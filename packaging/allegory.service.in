@@ -1,0 +1,22 @@
+[Unit]
+Description=Allegory music server (Vite dev server)
+Documentation=file://__REPO__/packaging/README.md
+# Wait for the network so the LAN URLs (phone access) come up cleanly.
+After=network-online.target
+Wants=network-online.target
+# Don't flap: if it crashes 5 times in 60s, stop trying and surface it.
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+[Service]
+Type=simple
+WorkingDirectory=__REPO__
+# systemd user services start with a minimal PATH; pin node/npm in.
+Environment=PATH=__NODE_BIN__:/usr/local/bin:/usr/bin:/bin
+ExecStart=__NPM__ run dev
+# Auto-restart on crash; cgroup kill cleans up the child vite process.
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=default.target

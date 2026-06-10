@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Allegory
+GenericName=Music Player
+Comment=Local-file music player with the Socrates AI sidebar
+Exec=__REPO__/bin/allegory-launch
+Icon=__REPO__/public/favicon.svg
+Terminal=false
+Categories=AudioVideo;Audio;Player;
+Keywords=music;audio;player;allegory;
+StartupNotify=true
+StartupWMClass=firefox

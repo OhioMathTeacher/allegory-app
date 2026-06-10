@@ -1,0 +1,168 @@
+@import "tailwindcss";
+
+@theme {
+  --color-bg: #09090b;
+  --color-surface: #131316;
+  --color-elevated: #1b1b20;
+  --color-line: rgba(255, 255, 255, 0.07);
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+}
+
+:root {
+  --accent: #818cf8;
+  --accent-soft: #1e1b35;
+  color-scheme: dark;
+  /* The whole app renders as a single phone-style column, identical on
+     desktop and phone. On a screen wider than this the column is centred
+     with empty margins ("borders") either side; on a narrower screen (a
+     phone, or a portrait monitor about this wide) it fills the viewport.
+     Sized to a vertically-oriented monitor — tweak this one value to taste. */
+  --app-max-width: 1440px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  width: 100%;
+}
+
+html {
+  /* iOS Safari otherwise inflates text in "narrow columns", which on mobile
+     pushes the top bar wider than the viewport and produces a horizontal
+     rubber-band scroll on the whole page. */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+/* The whole UI scales from the root font size. On desktop — where the demo
+   runs and the Socrates chat must fit beside the content — render a touch
+   smaller so nothing needs a browser zoom-out. Phones stay at the browser
+   default so iOS doesn't auto-zoom form inputs (see the 1rem input min below). */
+@media (min-width: 700px) {
+  html {
+    font-size: 90%;
+  }
+}
+
+body {
+  margin: 0;
+  background: var(--color-bg);
+  color: #e8e8ec;
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  overflow: hidden;
+}
+
+button {
+  cursor: pointer;
+}
+
+::-webkit-scrollbar {
+  width: 11px;
+  height: 11px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.09);
+  border-radius: 999px;
+  border: 3px solid transparent;
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.18);
+  background-clip: padding-box;
+}
+
+.glass {
+  background: var(--color-bg);
+}
+
+/* Self-hosted so the wordmark works wifi-off — no Google Fonts. See public/fonts/. */
+@font-face {
+  font-family: 'Outfit';
+  font-style: normal;
+  font-weight: 900;
+  font-display: swap;
+  src: url('/fonts/outfit-900.woff2') format('woff2');
+}
+
+.font-wordmark {
+  font-family: 'Outfit', system-ui, sans-serif;
+  font-weight: 900;
+  letter-spacing: -0.045em;
+  text-transform: lowercase;
+}
+
+/* Slowly rotate the hue of an element's color — 50s full cycle. Applied
+   to the Logo so it "breathes" through the spectrum without overriding
+   the per-album --accent that drives the rest of the UI. */
+@keyframes hue-breathe {
+  to { filter: hue-rotate(360deg); }
+}
+
+.breathe {
+  animation: hue-breathe 50s linear infinite;
+  /* Keep crisp at any zoom */
+  will-change: filter;
+}
+
+.input {
+  width: 100%;
+  border-radius: 0.5rem;
+  border: 1px solid var(--color-line);
+  background: rgba(255, 255, 255, 0.04);
+  padding: 0.6rem 0.75rem;
+  /* 16px (1rem) min — anything smaller makes iOS Safari auto-zoom the whole
+     viewport on focus, which blows up the layout. Do not lower this. */
+  font-size: 1rem;
+  color: #e8e8ec;
+  outline: none;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.input:focus {
+  border-color: var(--accent);
+  background: rgba(255, 255, 255, 0.06);
+}
+.input::placeholder {
+  color: rgba(255, 255, 255, 0.25);
+}
+
+/* The main Search field — deliberately lighter, bigger, and brighter than a
+   plain .input so it reads as the easy, inviting way in. */
+.search-input {
+  width: 100%;
+  border-radius: 0.875rem;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.12);
+  padding: 0.9rem 1rem;
+  font-size: 1.0625rem;
+  color: #fff;
+  outline: none;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.search-input:focus {
+  border-color: var(--accent);
+  background: rgba(255, 255, 255, 0.16);
+}
+.search-input::placeholder {
+  color: rgba(255, 255, 255, 0.55);
+}
+
+@keyframes eq {
+  0%,
+  100% {
+    transform: scaleY(0.3);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}
