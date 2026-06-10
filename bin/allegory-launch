@@ -1,0 +1,114 @@
+#!/usr/bin/env bash
+# Launch Allegory: start the Vite dev server (if not already running)
+# and open the live URL in the browser. Designed to be invoked from a
+# Cinnamon .desktop file — all user-visible errors are surfaced through
+# zenity (with a notify-send fallback).
+set -euo pipefail
+
+REPO="$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)"
+CACHE_DIR="$REPO/.allegory-cache"
+URL_FILE="$CACHE_DIR/url"
+LOG_FILE="$CACHE_DIR/launcher.log"
+
+mkdir -p "$CACHE_DIR"
+cd "$REPO"
+
+# Cinnamon (and many DEs) launch .desktop files with a stripped-down PATH that
+# does not include user-installed node. Prepend common locations so `npm` is
+# reachable even when this script is invoked from the menu/panel.
+if ! command -v npm >/dev/null 2>&1; then
+  for d in "$HOME/.local/node/bin" "/usr/local/bin" "/opt/homebrew/bin"; do
+    if [ -x "$d/npm" ]; then
+      export PATH="$d:$PATH"
+      break
+    fi
+  done
+fi
+
+notify() {
+  local title="$1" body="$2" kind="${3:-info}"
+  if command -v zenity >/dev/null 2>&1; then
+    case "$kind" in
+      error)    zenity --error    --width=520 --title="$title" --text="$body" ;;
+      question) zenity --question --width=520 --title="$title" --text="$body" ;;
+      *)        zenity --info     --width=520 --title="$title" --text="$body" ;;
+    esac
+  elif command -v notify-send >/dev/null 2>&1; then
+    notify-send -u "$( [ "$kind" = error ] && echo critical || echo normal )" "$title" "$body"
+  else
+    echo "[$title] $body" >&2
+  fi
+}
+
+die() {
+  notify "Allegory" "$1" error
+  exit 1
+}
+
+open_browser() {
+  local url="$1"
+  if command -v firefox >/dev/null 2>&1; then
+    firefox --new-tab "$url" >/dev/null 2>&1 &
+  else
+    xdg-open "$url" >/dev/null 2>&1 &
+  fi
+}
+
+# If a previous launch left a URL file behind, reuse it when the server
+# is still responsive — otherwise treat it as stale and start fresh.
+if [ -f "$URL_FILE" ]; then
+  existing="$(head -n1 "$URL_FILE" 2>/dev/null || true)"
+  if [ -n "$existing" ] && curl -ks --max-time 2 "$existing" >/dev/null; then
+    open_browser "$existing"
+    exit 0
+  fi
+  rm -f "$URL_FILE"
+fi
+
+# No URL file (or stale), but the systemd allegory.service may already be
+# serving on the pinned port. vite.config.ts uses strictPort:true at 5173,
+# so probe there directly before assuming we need to start a new server.
+for url in "http://localhost:5173/" "https://localhost:5173/"; do
+  if curl -ks --max-time 2 "$url" >/dev/null; then
+    open_browser "$url"
+    exit 0
+  fi
+done
+
+# First-run install. Offer to run `npm install` interactively.
+if [ ! -d node_modules ]; then
+  if command -v zenity >/dev/null 2>&1; then
+    zenity --question --width=520 --title="Allegory" \
+      --text="Dependencies aren't installed yet.\n\nRun <tt>npm install</tt> now? (one-time, takes a minute or two)" \
+      || exit 0
+  fi
+  : > "$LOG_FILE"
+  if ! npm install >>"$LOG_FILE" 2>&1; then
+    die "npm install failed.\n\nLast log lines:\n\n$(tail -n 20 "$LOG_FILE")"
+  fi
+fi
+
+# Spawn the dev server detached so the launcher can exit cleanly once
+# the browser tab is open. setsid + nohup keeps it alive after this
+# script returns; stdout/stderr go to the log file.
+: > "$LOG_FILE"
+setsid nohup npm run dev </dev/null >>"$LOG_FILE" 2>&1 &
+server_pid=$!
+
+# Wait for the plugin to publish the live URL (or for the server to die).
+# 30 s is generous — first-run cold start dominates the time.
+for _ in $(seq 1 60); do
+  if [ -f "$URL_FILE" ]; then
+    url="$(head -n1 "$URL_FILE" 2>/dev/null || true)"
+    if [ -n "$url" ]; then
+      open_browser "$url"
+      exit 0
+    fi
+  fi
+  if ! kill -0 "$server_pid" 2>/dev/null; then
+    die "Allegory failed to start.\n\nLast log lines:\n\n$(tail -n 25 "$LOG_FILE")"
+  fi
+  sleep 0.5
+done
+
+die "Allegory took too long to start.\n\nLast log lines:\n\n$(tail -n 25 "$LOG_FILE")"

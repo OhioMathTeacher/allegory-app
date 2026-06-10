@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+# Stop a running Allegory dev server. Optional companion to
+# `allegory-launch` — wire it up to a second .desktop file or a keybind
+# if you want a one-click "quit".
+set -euo pipefail
+
+REPO="$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)"
+URL_FILE="$REPO/.allegory-cache/url"
+
+notify() {
+  if command -v notify-send >/dev/null 2>&1; then
+    notify-send "Allegory" "$1"
+  else
+    echo "[Allegory] $1"
+  fi
+}
+
+# Kill anything still serving this repo. Match on the repo path so we
+# don't stomp on unrelated `vite` processes. The actual command line is
+# `node <repo>/node_modules/.bin/vite`, so the repo path comes first.
+if pkill -f "$REPO.*vite" 2>/dev/null; then
+  rm -f "$URL_FILE"
+  notify "Server stopped."
+else
+  notify "No running server found."
+fi
