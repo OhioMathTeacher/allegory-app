@@ -11,7 +11,7 @@ import sharp from 'sharp'
 import type { Library } from './scanner.ts'
 import type { Playlists } from './playlists.ts'
 import type { SettingsStore } from './settings.ts'
-import { editAlbum, renameArtist } from './metadata.ts'
+import { editAlbum, renameArtist, applyAlbumTags, readFullTags } from './metadata.ts'
 import { saveUpload } from './upload.ts'
 import { recordPlay, getPlayHistory } from './play-history.ts'
 import { transcodedPath } from './transcode.ts'
@@ -118,6 +118,65 @@ function readRawBody(
     req.on('end', () => resolve(Buffer.concat(chunks)))
     req.on('error', reject)
   })
+}
+
+const MAX_IMAGE_BYTES = 25 * 1024 * 1024
+
+/**
+ * Download an image from a user-supplied URL, server-side. Doing the fetch here
+ * (rather than in the browser) sidesteps CORS, which blocks fetching most
+ * remote artwork from the page. Restricted to http(s); rejects non-images,
+ * oversized payloads and slow hosts. Returns the raw bytes for `sharp` to
+ * validate and re-encode, exactly like an uploaded file.
+ */
+async function fetchRemoteImage(rawUrl: string | undefined): Promise<Buffer> {
+  const url = (rawUrl ?? '').trim()
+  if (!/^https?:\/\//i.test(url)) {
+    throw new Error('Enter an image URL starting with http:// or https://.')
+  }
+  const ac = new AbortController()
+  const timer = setTimeout(() => ac.abort(), 15000)
+  let res: Response
+  try {
+    res = await fetch(url, {
+      signal: ac.signal,
+      redirect: 'follow',
+      headers: { 'User-Agent': 'Allegory', Accept: 'image/*' },
+    })
+  } catch {
+    throw new Error('Could not reach that URL.')
+  } finally {
+    clearTimeout(timer)
+  }
+  if (!res.ok) throw new Error(`That URL returned ${res.status}.`)
+  const type = (res.headers.get('content-type') ?? '').toLowerCase()
+  if (type && !type.startsWith('image/')) {
+    throw new Error('That URL does not point to an image.')
+  }
+  const declared = Number(res.headers.get('content-length') ?? '')
+  if (Number.isFinite(declared) && declared > MAX_IMAGE_BYTES) {
+    throw new Error('Image is too large (25 MB max).')
+  }
+  const buf = Buffer.from(await res.arrayBuffer())
+  if (buf.length > MAX_IMAGE_BYTES) {
+    throw new Error('Image is too large (25 MB max).')
+  }
+  if (buf.length === 0) throw new Error('That URL returned an empty response.')
+  return buf
+}
+
+/**
+ * Get the image bytes for an art-upload request, from either a JSON `{ url }`
+ * body (fetched server-side) or the raw request body (a direct file upload).
+ * The two cover-art entry points share this so every endpoint accepts both.
+ */
+async function readImageUpload(req: IncomingMessage): Promise<Buffer> {
+  const ct = (req.headers['content-type'] ?? '').toLowerCase()
+  if (ct.includes('application/json')) {
+    const body = (await readBody(req)) as { url?: string }
+    return fetchRemoteImage(body.url)
+  }
+  return readRawBody(req)
 }
 
 /** Stream an audio file, honouring a `Range` header so seeking works. */
@@ -544,7 +603,13 @@ export function createRouter(deps: RouterDeps): Router {
         method === 'POST'
       ) {
         const albumId = seg(2)
-        const raw = await readRawBody(req)
+        let raw: Buffer
+        try {
+          raw = await readImageUpload(req)
+        } catch (err) {
+          sendJson(res, { error: err instanceof Error ? err.message : 'Could not read image.' }, 400)
+          return true
+        }
         let jpeg: Buffer
         try {
           jpeg = await sharp(raw)
@@ -587,6 +652,46 @@ export function createRouter(deps: RouterDeps): Router {
         const result = await editAlbum(library, seg(2), body)
         await library.scan() // tags and possibly the folder changed on disk
         sendJson(res, result)
+        return true
+      }
+      // Full per-track tag picture for the detailed editor.
+      if (
+        segs.length === 4 &&
+        segs[1] === 'albums' &&
+        segs[3] === 'tags' &&
+        method === 'GET'
+      ) {
+        const album = library.album(seg(2))
+        if (!album) {
+          sendJson(res, { error: 'Unknown album.' }, 404)
+          return true
+        }
+        const tracks = []
+        for (const trackId of album.trackIds) {
+          const track = library.track(trackId)
+          if (track) tracks.push(await readFullTags(track.id, track.path))
+        }
+        sendJson(res, {
+          album: { id: album.id, name: album.name, artist: album.artist, year: album.year },
+          tracks,
+        })
+        return true
+      }
+      // Save album-wide + per-track tag edits in one batch.
+      if (
+        segs.length === 4 &&
+        segs[1] === 'albums' &&
+        segs[3] === 'tags' &&
+        method === 'POST'
+      ) {
+        const body = (await readBody(req)) as Parameters<typeof applyAlbumTags>[2]
+        try {
+          const result = await applyAlbumTags(library, seg(2), body)
+          await library.scan() // tags and possibly the folder changed on disk
+          sendJson(res, result)
+        } catch (err) {
+          sendJson(res, { error: err instanceof Error ? err.message : 'Save failed.' }, 400)
+        }
         return true
       }
 
@@ -647,7 +752,13 @@ export function createRouter(deps: RouterDeps): Router {
         method === 'POST'
       ) {
         const artistId = seg(2)
-        const raw = await readRawBody(req)
+        let raw: Buffer
+        try {
+          raw = await readImageUpload(req)
+        } catch (err) {
+          sendJson(res, { error: err instanceof Error ? err.message : 'Could not read image.' }, 400)
+          return true
+        }
         let jpeg: Buffer
         try {
           jpeg = await sharp(raw)
@@ -830,7 +941,13 @@ export function createRouter(deps: RouterDeps): Router {
         method === 'POST'
       ) {
         const playlistId = seg(2)
-        const raw = await readRawBody(req)
+        let raw: Buffer
+        try {
+          raw = await readImageUpload(req)
+        } catch (err) {
+          sendJson(res, { error: err instanceof Error ? err.message : 'Could not read image.' }, 400)
+          return true
+        }
         let jpeg: Buffer
         try {
           jpeg = await sharp(raw)

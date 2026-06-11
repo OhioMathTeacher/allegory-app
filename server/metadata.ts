@@ -44,7 +44,7 @@ async function moveFile(from: string, to: string): Promise<void> {
 }
 
 /** Write the given tag set to one audio file, in place. */
-async function writeTrackTags(path: string, tags: Record<string, string>): Promise<void> {
+export async function writeTrackTags(path: string, tags: Record<string, string>): Promise<void> {
   const tmp = join(dirname(path), `.allegory-edit-${Date.now()}-${basename(path)}`)
   const metaArgs: string[] = []
   for (const [key, value] of Object.entries(tags)) {
@@ -128,49 +128,74 @@ export async function editAlbum(
     await writeTrackTags(path, tags)
   }
 
-  // Then rename the folder if the album moved on disk. `album.dir` is the
-  // album folder; its parent is the artist folder.
-  let newDir = album.dir
-  let folderRenamed = false
-  const renameArtist = edits.artist !== undefined && newArtist !== album.artist
-  const renameAlbum = edits.name !== undefined && newName !== album.name
-
-  if (renameArtist || renameAlbum) {
-    // <musicDir>/<artist>/<album>/ — derive musicDir from album.dir minus
-    // its last two segments rather than carrying it through as a parameter.
-    const oldArtistDir = dirname(album.dir)
-    const musicDir = dirname(oldArtistDir)
-    const newArtistDir = renameArtist ? join(musicDir, newArtist) : oldArtistDir
-    newDir = join(newArtistDir, newName)
-
-    if (newDir !== album.dir) {
-      if (await exists(newDir)) {
-        throw new Error(
-          `Cannot rename — a folder already exists at ${newDir}. Move or delete it and try again.`,
-        )
-      }
-      if (renameArtist) {
-        await mkdir(newArtistDir, { recursive: true })
-      }
-      await rename(album.dir, newDir).catch(async () => {
-        // Cross-filesystem fallback: copy the directory contents file by file.
-        // (Rare on a single drive, but keeps us honest.)
-        await mkdir(newDir, { recursive: true })
-        for (const old of paths) {
-          const target = join(newDir, basename(old))
-          await moveFile(old, target)
-        }
-        await unlink(album.dir).catch(() => undefined)
-      })
-      folderRenamed = true
-    }
-  }
+  // Then rename the folder if the album moved on disk.
+  const { folderRenamed, newDir } = await renameAlbumFolder(
+    album.dir,
+    newName,
+    newArtist,
+    album.artist,
+    album.name,
+    paths,
+  )
 
   return {
     tracksWritten: paths.length,
     folderRenamed,
     newDir,
   }
+}
+
+/**
+ * Move an album's folder on disk to reflect a new album name and/or artist.
+ * `album.dir` is `<musicDir>/<artist>/<album>/`. Returns the directory the
+ * album lives at afterwards (unchanged if nothing moved).
+ *
+ * Throws if the destination already exists. Falls back to a per-file move
+ * across filesystems. Call this AFTER writing tags — `paths` must still be
+ * valid when it runs.
+ */
+export async function renameAlbumFolder(
+  currentDir: string,
+  newName: string,
+  newArtist: string,
+  oldArtist: string,
+  oldName: string,
+  paths: string[],
+): Promise<{ folderRenamed: boolean; newDir: string }> {
+  const renameArtist = newArtist !== oldArtist
+  const renameAlbum = newName !== oldName
+  if (!renameArtist && !renameAlbum) {
+    return { folderRenamed: false, newDir: currentDir }
+  }
+
+  // <musicDir>/<artist>/<album>/ — derive musicDir from currentDir minus its
+  // last two segments rather than carrying it through as a parameter.
+  const oldArtistDir = dirname(currentDir)
+  const musicDir = dirname(oldArtistDir)
+  const newArtistDir = renameArtist ? join(musicDir, newArtist) : oldArtistDir
+  const newDir = join(newArtistDir, newName)
+
+  if (newDir === currentDir) return { folderRenamed: false, newDir: currentDir }
+
+  if (await exists(newDir)) {
+    throw new Error(
+      `Cannot rename — a folder already exists at ${newDir}. Move or delete it and try again.`,
+    )
+  }
+  if (renameArtist) {
+    await mkdir(newArtistDir, { recursive: true })
+  }
+  await rename(currentDir, newDir).catch(async () => {
+    // Cross-filesystem fallback: copy the directory contents file by file.
+    // (Rare on a single drive, but keeps us honest.)
+    await mkdir(newDir, { recursive: true })
+    for (const old of paths) {
+      const target = join(newDir, basename(old))
+      await moveFile(old, target)
+    }
+    await unlink(currentDir).catch(() => undefined)
+  })
+  return { folderRenamed: true, newDir }
 }
 
 export interface ArtistRenameResult {
@@ -278,4 +303,200 @@ export async function renameArtist(
   }
 
   return { tracksRewritten: paths.length, folderRenamed, mergedInto }
+}
+
+// ---------------------------------------------------------------------------
+// Full per-track tag editing
+// ---------------------------------------------------------------------------
+
+/** The curated set of common fields we read and edit per track. */
+export interface CommonTags {
+  title: string
+  artist: string
+  album: string
+  albumartist: string
+  year: string
+  trackNo: string
+  discNo: string
+  genre: string
+  composer: string
+  comment: string
+}
+
+/** One track's full tag picture, as sent to the editor. */
+export interface TrackTags {
+  trackId: string
+  file: string
+  format?: string
+  common: CommonTags
+  /** Raw container-native frames, read-only — for diagnosis. */
+  native: Array<{ id: string; value: string }>
+  /** Set when the file's tags could not be parsed. */
+  error?: string
+}
+
+/** Album-wide identity + per-track edits sent back when saving. */
+export interface AlbumTagEdits {
+  /** Applied to every track; album/artist also rename the folder. */
+  album?: {
+    name?: string
+    artist?: string
+    year?: string
+    genre?: string
+  }
+  /** Per-track overrides, keyed by track id. Override album-wide values. */
+  tracks?: Array<{ trackId: string } & Partial<CommonTags>>
+}
+
+/** Map a CommonTags-shaped partial to the ffmpeg `-metadata` key/value set. */
+function toFfmpegTags(edit: Partial<CommonTags>): Record<string, string> {
+  const tags: Record<string, string> = {}
+  if (edit.title !== undefined) tags.title = edit.title
+  if (edit.artist !== undefined) tags.artist = edit.artist
+  if (edit.album !== undefined) tags.album = edit.album
+  if (edit.albumartist !== undefined) tags.album_artist = edit.albumartist
+  if (edit.year !== undefined) tags.date = edit.year
+  if (edit.trackNo !== undefined) tags.track = edit.trackNo
+  if (edit.discNo !== undefined) tags.disc = edit.discNo
+  if (edit.genre !== undefined) tags.genre = edit.genre
+  if (edit.composer !== undefined) tags.composer = edit.composer
+  if (edit.comment !== undefined) tags.comment = edit.comment
+  return tags
+}
+
+/** Read every field we expose for one track, including the raw native frames. */
+export async function readFullTags(trackId: string, path: string): Promise<TrackTags> {
+  const blank: CommonTags = {
+    title: '', artist: '', album: '', albumartist: '', year: '',
+    trackNo: '', discNo: '', genre: '', composer: '', comment: '',
+  }
+  try {
+    const mm = await import('music-metadata')
+    const md = await mm.parseFile(path, { duration: false, skipCovers: true })
+    const c = md.common
+    const common: CommonTags = {
+      title: c.title?.trim() ?? '',
+      artist: c.artist?.trim() ?? '',
+      album: c.album?.trim() ?? '',
+      albumartist: c.albumartist?.trim() ?? '',
+      year: c.year != null ? String(c.year) : '',
+      trackNo: c.track?.no != null ? String(c.track.no) : '',
+      discNo: c.disk?.no != null ? String(c.disk.no) : '',
+      genre: c.genre?.join(', ') ?? '',
+      composer: c.composer?.join(', ') ?? '',
+      comment:
+        c.comment
+          ?.map((x) => (typeof x === 'string' ? x : (x?.text ?? '')))
+          .filter(Boolean)
+          .join(' / ') ?? '',
+    }
+    const native: Array<{ id: string; value: string }> = []
+    for (const frames of Object.values(md.native ?? {})) {
+      for (const f of frames) {
+        const v = f.value
+        const value =
+          v == null
+            ? ''
+            : typeof v === 'object'
+              ? ('text' in v ? String((v as { text?: unknown }).text ?? '') : '[binary]')
+              : String(v)
+        native.push({ id: f.id, value: value.slice(0, 500) })
+      }
+    }
+    return { trackId, file: basename(path), format: md.format.container ?? undefined, common, native }
+  } catch {
+    return { trackId, file: basename(path), common: blank, native: [], error: 'unreadable' }
+  }
+}
+
+export interface AlbumTagSaveResult {
+  tracksWritten: number
+  folderRenamed: boolean
+  newDir: string
+}
+
+/**
+ * Apply album-wide and per-track tag edits in one pass. Album-wide values are
+ * written to every track; per-track values override them for their own track.
+ * Tags are written FIRST (while paths are valid), then the folder is renamed if
+ * the album name or artist changed.
+ */
+export async function applyAlbumTags(
+  library: Library,
+  albumId: string,
+  edits: AlbumTagEdits,
+): Promise<AlbumTagSaveResult> {
+  const album = library.album(albumId)
+  if (!album) throw new Error('Album not found.')
+
+  // --- album-wide values (applied to every track) ---
+  const aw = edits.album ?? {}
+  let newName = album.name
+  let newArtist = album.artist
+  const albumWide: Partial<CommonTags> = {}
+
+  if (aw.name !== undefined) {
+    const safe = safeFsName(aw.name)
+    if (!safe) throw new Error('Album name cannot be empty.')
+    newName = safe
+    albumWide.album = safe
+  }
+  if (aw.artist !== undefined) {
+    const safe = safeFsName(aw.artist)
+    if (!safe) throw new Error('Album artist cannot be empty.')
+    newArtist = safe
+    albumWide.artist = safe
+    albumWide.albumartist = safe
+  }
+  if (aw.year !== undefined && aw.year !== '') {
+    const y = String(aw.year).trim()
+    if (!/^\d{4}$/.test(y)) throw new Error('Year must be a four-digit number.')
+    albumWide.year = y
+  }
+  if (aw.genre !== undefined) albumWide.genre = aw.genre.trim()
+
+  const albumWideTags = toFfmpegTags(albumWide)
+
+  // --- per-track overrides ---
+  const perTrack = new Map<string, Record<string, string>>()
+  for (const t of edits.tracks ?? []) {
+    const { trackId, ...rest } = t
+    perTrack.set(trackId, toFfmpegTags(rest))
+  }
+
+  // Resolve paths up front; we need them all for a folder-rename fallback.
+  const allPaths = album.trackIds
+    .map((id) => library.track(id)?.path)
+    .filter((p): p is string => !!p)
+
+  // Build the write set: album-wide tags merged with per-track overrides.
+  const writes: Array<{ path: string; tags: Record<string, string> }> = []
+  for (const trackId of album.trackIds) {
+    const track = library.track(trackId)
+    if (!track) continue
+    const merged = { ...albumWideTags, ...(perTrack.get(trackId) ?? {}) }
+    if (Object.keys(merged).length > 0) writes.push({ path: track.path, tags: merged })
+  }
+
+  const identityChanged = newName !== album.name || newArtist !== album.artist
+  if (writes.length === 0 && !identityChanged) {
+    return { tracksWritten: 0, folderRenamed: false, newDir: album.dir }
+  }
+
+  // Write tags first — paths are still valid before any folder move.
+  for (const w of writes) {
+    await writeTrackTags(w.path, w.tags)
+  }
+
+  // Then move the folder if the album's name or artist changed.
+  const { folderRenamed, newDir } = await renameAlbumFolder(
+    album.dir,
+    newName,
+    newArtist,
+    album.artist,
+    album.name,
+    allPaths,
+  )
+
+  return { tracksWritten: writes.length, folderRenamed, newDir }
 }
