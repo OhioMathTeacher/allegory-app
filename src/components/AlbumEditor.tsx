@@ -2,8 +2,10 @@ import { useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { Loader2, X, AlertCircle, Check, Upload, ImageIcon } from 'lucide-react'
 import { useConnected } from '../lib/connection'
-import { editAlbumMetadata, uploadAlbumImage, albumImageUrl } from '../lib/api'
+import { uploadAlbumImage, uploadAlbumImageFromUrl, albumImageUrl } from '../lib/api'
 import type { Album } from '../lib/types'
+import { ArtFromUrl } from './ArtFromUrl'
+import { TagEditor } from './TagEditor'
 
 interface AlbumEditorProps {
   album: Album
@@ -22,55 +24,15 @@ type Tab = 'meta' | 'cover'
  *     doesn't matter.
  */
 export function AlbumEditor({ album, onClose, onSaved }: AlbumEditorProps) {
-  const conn = useConnected()
-  const queryClient = useQueryClient()
   const [tab, setTab] = useState<Tab>('meta')
-
-  // --- metadata state ----------------------------------------------------
-  const [name, setName] = useState(album.name)
-  const [artist, setArtist] = useState(album.artist)
-  const [year, setYear] = useState(album.year != null ? String(album.year) : '')
-  const [saving, setSaving] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [done, setDone] = useState<string | null>(null)
-
-  const dirty =
-    name !== album.name ||
-    artist !== album.artist ||
-    year !== (album.year != null ? String(album.year) : '')
-
-  async function saveMeta() {
-    if (!dirty || saving) return
-    setSaving(true)
-    setError(null)
-    try {
-      const edits: { name?: string; artist?: string; year?: string } = {}
-      if (name !== album.name) edits.name = name
-      if (artist !== album.artist) edits.artist = artist
-      const startYear = album.year != null ? String(album.year) : ''
-      if (year !== startYear) edits.year = year
-      const result = await editAlbumMetadata(conn, album.id, edits)
-      queryClient.invalidateQueries()
-      setDone(
-        `Saved ${result.tracksWritten} track${result.tracksWritten === 1 ? '' : 's'}` +
-          (result.folderRenamed ? ' · folder renamed' : ''),
-      )
-      onSaved?.()
-      window.setTimeout(onClose, 1100)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Save failed.')
-    } finally {
-      setSaving(false)
-    }
-  }
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm"
-      onClick={saving ? undefined : onClose}
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/70 py-8 backdrop-blur-sm"
+      onClick={onClose}
     >
       <div
-        className="w-[min(520px,calc(100vw-2rem))] rounded-xl border border-line bg-surface p-6 shadow-2xl"
+        className="my-auto w-[min(840px,calc(100vw-2rem))] rounded-xl border border-line bg-surface p-6 shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-1 flex items-start justify-between gap-4">
@@ -78,16 +40,15 @@ export function AlbumEditor({ album, onClose, onSaved }: AlbumEditorProps) {
             <h2 className="text-lg font-semibold">Edit album</h2>
             <p className="mt-1 text-sm text-white/55">
               {tab === 'meta'
-                ? 'Writes to every track and renames the folder.'
+                ? 'Edit album-wide and per-track tags. Writes to the files on disk.'
                 : 'Saved as folder.jpg in the album folder.'}
             </p>
           </div>
           <button
             type="button"
             onClick={onClose}
-            disabled={saving}
             aria-label="Close"
-            className="rounded-md p-1.5 text-white/50 transition-colors hover:bg-white/5 hover:text-white disabled:opacity-40"
+            className="rounded-md p-1.5 text-white/50 transition-colors hover:bg-white/5 hover:text-white"
           >
             <X className="h-4 w-4" />
           </button>
@@ -95,7 +56,7 @@ export function AlbumEditor({ album, onClose, onSaved }: AlbumEditorProps) {
 
         <div className="mt-4 flex gap-1 border-b border-line">
           <TabButton active={tab === 'meta'} onClick={() => setTab('meta')}>
-            Metadata
+            Tags
           </TabButton>
           <TabButton active={tab === 'cover'} onClick={() => setTab('cover')}>
             Cover art
@@ -103,77 +64,7 @@ export function AlbumEditor({ album, onClose, onSaved }: AlbumEditorProps) {
         </div>
 
         {tab === 'meta' ? (
-          <>
-            <Field label="Album">
-              <input
-                autoFocus
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                disabled={saving}
-                autoCapitalize="off"
-                spellCheck={false}
-                className="input w-full"
-              />
-            </Field>
-
-            <Field label="Artist">
-              <input
-                value={artist}
-                onChange={(e) => setArtist(e.target.value)}
-                disabled={saving}
-                autoCapitalize="off"
-                spellCheck={false}
-                className="input w-full"
-              />
-            </Field>
-
-            <Field label="Year">
-              <input
-                value={year}
-                onChange={(e) => setYear(e.target.value)}
-                disabled={saving}
-                placeholder="1996"
-                inputMode="numeric"
-                pattern="\d{4}"
-                maxLength={4}
-                className="input w-32"
-              />
-            </Field>
-
-            {error && (
-              <div className="mt-3 flex items-start gap-1.5 rounded-md border border-red-500/30 bg-red-500/5 px-3 py-2 text-sm text-red-300/90">
-                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-                <span className="break-words">{error}</span>
-              </div>
-            )}
-            {done && (
-              <div className="mt-3 flex items-center gap-1.5 rounded-md border border-emerald-500/30 bg-emerald-500/5 px-3 py-2 text-sm text-emerald-300/90">
-                <Check className="h-4 w-4" />
-                {done}
-              </div>
-            )}
-
-            <div className="mt-5 flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={onClose}
-                disabled={saving}
-                className="rounded-md border border-line px-4 py-2 text-sm text-white/70 transition-colors hover:bg-white/5 disabled:opacity-40"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={saveMeta}
-                disabled={!dirty || saving}
-                className="flex items-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-black transition-transform hover:scale-[1.02] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:scale-100"
-                style={{ background: 'var(--accent)' }}
-              >
-                {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                {saving ? 'Writing tags…' : 'Save'}
-              </button>
-            </div>
-          </>
+          <TagEditor album={album} onClose={onClose} onSaved={onSaved} />
         ) : (
           <CoverTab album={album} onClose={onClose} />
         )}
@@ -288,6 +179,14 @@ function CoverTab({ album, onClose }: CoverTabProps) {
         </span>
       </div>
 
+      <ArtFromUrl
+        onSubmit={(url) => uploadAlbumImageFromUrl(conn, album.id, url)}
+        onDone={() => {
+          queryClient.invalidateQueries()
+          setVersion((v) => v + 1)
+        }}
+      />
+
       {error && (
         <div className="mt-3 flex items-start gap-1.5 rounded-md border border-red-500/30 bg-red-500/5 px-3 py-2 text-sm text-red-300/90">
           <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
@@ -340,18 +239,3 @@ function TabButton({ active, onClick, children }: TabButtonProps) {
   )
 }
 
-interface FieldProps {
-  label: string
-  children: React.ReactNode
-}
-
-function Field({ label, children }: FieldProps) {
-  return (
-    <div className="mt-3">
-      <label className="text-[11px] font-medium uppercase tracking-wide text-white/45">
-        {label}
-      </label>
-      <div className="mt-1">{children}</div>
-    </div>
-  )
-}

@@ -2,8 +2,9 @@ import { useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { Loader2, X, AlertCircle, Check, Upload, ImageIcon } from 'lucide-react'
 import { useConnected } from '../lib/connection'
-import { renameArtist, uploadArtistImage, albumImageUrl } from '../lib/api'
+import { renameArtist, uploadArtistImage, uploadArtistImageFromUrl, albumImageUrl } from '../lib/api'
 import type { Artist } from '../lib/types'
+import { ArtFromUrl } from './ArtFromUrl'
 
 interface ArtistEditorProps {
   artist: Artist
@@ -242,6 +243,14 @@ function CoverPicker({ artist }: CoverPickerProps) {
         </button>
         <span className="text-[11px] text-white/40">…or drop on the circle</span>
       </div>
+
+      <ArtFromUrl
+        onSubmit={(url) => uploadArtistImageFromUrl(conn, artist.id, url)}
+        onDone={() => {
+          queryClient.invalidateQueries()
+          setVersion((v) => v + 1)
+        }}
+      />
 
       {error && (
         <div className="mt-3 flex items-start gap-1.5 rounded-md border border-red-500/30 bg-red-500/5 px-3 py-2 text-sm text-red-300/90">

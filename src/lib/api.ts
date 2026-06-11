@@ -83,6 +83,65 @@ export async function editAlbumMetadata(
   return send<AlbumEditResult>(conn, 'POST', `/albums/${albumId}/metadata`, edits)
 }
 
+/** The curated, editable common tag fields shown per track. */
+export interface CommonTags {
+  title: string
+  artist: string
+  album: string
+  albumartist: string
+  year: string
+  trackNo: string
+  discNo: string
+  genre: string
+  composer: string
+  comment: string
+}
+
+/** One track's full tag picture as returned by the detailed editor's loader. */
+export interface TrackTags {
+  trackId: string
+  file: string
+  format?: string
+  common: CommonTags
+  /** Raw container-native frames, read-only. */
+  native: Array<{ id: string; value: string }>
+  error?: string
+}
+
+export interface AlbumTags {
+  album: { id: string; name: string; artist: string; year?: number }
+  tracks: TrackTags[]
+}
+
+/** Album-wide + per-track tag edits sent when saving the detailed editor. */
+export interface AlbumTagEdits {
+  album?: { name?: string; artist?: string; year?: string; genre?: string }
+  tracks?: Array<{ trackId: string } & Partial<CommonTags>>
+}
+
+export interface AlbumTagSaveResult {
+  tracksWritten: number
+  folderRenamed: boolean
+  newDir: string
+}
+
+/** Read every editable field (plus raw native tags) for an album's tracks. */
+export async function getAlbumTags(
+  conn: Connection,
+  albumId: string,
+): Promise<AlbumTags> {
+  return getJson<AlbumTags>(conn, `/albums/${albumId}/tags`)
+}
+
+/** Save album-wide and per-track tag edits in one batch. */
+export async function saveAlbumTags(
+  conn: Connection,
+  albumId: string,
+  edits: AlbumTagEdits,
+): Promise<AlbumTagSaveResult> {
+  return send<AlbumTagSaveResult>(conn, 'POST', `/albums/${albumId}/tags`, edits)
+}
+
 /** Search tracks, albums and artists by name. */
 export async function search(
   conn: Connection,
@@ -245,6 +304,46 @@ async function uploadImage(
     }
     throw new Error(message)
   }
+}
+
+/**
+ * Set artwork from a remote URL. The server fetches the image (avoiding the
+ * browser's CORS restrictions), then resizes and stores it like an upload.
+ * The same image endpoints accept either raw bytes or a JSON `{ url }` body.
+ */
+async function uploadImageFromUrl(
+  conn: Connection,
+  path: string,
+  url: string,
+): Promise<void> {
+  await send(conn, 'POST', path, { url })
+}
+
+/** Set an album's cover from a remote image URL. */
+export async function uploadAlbumImageFromUrl(
+  conn: Connection,
+  albumId: string,
+  url: string,
+): Promise<void> {
+  await uploadImageFromUrl(conn, `/albums/${albumId}/image`, url)
+}
+
+/** Set an artist's cover from a remote image URL. */
+export async function uploadArtistImageFromUrl(
+  conn: Connection,
+  artistId: string,
+  url: string,
+): Promise<void> {
+  await uploadImageFromUrl(conn, `/artists/${artistId}/image`, url)
+}
+
+/** Set a playlist's cover from a remote image URL. */
+export async function uploadPlaylistImageFromUrl(
+  conn: Connection,
+  playlistId: string,
+  url: string,
+): Promise<void> {
+  await uploadImageFromUrl(conn, `/playlists/${playlistId}/image`, url)
 }
 
 /** The user's playlists. */

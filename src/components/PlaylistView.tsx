@@ -7,7 +7,9 @@ import {
   albumImageUrl,
   movePlaylistTrack,
   uploadPlaylistImage,
+  uploadPlaylistImageFromUrl,
 } from '../lib/api'
+import { ArtFromUrl } from './ArtFromUrl'
 import { usePlayer } from '../lib/player'
 import { shuffle } from '../lib/shuffle'
 import { formatDuration, ticksToSeconds } from '../lib/format'
@@ -91,38 +93,47 @@ export function PlaylistView({ playlist, onBack, onSelectArtist }: PlaylistViewP
       </button>
 
       <div className="flex flex-col gap-6 sm:flex-row sm:items-end">
-        <div className="relative h-52 w-52 shrink-0">
-          <button
-            type="button"
-            onClick={() => fileRef.current?.click()}
-            title="Change artwork"
-            className="group flex h-full w-full items-center justify-center overflow-hidden rounded-2xl bg-elevated shadow-2xl shadow-black/60"
-          >
-            {playlist.imageTag || artVersion > 0 ? (
-              <Cover
-                src={
-                  albumImageUrl(conn, playlist.id, playlist.imageTag, 520) +
-                  (artVersion ? `&v=${artVersion}` : '')
-                }
-                alt={name}
-                className="h-full w-full"
-              />
-            ) : (
-              <ListMusic className="h-16 w-16 text-white/20" />
-            )}
-            <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-black/55 opacity-0 transition-opacity group-hover:opacity-100">
-              <Pencil className="h-6 w-6 text-white" />
-              <span className="text-xs font-medium text-white">
-                {uploadingArt ? 'Uploading…' : 'Change artwork'}
-              </span>
-            </div>
-          </button>
-          <input
-            ref={fileRef}
-            type="file"
-            accept="image/*"
-            className="hidden"
-            onChange={handleArtFile}
+        <div className="flex w-52 shrink-0 flex-col gap-2">
+          <div className="relative h-52 w-52">
+            <button
+              type="button"
+              onClick={() => fileRef.current?.click()}
+              title="Change artwork"
+              className="group flex h-full w-full items-center justify-center overflow-hidden rounded-2xl bg-elevated shadow-2xl shadow-black/60"
+            >
+              {playlist.imageTag || artVersion > 0 ? (
+                <Cover
+                  src={
+                    albumImageUrl(conn, playlist.id, playlist.imageTag, 520) +
+                    (artVersion ? `&v=${artVersion}` : '')
+                  }
+                  alt={name}
+                  className="h-full w-full"
+                />
+              ) : (
+                <ListMusic className="h-16 w-16 text-white/20" />
+              )}
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-black/55 opacity-0 transition-opacity group-hover:opacity-100">
+                <Pencil className="h-6 w-6 text-white" />
+                <span className="text-xs font-medium text-white">
+                  {uploadingArt ? 'Uploading…' : 'Change artwork'}
+                </span>
+              </div>
+            </button>
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handleArtFile}
+            />
+          </div>
+          <ArtFromUrl
+            onSubmit={(url) => uploadPlaylistImageFromUrl(conn, playlist.id, url)}
+            onDone={() => {
+              setArtVersion((v) => v + 1)
+              queryClient.invalidateQueries({ queryKey: ['playlists'] })
+            }}
           />
         </div>
         <div className="min-w-0 pb-1">
