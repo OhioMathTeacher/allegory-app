@@ -3,8 +3,9 @@
  * playlist editing, audio streaming (with Range support so the browser can
  * seek) and on-the-fly cover-art thumbnails.
  */
-import { createReadStream } from 'node:fs'
+import { createReadStream, existsSync } from 'node:fs'
 import { mkdir, readdir, readFile, stat, unlink, writeFile } from 'node:fs/promises'
+import { spawn } from 'node:child_process'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { basename, dirname, extname, join } from 'node:path'
 import sharp from 'sharp'
@@ -177,6 +178,35 @@ async function readImageUpload(req: IncomingMessage): Promise<Buffer> {
     return fetchRemoteImage(body.url)
   }
   return readRawBody(req)
+}
+
+/** Run a git command in the repo (process.cwd()), capturing its output. */
+function runGit(
+  args: string[],
+  timeoutMs = 12000,
+): Promise<{ ok: boolean; stdout: string; stderr: string }> {
+  return new Promise((resolve) => {
+    let proc: ReturnType<typeof spawn>
+    try {
+      proc = spawn('git', args, { cwd: process.cwd() })
+    } catch {
+      resolve({ ok: false, stdout: '', stderr: 'git not found' })
+      return
+    }
+    let stdout = ''
+    let stderr = ''
+    const timer = setTimeout(() => proc.kill('SIGKILL'), timeoutMs)
+    proc.stdout?.on('data', (d: Buffer) => (stdout += d.toString()))
+    proc.stderr?.on('data', (d: Buffer) => (stderr += d.toString()))
+    proc.on('error', () => {
+      clearTimeout(timer)
+      resolve({ ok: false, stdout, stderr: stderr || 'git not found' })
+    })
+    proc.on('close', (code) => {
+      clearTimeout(timer)
+      resolve({ ok: code === 0, stdout, stderr })
+    })
+  })
 }
 
 /** Stream an audio file, honouring a `Range` header so seeking works. */
@@ -547,6 +577,83 @@ export function createRouter(deps: RouterDeps): Router {
       ) {
         const body = (await readBody(req)) as { musicDir?: string }
         sendJson(res, await settings.validate((body.musicDir ?? '').trim()))
+        return true
+      }
+
+      // --- self-update ----------------------------------------------------
+      // These run before `await ready` so updates work even mid-scan. The repo
+      // is the server's cwd; the heavy lifting (pull + restart) is done by
+      // bin/allegory-update so it survives the server restarting itself.
+      if (
+        segs.length === 3 &&
+        segs[1] === 'update' &&
+        segs[2] === 'status' &&
+        method === 'GET'
+      ) {
+        const head = await runGit(['rev-parse', '--short', 'HEAD'])
+        if (!head.ok) {
+          sendJson(res, {
+            error: 'This install is not a git checkout — in-app update is unavailable.',
+            available: false,
+          })
+          return true
+        }
+        const fetched = await runGit(['fetch', 'origin', 'main', '--quiet'])
+        const headMsg = await runGit(['log', '-1', '--format=%s'])
+        const counts = await runGit(['rev-list', '--left-right', '--count', 'HEAD...origin/main'])
+        const latest = await runGit(['rev-parse', '--short', 'origin/main'])
+        const latestMsg = await runGit(['log', '-1', '--format=%s', 'origin/main'])
+        let ahead = 0
+        let behind = 0
+        if (counts.ok) {
+          const [a, b] = counts.stdout.trim().split(/\s+/).map(Number)
+          ahead = a || 0
+          behind = b || 0
+        }
+        sendJson(res, {
+          current: head.stdout.trim(),
+          currentMessage: headMsg.stdout.trim(),
+          latest: latest.stdout.trim(),
+          latestMessage: latestMsg.stdout.trim(),
+          ahead,
+          behind,
+          available: behind > 0,
+          fetchOk: fetched.ok,
+          fetchError: fetched.ok
+            ? undefined
+            : (fetched.stderr.trim() || 'Could not reach the update server.').slice(0, 200),
+        })
+        return true
+      }
+      if (
+        segs.length === 3 &&
+        segs[1] === 'update' &&
+        segs[2] === 'apply' &&
+        method === 'POST'
+      ) {
+        const script = join(process.cwd(), 'bin', 'allegory-update')
+        if (!existsSync(script)) {
+          sendJson(res, { error: 'Update script not found in this install.' }, 500)
+          return true
+        }
+        try {
+          // Detached + own session so killing this server (during the restart)
+          // doesn't kill the updater.
+          const child = spawn('bash', [script], {
+            cwd: process.cwd(),
+            detached: true,
+            stdio: 'ignore',
+          })
+          child.unref()
+        } catch (err) {
+          sendJson(
+            res,
+            { error: err instanceof Error ? err.message : 'Could not start the updater.' },
+            500,
+          )
+          return true
+        }
+        sendJson(res, { ok: true, restarting: true })
         return true
       }
 
