@@ -414,7 +414,7 @@ function TopButton({ onClick, label, active, prominent, children }: TopButtonPro
   )
 }
 
-const GITHUB_URL = 'https://github.com/OhioMathTeacher/jellyfin-sound-machine'
+const GITHUB_URL = 'https://github.com/OhioMathTeacher/allegory-app'
 
 // "About Allegory" splash — opened by tapping the brand mark. A portrait of
 // Socrates (drop your own at public/socrates.jpg; falls back to the logo),
