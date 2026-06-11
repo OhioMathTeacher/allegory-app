@@ -1,0 +1,72 @@
+#!/usr/bin/env bash
+# Update Allegory to the latest published version, then restart the server.
+#
+# Install machines are pure checkouts that never make local commits, and the
+# public repo's history can be rewritten (squashed release snapshots), so we
+# land exactly on origin/main with `reset --hard` rather than `pull` — a pull
+# would conflict after a force-push. Everything personal (settings, play
+# history, the music library) lives OUTSIDE git, so nothing of yours is
+# touched.
+#
+# Safe to run from a terminal, a .desktop entry, or the in-app Update button
+# (the server spawns this detached so it survives its own restart).
+set -euo pipefail
+
+REPO="$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)"
+CACHE_DIR="$REPO/.allegory-cache"
+LOG_FILE="$CACHE_DIR/update.log"
+BRANCH="${ALLEGORY_BRANCH:-main}"
+mkdir -p "$CACHE_DIR"
+cd "$REPO"
+
+# .desktop / systemd launches start with a stripped-down PATH that omits a
+# user-installed node. Prepend the usual locations so `npm` is reachable.
+if ! command -v npm >/dev/null 2>&1; then
+  for d in "$HOME/.local/node/bin" "/usr/local/bin" "/opt/homebrew/bin"; do
+    if [ -x "$d/npm" ]; then export PATH="$d:$PATH"; break; fi
+  done
+fi
+
+log() { echo "[$(date '+%H:%M:%S')] $*" >>"$LOG_FILE"; }
+: > "$LOG_FILE"
+log "update starting (branch $BRANCH)"
+
+# Give an in-app caller's HTTP response time to flush before we may kill the
+# server it came from. Harmless from a terminal.
+sleep 2
+
+# Only reinstall when the lockfile actually changes.
+lock_before="$(sha1sum package-lock.json 2>/dev/null | cut -d' ' -f1 || true)"
+
+git fetch origin "$BRANCH" --quiet >>"$LOG_FILE" 2>&1
+git reset --hard "origin/$BRANCH" >>"$LOG_FILE" 2>&1
+log "synced to $(git rev-parse --short HEAD): $(git log -1 --format=%s)"
+
+lock_after="$(sha1sum package-lock.json 2>/dev/null | cut -d' ' -f1 || true)"
+if [ "$lock_before" != "$lock_after" ] || [ ! -d node_modules ]; then
+  log "dependencies changed — running npm install"
+  npm install >>"$LOG_FILE" 2>&1
+else
+  log "dependencies unchanged — skipping npm install"
+fi
+
+# Restart. If a systemd user service manages the server, restart it (in a
+# transient scope so the service cgroup's teardown doesn't kill this script
+# mid-flight). Otherwise stop any vite serving this repo and relaunch detached.
+if command -v systemctl >/dev/null 2>&1 && systemctl --user is-active --quiet allegory.service 2>/dev/null; then
+  log "restarting via systemd user service"
+  if command -v systemd-run >/dev/null 2>&1; then
+    systemd-run --user --scope --collect systemctl --user restart allegory.service >>"$LOG_FILE" 2>&1 ||
+      systemctl --user restart allegory.service >>"$LOG_FILE" 2>&1
+  else
+    systemctl --user restart allegory.service >>"$LOG_FILE" 2>&1
+  fi
+else
+  log "restarting dev server manually"
+  pkill -f "$REPO.*vite" 2>/dev/null || true
+  rm -f "$CACHE_DIR/url"
+  sleep 1
+  setsid nohup npm run dev </dev/null >>"$CACHE_DIR/launcher.log" 2>&1 &
+fi
+
+log "update complete"

@@ -6,6 +6,7 @@ import {
   subscribeCrashLog,
   type LogEntry,
 } from '../lib/crash-log'
+import { UpdatePanel } from './UpdatePanel'
 
 function formatTime(t: number): string {
   const d = new Date(t)
@@ -58,6 +59,7 @@ export function DiagnosticsPanel() {
 
   return (
     <div className="mt-5">
+      <UpdatePanel />
       <p className="mb-3 text-sm text-white/55">
         A rolling log of playback + lifecycle events, kept in this browser so
         it survives a crash. When playback dies in the car, open this, find the

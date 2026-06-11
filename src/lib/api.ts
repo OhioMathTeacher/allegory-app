@@ -142,6 +142,37 @@ export async function saveAlbumTags(
   return send<AlbumTagSaveResult>(conn, 'POST', `/albums/${albumId}/tags`, edits)
 }
 
+/** State of the local checkout relative to the published latest. */
+export interface UpdateStatus {
+  current: string
+  currentMessage: string
+  latest: string
+  latestMessage: string
+  ahead: number
+  behind: number
+  available: boolean
+  fetchOk: boolean
+  fetchError?: string
+  /** Set when the install can't self-update (e.g. not a git checkout). */
+  error?: string
+}
+
+/** Check whether a newer version is published (server runs `git fetch`). */
+export async function getUpdateStatus(conn: Connection): Promise<UpdateStatus> {
+  return getJson<UpdateStatus>(conn, '/update/status')
+}
+
+/**
+ * Apply the latest update and restart the server. Returns as soon as the
+ * (detached) updater is launched; the server will go down and come back on the
+ * same URL, so the caller should poll and reload.
+ */
+export async function applyUpdate(
+  conn: Connection,
+): Promise<{ ok: boolean; restarting: boolean }> {
+  return send<{ ok: boolean; restarting: boolean }>(conn, 'POST', '/update/apply', {})
+}
+
 /** Search tracks, albums and artists by name. */
 export async function search(
   conn: Connection,
