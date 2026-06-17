@@ -306,6 +306,12 @@ export async function askAI(
   messages: ChatMessage[],
   systemPrompt: string,
   signal?: AbortSignal,
+  /**
+   * Output-token ceiling for this one call. Omit for the terse-chat default
+   * (~220 local / 1024 cloud). Callers raise it when a playlist block is in
+   * play, since that JSON needs far more room than a 3-sentence reply.
+   */
+  maxTokens?: number,
 ): Promise<string> {
   if (!providerId || providerId === 'none') {
     throw new Error('No AI provider selected. Open Settings → AI to choose one.')
@@ -324,9 +330,10 @@ export async function askAI(
           model: local.model,
           // Hard backstop so a chatty local model can't run away — Socrates is
           // meant to answer in ~3 sentences (see socrates-prompt). ~220 tokens
-          // bites on essays while still completing a short reply (and a small
-          // playlist block, where the prose around it is meant to stay terse).
-          max_tokens: 220,
+          // bites on essays while still completing a short reply. A playlist
+          // request lifts this (via maxTokens) so the JSON block isn't truncated
+          // mid-track — the #1 reason local models never produced a usable one.
+          max_tokens: maxTokens ?? 220,
           messages: [{ role: 'system', content: systemPrompt }, ...messages],
         }),
       })
@@ -365,7 +372,7 @@ export async function askAI(
       },
       body: JSON.stringify({
         model: 'claude-sonnet-4-20250514',
-        max_tokens: 1024,
+        max_tokens: maxTokens ?? 1024,
         system: systemPrompt,
         messages: messages.map((m) => ({ role: m.role, content: m.content })),
       }),
@@ -393,7 +400,7 @@ export async function askAI(
           role: m.role === 'assistant' ? 'model' : 'user',
           parts: [{ text: m.content }],
         })),
-        generationConfig: { maxOutputTokens: 1024, temperature: 0.7 },
+        generationConfig: { maxOutputTokens: maxTokens ?? 1024, temperature: 0.7 },
       }),
     })
     if (!res.ok) {
@@ -423,7 +430,7 @@ export async function askAI(
     },
     body: JSON.stringify({
       model: config.model,
-      max_tokens: 1024,
+      max_tokens: maxTokens ?? 1024,
       messages: [{ role: 'system', content: systemPrompt }, ...messages],
     }),
   })

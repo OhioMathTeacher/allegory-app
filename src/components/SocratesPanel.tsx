@@ -13,6 +13,7 @@ import {
   ChevronsDown,
   Sparkles,
   NotebookPen,
+  ListMusic,
 } from 'lucide-react'
 import { useConnected } from '../lib/connection'
 import { usePlayer } from '../lib/player'
@@ -31,9 +32,37 @@ import {
   providerDisplayName,
   type ChatMessage,
 } from '../lib/ai'
-import { buildSocratesPrompt } from '../lib/socrates-prompt'
-import { parseSocratesMessage } from '../lib/socrates-actions'
+import { buildSocratesPrompt, buildPlaylistStructuringPrompt } from '../lib/socrates-prompt'
+import { parseSocratesMessage, type PlaylistProposal } from '../lib/socrates-actions'
 import { SocratesPlaylistCard } from './SocratesPlaylistCard'
+
+/** Does the user's message read like a request to build/play a set? Used only
+ *  to lift the token ceiling for that one call so the JSON block isn't cut off. */
+function looksLikePlaylistRequest(text: string): boolean {
+  return /\b(playlist|queue|set ?list|mix(?:tape)?|make me|build me|put together|some (?:songs|tracks)|play (?:me|some|a few))\b/i.test(
+    text,
+  )
+}
+
+/** Does an assistant reply look like it lists songs (so the "Make a playlist
+ *  from this" rescue is worth offering)? Either list-shaped, or it names two or
+ *  more library artists in prose. Kept cheap — it runs per assistant bubble. */
+function looksLikeSongList(prose: string, artists: { name: string }[]): boolean {
+  if (!prose) return false
+  const listLines = prose
+    .split('\n')
+    .filter((l) => /^\s*([-*•]|\d+[.)])\s+/.test(l)).length
+  if (listLines >= 2) return true
+  const lower = prose.toLowerCase()
+  let hits = 0
+  for (const a of artists) {
+    const n = a.name.toLowerCase()
+    if (n.length >= 4 && lower.includes(n)) {
+      if (++hits >= 2) return true
+    }
+  }
+  return false
+}
 
 const CHAT_STORAGE_KEY = 'allegory.socrates.chat'
 
@@ -92,6 +121,13 @@ export function SocratesPanel({
   const [input, setInput] = useState('')
   const [thinking, setThinking] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // Playlists built from a reply's prose via "Make a playlist from this",
+  // keyed by that assistant message's index. `buildingIdx` is the one in
+  // flight (for its spinner). Both reset when the conversation is cleared.
+  const [built, setBuilt] = useState<
+    Record<number, { proposals?: PlaylistProposal[]; error?: string }>
+  >({})
+  const [buildingIdx, setBuildingIdx] = useState<number | null>(null)
   const [aboutOpen, setAboutOpen] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
@@ -242,7 +278,10 @@ export function SocratesPanel({
     const controller = new AbortController()
     abortRef.current = controller
     try {
-      const reply = await askAI(providerId, next, systemPrompt, controller.signal)
+      // A playlist request needs room for the JSON block — lift the token
+      // ceiling for just this call so it isn't truncated mid-track.
+      const maxTokens = looksLikePlaylistRequest(text) ? 1200 : undefined
+      const reply = await askAI(providerId, next, systemPrompt, controller.signal, maxTokens)
       setMessages((m) => [...m, { role: 'assistant', content: reply.trim() || '…' }])
     } catch (err) {
       // A user-initiated cancel is not an error — just stop quietly.
@@ -258,6 +297,46 @@ export function SocratesPanel({
 
   function send() {
     void sendText(input)
+  }
+
+  // Rescue path: take a reply that just *listed* songs in prose and turn it into
+  // a real, resolvable playlist card via a focused, persona-free second pass.
+  // This is what makes the feature work on weak/free models that won't emit the
+  // action block inline — the narrow "structure this" job is one they handle.
+  async function makePlaylistFromBubble(index: number, sourceText: string) {
+    if (buildingIdx !== null || noProvider || !sourceText.trim()) return
+    setBuildingIdx(index)
+    setBuilt((b) => ({ ...b, [index]: {} }))
+    const controller = new AbortController()
+    try {
+      const sys = buildPlaylistStructuringPrompt({
+        artists: artists ?? [],
+        albums: albums ?? [],
+      })
+      const reply = await askAI(
+        providerId,
+        [{ role: 'user', content: sourceText }],
+        sys,
+        controller.signal,
+        1200,
+      )
+      const { proposals } = parseSocratesMessage(reply)
+      if (proposals.length) {
+        setBuilt((b) => ({ ...b, [index]: { proposals } }))
+      } else {
+        setBuilt((b) => ({
+          ...b,
+          [index]: { error: "I couldn't find those in your library." },
+        }))
+      }
+    } catch (err) {
+      setBuilt((b) => ({
+        ...b,
+        [index]: { error: err instanceof Error ? err.message : 'Could not build a playlist.' },
+      }))
+    } finally {
+      setBuildingIdx(null)
+    }
   }
 
   // A highlighted passage, trimmed for use in a prompt.
@@ -311,6 +390,8 @@ export function SocratesPanel({
   function clearConversation() {
     setMessages([])
     setError(null)
+    setBuilt({})
+    setBuildingIdx(null)
     try {
       localStorage.removeItem(CHAT_STORAGE_KEY)
     } catch {
@@ -402,6 +483,9 @@ export function SocratesPanel({
             message={m}
             artists={artists ?? []}
             albums={albums ?? []}
+            building={buildingIdx === i}
+            built={built[i]}
+            onMakePlaylist={(text) => void makePlaylistFromBubble(i, text)}
           />
         ))}
         {thinking && (
@@ -565,9 +649,15 @@ interface BubbleProps {
   message: ChatMessage
   artists: import('../lib/types').Artist[]
   albums: import('../lib/types').Album[]
+  /** True while this bubble's "Make a playlist from this" pass is running. */
+  building?: boolean
+  /** Result of that pass: cards to render, or an error to show. */
+  built?: { proposals?: PlaylistProposal[]; error?: string }
+  /** Run the rescue pass on this bubble's prose. */
+  onMakePlaylist?: (text: string) => void
 }
 
-function Bubble({ message, artists, albums }: BubbleProps) {
+function Bubble({ message, artists, albums, building, built, onMakePlaylist }: BubbleProps) {
   if (message.role === 'user') {
     return (
       <div className="mb-3 flex justify-end">
@@ -583,6 +673,12 @@ function Bubble({ message, artists, albums }: BubbleProps) {
   // Assistant: split prose from any playlist action blocks so cards
   // render inline and the surrounding prose stays readable.
   const { prose, proposals } = parseSocratesMessage(message.content)
+  const builtProposals = built?.proposals ?? []
+  const hasCard = proposals.length > 0 || builtProposals.length > 0
+  // Offer the rescue only when he listed songs but no card came of it — keeps
+  // it off pure-philosophy replies. Always available once a build errored (retry).
+  const offerBuild =
+    !!onMakePlaylist && !hasCard && (looksLikeSongList(prose, artists) || !!built?.error)
   return (
     <div className="mb-3">
       {prose && (
@@ -592,12 +688,40 @@ function Bubble({ message, artists, albums }: BubbleProps) {
       )}
       {proposals.map((p, i) => (
         <SocratesPlaylistCard
-          key={i}
+          key={`p${i}`}
           proposal={p}
           artists={artists}
           albums={albums}
         />
       ))}
+      {builtProposals.map((p, i) => (
+        <SocratesPlaylistCard
+          key={`b${i}`}
+          proposal={p}
+          artists={artists}
+          albums={albums}
+        />
+      ))}
+      {building ? (
+        <div className="mt-2 flex items-center gap-2 text-sm text-white/55">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          Building a playlist…
+        </div>
+      ) : offerBuild ? (
+        <div className="mt-2 flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => onMakePlaylist?.(prose)}
+            className="inline-flex items-center gap-1.5 rounded-full border border-line bg-white/[0.03] px-3 py-1.5 text-sm text-white/80 transition-colors hover:bg-white/10 hover:text-white"
+          >
+            <ListMusic className="h-3.5 w-3.5" style={{ color: 'var(--accent)' }} />
+            {built?.error ? 'Try again' : 'Make a playlist from this'}
+          </button>
+          {built?.error && (
+            <span className="text-xs text-amber-300/80">{built.error}</span>
+          )}
+        </div>
+      ) : null}
     </div>
   )
 }
