@@ -30,6 +30,11 @@ export default defineConfig(({ mode }) => {
     // not a git checkout — leave 'unknown'
   }
   const buildDate = new Date().toISOString().slice(0, 10)
+  const buildInfo = JSON.stringify({
+    version: pkg.version ?? '0.0.0',
+    sha: gitSha,
+    date: buildDate,
+  })
 
   // Serve HTTPS when a cert is present in `.allegory-cache/` (gitignored).
   // Generate one with mkcert (locally trusted, no browser warnings):
@@ -48,12 +53,26 @@ export default defineConfig(({ mode }) => {
       : undefined
 
   return {
-    define: {
-      __APP_VERSION__: JSON.stringify(pkg.version ?? '0.0.0'),
-      __GIT_SHA__: JSON.stringify(gitSha),
-      __BUILD_DATE__: JSON.stringify(buildDate),
-    },
-    plugins: [react(), tailwindcss(), allegoryLibrary({ defaultMusicDir })],
+    plugins: [
+      react(),
+      tailwindcss(),
+      allegoryLibrary({ defaultMusicDir }),
+      // Expose the build stamp to the client as `window.__ALLEGORY_BUILD__`,
+      // read by the About splash. Injected via transformIndexHtml rather than
+      // Vite `define` because `define` is NOT applied to app modules in dev
+      // (only in `build`) — this hook runs in both, and fresh on every dev page
+      // load, so the phone always sees the running build.
+      {
+        name: 'allegory-build-info',
+        transformIndexHtml: () => [
+          {
+            tag: 'script',
+            injectTo: 'head',
+            children: `window.__ALLEGORY_BUILD__=${buildInfo};`,
+          },
+        ],
+      },
+    ],
     server: {
       https,
       // Bind every interface (incl. the Tailscale one) so the phone can
