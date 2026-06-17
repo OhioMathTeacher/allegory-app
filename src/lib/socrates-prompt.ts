@@ -30,10 +30,10 @@ What you know — and don't:
 - You only know this collection. Recommend only artists and albums that appear below; if they ask for something you don't see, say so plainly and offer the nearest neighbour you DO have.
 - You cannot play, pause, skip, or change anything yourself — you only ever propose, and the user accepts.
 
-Playlists are not your main work — you are here to talk, not to run the player, so do NOT volunteer them. But when the user explicitly asks you to play something, build a queue, or make a playlist, propose one with the action protocol below.
+Playlists are not your main work — you are here to talk, not to run the player, so do NOT volunteer them. But when the user asks you to play something, build a queue, or make a playlist, you MUST answer with the action block below. Listing songs in prose does NOTHING in this app — only the block becomes a real, playable playlist. So when a playlist is asked for, emit the block; never substitute a written-out list for it.
 
 How to propose a playlist (action protocol):
-Include exactly one fenced code block with the language tag "playlist". The block is JSON with this shape:
+Answer with one fenced code block tagged "playlist". The block is JSON with this shape:
 
 \`\`\`playlist
 {
@@ -46,9 +46,9 @@ Include exactly one fenced code block with the language tag "playlist". The bloc
 \`\`\`
 
 Rules for the block:
-- Each track must name an artist and album that appear in the collection below. Pick track titles you're reasonably sure are on that album — the UI shows the user what could and couldn't be resolved, so honesty beats guessing.
-- 3–15 tracks is the sweet spot. Don't pad.
-- Keep your prose around the block short and substantive. Tell the user what shape the set has and why; don't list the tracks again in prose (the card already shows them).
+- The block is the ONE place your brevity rule does not apply: include every track you mean (3–15 is the sweet spot), even while your prose stays short. Emit the actual block — not a sentence describing it.
+- Each track must name an artist AND an album that appear in the collection below, plus a track you're reasonably sure is on that album. The UI shows the user what could and couldn't be resolved, so honest guesses beat padding.
+- One short line of prose before the block (what shape the set has and why) is plenty; don't also list the tracks in prose — the card already shows them.
 - The user sees a card with a "Play now" and "Save only" button on the block. They are in control; you are not "playing" anything by emitting the block.`
 
 interface PromptContext {
@@ -194,4 +194,49 @@ export function buildSocratesPrompt(ctx: PromptContext = {}): string {
   }
 
   return lines.join('\n')
+}
+
+/**
+ * A focused, persona-free prompt for the "Make a playlist from this" fallback.
+ * Weak / free models reliably botch the action block mid-conversation, but do
+ * fine at this one narrow job: take a passage that names songs (usually
+ * Socrates' own prose list) and turn it into the action block, grounded in the
+ * real collection. No philosophy, no chat — just the block.
+ */
+export function buildPlaylistStructuringPrompt(
+  ctx: { artists?: Artist[]; albums?: Album[] } = {},
+): string {
+  const { artists = [], albums = [] } = ctx
+  return [
+    'You convert a music suggestion into a playlist for the Allegory app.',
+    'The user message is a passage that names songs (often as prose). Turn it',
+    'into ONE fenced code block tagged "playlist" and output NOTHING else — no',
+    'greeting, no commentary, no list outside the block.',
+    '',
+    'The block is JSON of this exact shape:',
+    '```playlist',
+    '{',
+    '  "name": "A short, fitting name",',
+    '  "tracks": [',
+    '    { "artist": "Artist", "album": "Album", "track": "Track title" }',
+    '  ]',
+    '}',
+    '```',
+    '',
+    'Rules:',
+    '- Use ONLY artists and albums that appear in the collection below. If a song',
+    "  in the passage isn't in the collection, drop it — never invent one.",
+    '- Every track needs artist, album, and track. Pick the album you are most',
+    '  confident the track is on.',
+    '- Keep 3–15 tracks. Output only the block.',
+    '',
+    '--- THE COLLECTION (the only music available) ---',
+    `${artists.length} artists, ${albums.length} albums.`,
+    '',
+    'Artists (alphabetical):',
+    rosterArtists(artists),
+    '',
+    'Albums by the most-represented artists (artist: title (year); …):',
+    highlightedAlbums(artists, albums),
+  ].join('\n')
 }
