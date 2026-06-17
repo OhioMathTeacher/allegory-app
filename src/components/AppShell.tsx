@@ -421,6 +421,7 @@ const GITHUB_URL = 'https://github.com/OhioMathTeacher/allegory-app'
 // the tagline, and a link to the repo. Click anywhere outside to dismiss.
 function Splash({ onClose }: { onClose: () => void }) {
   const [imgFailed, setImgFailed] = useState(false)
+  const build = window.__ALLEGORY_BUILD__ ?? { version: '?', sha: 'dev', date: '' }
   return (
     <motion.div
       initial={{ opacity: 0 }}
@@ -478,9 +479,10 @@ function Splash({ onClose }: { onClose: () => void }) {
             View on GitHub
           </a>
           {/* Build stamp — confirms which build is loaded (handy on the phone,
-              through caching). The short SHA changes every commit. */}
+              through caching). The short SHA changes every commit. Injected into
+              index.html by vite.config's allegory-build-info plugin. */}
           <p className="mt-4 text-xs tracking-wide text-white/40">
-            Version {__APP_VERSION__} · {__GIT_SHA__} · {__BUILD_DATE__}
+            Version {build.version} · {build.sha} · {build.date}
           </p>
         </div>
       </motion.div>
