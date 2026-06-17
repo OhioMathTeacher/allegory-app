@@ -477,6 +477,11 @@ function Splash({ onClose }: { onClose: () => void }) {
           >
             View on GitHub
           </a>
+          {/* Build stamp — confirms which build is loaded (handy on the phone,
+              through caching). The short SHA changes every commit. */}
+          <p className="mt-4 text-xs tracking-wide text-white/40">
+            Version {__APP_VERSION__} · {__GIT_SHA__} · {__BUILD_DATE__}
+          </p>
         </div>
       </motion.div>
     </motion.div>

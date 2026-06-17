@@ -1,5 +1,6 @@
 import { defineConfig, loadEnv } from 'vite'
 import { existsSync, readFileSync } from 'node:fs'
+import { execSync } from 'node:child_process'
 import { resolve } from 'node:path'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
@@ -11,6 +12,24 @@ export default defineConfig(({ mode }) => {
   // in-app Settings UI). ALLEGORY_MUSIC_DIR seeds the default on first run.
   const env = loadEnv(mode, process.cwd(), '')
   const defaultMusicDir = env.ALLEGORY_MUSIC_DIR || ''
+
+  // Build stamp baked into the bundle, surfaced on the About splash so you can
+  // confirm — from the phone, through any cache — exactly which build loaded.
+  // The semver is human-readable; the short git SHA changes every commit, which
+  // is the real "is my new code live?" tell. Falls back gracefully off a git
+  // checkout (e.g. a deployed tarball).
+  const pkg = JSON.parse(
+    readFileSync(resolve(process.cwd(), 'package.json'), 'utf8'),
+  ) as { version?: string }
+  let gitSha = 'unknown'
+  try {
+    gitSha = execSync('git rev-parse --short HEAD', { cwd: process.cwd() })
+      .toString()
+      .trim()
+  } catch {
+    // not a git checkout — leave 'unknown'
+  }
+  const buildDate = new Date().toISOString().slice(0, 10)
 
   // Serve HTTPS when a cert is present in `.allegory-cache/` (gitignored).
   // Generate one with mkcert (locally trusted, no browser warnings):
@@ -29,6 +48,11 @@ export default defineConfig(({ mode }) => {
       : undefined
 
   return {
+    define: {
+      __APP_VERSION__: JSON.stringify(pkg.version ?? '0.0.0'),
+      __GIT_SHA__: JSON.stringify(gitSha),
+      __BUILD_DATE__: JSON.stringify(buildDate),
+    },
     plugins: [react(), tailwindcss(), allegoryLibrary({ defaultMusicDir })],
     server: {
       https,
