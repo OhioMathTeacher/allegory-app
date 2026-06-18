@@ -1,9 +1,20 @@
 import { useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { motion } from 'motion/react'
-import { ListMusic, Plus, Pencil } from 'lucide-react'
+import { ListMusic, Plus, Pencil, Sparkles, Loader2 } from 'lucide-react'
 import { useConnected } from '../lib/connection'
-import { getPlaylists, getSongNotesIndex, createPlaylist, albumImageUrl } from '../lib/api'
+import {
+  getPlaylists,
+  getSongNotesIndex,
+  createPlaylist,
+  albumImageUrl,
+  getArtists,
+  getAlbums,
+} from '../lib/api'
+import { askAI, getStoredProvider } from '../lib/ai'
+import { buildPlaylistFromDescriptionPrompt } from '../lib/socrates-prompt'
+import { parseSocratesMessage, type PlaylistProposal } from '../lib/socrates-actions'
+import { SocratesPlaylistCard } from './SocratesPlaylistCard'
 import { Cover } from './Cover'
 import { PlaylistEditMenu } from './PlaylistEditMenu'
 import type { Playlist } from '../lib/types'
@@ -17,9 +28,20 @@ interface PlaylistsProps {
 export function Playlists({ onSelectPlaylist, onOpenNotes }: PlaylistsProps) {
   const conn = useConnected()
   const queryClient = useQueryClient()
+  const providerId = getStoredProvider()
+  const hasAI = !!providerId && providerId !== 'none'
+
   const [creating, setCreating] = useState(false)
+  // Describe-it (AI) is the primary New flow when a provider is set up; the
+  // plain name field is the fallback (and the only option without AI).
+  const [mode, setMode] = useState<'describe' | 'name'>(hasAI ? 'describe' : 'name')
   const [newName, setNewName] = useState('')
   const [busy, setBusy] = useState(false)
+  // Describe-a-playlist state.
+  const [description, setDescription] = useState('')
+  const [generating, setGenerating] = useState(false)
+  const [proposal, setProposal] = useState<PlaylistProposal | null>(null)
+  const [genError, setGenError] = useState<string | null>(null)
 
   const {
     data: playlists,
@@ -30,6 +52,19 @@ export function Playlists({ onSelectPlaylist, onOpenNotes }: PlaylistsProps) {
     queryFn: () => getPlaylists(conn),
   })
 
+  // Library context for the AI prompt — same cache keys as Socrates, so it's
+  // shared, not re-fetched. Only needed for the describe flow.
+  const { data: artists } = useQuery({
+    queryKey: ['artists', conn.serverUrl, conn.userId],
+    queryFn: () => getArtists(conn),
+    enabled: hasAI,
+  })
+  const { data: albums } = useQuery({
+    queryKey: ['albums', conn.serverUrl, conn.userId],
+    queryFn: () => getAlbums(conn),
+    enabled: hasAI,
+  })
+
   // Shared cache key with the player bar / track pencils — drives the count
   // on the smart Notes playlist card.
   const { data: notesIndex } = useQuery({
@@ -37,6 +72,19 @@ export function Playlists({ onSelectPlaylist, onOpenNotes }: PlaylistsProps) {
     queryFn: () => getSongNotesIndex(conn),
   })
   const notesCount = notesIndex?.length ?? 0
+
+  function toggleCreating() {
+    setCreating((c) => {
+      const next = !c
+      // Reset everything when the panel opens or closes so it's never stale.
+      setNewName('')
+      setDescription('')
+      setProposal(null)
+      setGenError(null)
+      setMode(hasAI ? 'describe' : 'name')
+      return next
+    })
+  }
 
   async function handleCreate() {
     const name = newName.trim()
@@ -50,6 +98,35 @@ export function Playlists({ onSelectPlaylist, onOpenNotes }: PlaylistsProps) {
       onSelectPlaylist({ id, name, trackCount: 0 })
     } finally {
       setBusy(false)
+    }
+  }
+
+  // Describe → Socrates builds a proposal we preview (resolved against the
+  // library) before the user saves it. A focused, single-purpose AI call.
+  async function handleGenerate() {
+    const desc = description.trim()
+    if (!desc || generating || !hasAI) return
+    setGenError(null)
+    setProposal(null)
+    setGenerating(true)
+    try {
+      const sys = buildPlaylistFromDescriptionPrompt({
+        artists: artists ?? [],
+        albums: albums ?? [],
+      })
+      const reply = await askAI(providerId, [{ role: 'user', content: desc }], sys, undefined, 1200)
+      const { proposals } = parseSocratesMessage(reply)
+      if (proposals.length) {
+        setProposal(proposals[0])
+      } else {
+        setGenError(
+          "Socrates couldn't shape that into a playlist from your library — try describing it a little differently.",
+        )
+      }
+    } catch (err) {
+      setGenError(err instanceof Error ? err.message : 'Could not generate a playlist.')
+    } finally {
+      setGenerating(false)
     }
   }
 
@@ -67,7 +144,7 @@ export function Playlists({ onSelectPlaylist, onOpenNotes }: PlaylistsProps) {
           </div>
           <button
             type="button"
-            onClick={() => setCreating((c) => !c)}
+            onClick={toggleCreating}
             className="flex shrink-0 items-center gap-1.5 rounded-full border border-line px-4 py-2 text-sm font-medium text-white/85 transition-colors hover:bg-white/5"
           >
             <Plus className="h-4 w-4" />
@@ -75,31 +152,103 @@ export function Playlists({ onSelectPlaylist, onOpenNotes }: PlaylistsProps) {
           </button>
         </div>
 
-        {creating && (
-          <div className="mt-3 flex items-center gap-2">
-            <input
-              autoFocus
-              value={newName}
-              onChange={(e) => setNewName(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') handleCreate()
-                else if (e.key === 'Escape') {
-                  setCreating(false)
-                  setNewName('')
-                }
-              }}
-              placeholder="New playlist name…"
-              className="min-w-0 flex-1 rounded-lg border border-line bg-elevated px-3 py-2 text-sm text-white outline-none placeholder:text-white/35 focus:border-[var(--accent)]"
-            />
+        {creating && mode === 'describe' && hasAI && (
+          <div className="mt-3">
+            <div className="flex items-end gap-2">
+              <textarea
+                autoFocus
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault()
+                    void handleGenerate()
+                  } else if (e.key === 'Escape') toggleCreating()
+                }}
+                rows={2}
+                placeholder="Describe the playlist you want… (e.g. “late-night, melancholy, mostly acoustic”)"
+                className="max-h-32 min-w-0 flex-1 resize-none rounded-lg border border-line bg-elevated px-3 py-2 text-sm text-white outline-none placeholder:text-white/35 focus:border-[var(--accent)]"
+              />
+              <button
+                type="button"
+                onClick={() => void handleGenerate()}
+                disabled={!description.trim() || generating}
+                className="flex shrink-0 items-center gap-1.5 rounded-lg px-4 py-2.5 text-sm font-semibold text-black transition-transform hover:scale-105 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:scale-100"
+                style={{ background: 'var(--accent)' }}
+              >
+                {generating ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Sparkles className="h-4 w-4" />
+                )}
+                Generate
+              </button>
+            </div>
+
+            {genError && (
+              <p className="mt-2 text-xs text-amber-300/80">{genError}</p>
+            )}
+
+            {proposal && (
+              <div className="mt-3">
+                <SocratesPlaylistCard
+                  proposal={proposal}
+                  artists={artists ?? []}
+                  albums={albums ?? []}
+                  onCreated={(id, name, trackCount) => {
+                    setCreating(false)
+                    setDescription('')
+                    setProposal(null)
+                    onSelectPlaylist({ id, name, trackCount })
+                  }}
+                />
+              </div>
+            )}
+
             <button
               type="button"
-              onClick={handleCreate}
-              disabled={!newName.trim() || busy}
-              className="shrink-0 rounded-lg px-4 py-2 text-sm font-semibold text-black transition-transform hover:scale-105 disabled:opacity-40"
-              style={{ background: 'var(--accent)' }}
+              onClick={() => setMode('name')}
+              className="mt-2 text-xs text-white/45 underline-offset-2 transition-colors hover:text-white/70 hover:underline"
             >
-              Create
+              or name an empty one instead
             </button>
+          </div>
+        )}
+
+        {creating && (mode === 'name' || !hasAI) && (
+          <div className="mt-3">
+            <div className="flex items-center gap-2">
+              <input
+                autoFocus
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleCreate()
+                  else if (e.key === 'Escape') toggleCreating()
+                }}
+                placeholder="New playlist name…"
+                className="min-w-0 flex-1 rounded-lg border border-line bg-elevated px-3 py-2 text-sm text-white outline-none placeholder:text-white/35 focus:border-[var(--accent)]"
+              />
+              <button
+                type="button"
+                onClick={handleCreate}
+                disabled={!newName.trim() || busy}
+                className="shrink-0 rounded-lg px-4 py-2 text-sm font-semibold text-black transition-transform hover:scale-105 disabled:opacity-40"
+                style={{ background: 'var(--accent)' }}
+              >
+                Create
+              </button>
+            </div>
+            {hasAI && (
+              <button
+                type="button"
+                onClick={() => setMode('describe')}
+                className="mt-2 inline-flex items-center gap-1 text-xs text-white/45 underline-offset-2 transition-colors hover:text-white/70 hover:underline"
+              >
+                <Sparkles className="h-3 w-3" />
+                or describe it and let Socrates build it
+              </button>
+            )}
           </div>
         )}
       </header>
