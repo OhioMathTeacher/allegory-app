@@ -240,3 +240,43 @@ export function buildPlaylistStructuringPrompt(
     highlightedAlbums(artists, albums),
   ].join('\n')
 }
+
+/**
+ * Focused prompt for the "describe a playlist" flow in the Playlists window:
+ * the user gives a mood / occasion / vibe and Socrates builds a fitting set
+ * from the collection. Like buildPlaylistStructuringPrompt, it is persona-free
+ * and emits only the action block — but here the input is a description to
+ * interpret, not an existing list of songs to transcribe.
+ */
+export function buildPlaylistFromDescriptionPrompt(
+  ctx: { artists?: Artist[]; albums?: Album[] } = {},
+): string {
+  const { artists = [], albums = [] } = ctx
+  return [
+    'You build a playlist for the Allegory music app from a short description of',
+    'the mood, occasion, or vibe the user wants. Output ONE fenced code block',
+    'tagged "playlist" and NOTHING else — no greeting, no commentary.',
+    '',
+    'The block is JSON of this exact shape:',
+    '```playlist',
+    '{ "name": "...", "tracks": [ { "artist": "...", "album": "...", "track": "..." } ] }',
+    '```',
+    '',
+    'Rules:',
+    '- Choose tracks that genuinely fit the description, using ONLY artists and',
+    '  albums from the collection below. Never invent songs that are not in it.',
+    '- Every track needs artist, album, and track; pick the album you are most',
+    '  confident the track is on.',
+    '- Aim for 8–15 tracks, sequenced so the set flows. Give it a short, fitting',
+    '  name. Output only the block.',
+    '',
+    '--- THE COLLECTION (the only music available) ---',
+    `${artists.length} artists, ${albums.length} albums.`,
+    '',
+    'Artists (alphabetical):',
+    rosterArtists(artists),
+    '',
+    'Albums by the most-represented artists (artist: title (year); …):',
+    highlightedAlbums(artists, albums),
+  ].join('\n')
+}

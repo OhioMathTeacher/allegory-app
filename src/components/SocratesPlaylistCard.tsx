@@ -15,6 +15,9 @@ interface SocratesPlaylistCardProps {
   proposal: PlaylistProposal
   artists: Artist[]
   albums: Album[]
+  /** Called after the .m3u is created (Play or Save). Lets a host view react —
+   *  e.g. the Playlists window opens the new playlist. Optional; chat omits it. */
+  onCreated?: (playlistId: string, name: string, trackCount: number) => void
 }
 
 /**
@@ -29,6 +32,7 @@ export function SocratesPlaylistCard({
   proposal,
   artists,
   albums,
+  onCreated,
 }: SocratesPlaylistCardProps) {
   const conn = useConnected()
   const player = usePlayer()
@@ -66,8 +70,9 @@ export function SocratesPlaylistCard({
     setDone(null)
     try {
       const trackIds = resolvedTracks.map((r) => r.resolved!.id)
-      await createPlaylist(conn, proposal.name, trackIds)
+      const id = await createPlaylist(conn, proposal.name, trackIds)
       queryClient.invalidateQueries({ queryKey: ['playlists'] })
+      onCreated?.(id, proposal.name, trackIds.length)
       if (mode === 'play') {
         player.playQueue(resolvedTracks.map((r) => r.resolved!), 0)
         setDone(`Playing “${proposal.name}”.`)
