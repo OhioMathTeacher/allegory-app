@@ -136,12 +136,37 @@ export function parseSocratesMessage(content: string): ParsedMessage {
 
 // --- resolver -----------------------------------------------------------
 
+/** Separators stripped/split on when normalising for matching. */
+const SEPARATORS = /[\s_\-./&'":!?,()[\]]+/g
+
 /** Normalise for matching: lowercase + strip separators, punctuation, "the". */
 function norm(s: string): string {
   return s
     .toLowerCase()
     .replace(/^the\s+/, '')
-    .replace(/[\s_\-./&'":!?,()[\]]+/g, '')
+    .replace(SEPARATORS, '')
+}
+
+/**
+ * Order-insensitive normal form: like norm(), but splits into tokens and
+ * sorts them. Reconciles "Sort, Name" library folders with the "Name Sort"
+ * order the model proposes — e.g. "Osbourne, Ozzy" and "Ozzy Osbourne" both
+ * collapse to "osbourneozzy". Used only as an artist-match fallback, where
+ * the false-positive risk of reordering is negligible.
+ */
+function normSorted(s: string): string {
+  return s
+    .toLowerCase()
+    .replace(/^the\s+/, '')
+    .split(SEPARATORS)
+    .filter(Boolean)
+    .sort()
+    .join('')
+}
+
+/** Lower-cased word tokens, "the" prefix dropped. For subset matching. */
+function nameTokens(s: string): string[] {
+  return s.toLowerCase().replace(/^the\s+/, '').split(SEPARATORS).filter(Boolean)
 }
 
 export interface ResolvedTrack {
@@ -159,6 +184,14 @@ export interface ResolveContext {
    * them and most aren't relevant to any one resolution call.
    */
   fetchAlbumTracks: (albumId: string) => Promise<Track[]>
+  /**
+   * Optional online enrichment: given a proposed artist name the local
+   * library couldn't place, return alternate names (canonical/sort-name/
+   * aliases) to retry. Only called for unresolved artists, so a fully
+   * local-resolvable playlist makes zero network calls. Implementations are
+   * expected to skip themselves (return []) when offline.
+   */
+  enrichArtist?: (name: string) => Promise<string[]>
 }
 
 /**
@@ -170,9 +203,36 @@ export async function resolvePlaylist(
   proposal: PlaylistProposal,
   ctx: ResolveContext,
 ): Promise<ResolvedTrack[]> {
-  // Index artists + their albums.
+  // Index artists + their albums. The sorted index is an order-insensitive
+  // fallback so a "Sort, Name" library folder (e.g. "Osbourne, Ozzy") still
+  // matches the "Name Sort" order the model proposes ("Ozzy Osbourne").
   const artistByNorm = new Map<string, Artist>()
-  for (const a of ctx.artists) artistByNorm.set(norm(a.name), a)
+  const artistBySorted = new Map<string, Artist>()
+  const artistTokenSets = ctx.artists.map((a) => ({ artist: a, tokens: new Set(nameTokens(a.name)) }))
+  for (const a of ctx.artists) {
+    artistByNorm.set(norm(a.name), a)
+    const sortedKey = normSorted(a.name)
+    if (!artistBySorted.has(sortedKey)) artistBySorted.set(sortedKey, a)
+  }
+
+  /**
+   * Resolve a proposed artist name to a library artist, most-precise first:
+   *   1. exact normalised match
+   *   2. order-insensitive ("Osbourne, Ozzy" ≡ "Ozzy Osbourne")
+   *   3. subset: every proposed token appears in exactly ONE library artist
+   *      ("Dio" → "Dio, Ronnie James", "Ozzy" → "Osbourne, Ozzy"). The
+   *      uniqueness guard keeps an ambiguous token from matching the wrong one.
+   */
+  const findArtist = (name: string): Artist | null => {
+    const exact = artistByNorm.get(norm(name))
+    if (exact) return exact
+    const sorted = artistBySorted.get(normSorted(name))
+    if (sorted) return sorted
+    const pTokens = nameTokens(name)
+    if (pTokens.length === 0) return null
+    const candidates = artistTokenSets.filter(({ tokens }) => pTokens.every((t) => tokens.has(t)))
+    return candidates.length === 1 ? candidates[0].artist : null
+  }
 
   const albumsByArtistId = new Map<string, Album[]>()
   for (const al of ctx.albums) {
@@ -182,11 +242,38 @@ export async function resolvePlaylist(
     albumsByArtistId.set(al.artistId, list)
   }
 
+  // Resolve each proposed track's artist locally first.
+  const artistForTrack: (Artist | null)[] = proposal.tracks.map((p) => findArtist(p.artist))
+
+  // For artists we couldn't place locally, optionally ask the online lookup
+  // for alternate names and retry. The lookup skips itself when offline, and
+  // we only call it for the unresolved ones — a fully local-resolvable
+  // playlist makes no network calls. MusicBrainz rate-limits anonymous
+  // callers (~1 req/s), so we walk the unresolved names sequentially.
+  if (ctx.enrichArtist) {
+    const unresolved = [
+      ...new Set(proposal.tracks.filter((_, i) => !artistForTrack[i]).map((p) => p.artist)),
+    ]
+    for (const name of unresolved) {
+      let aliases: string[]
+      try {
+        aliases = await ctx.enrichArtist(name)
+      } catch {
+        aliases = []
+      }
+      const hit = aliases.reduce<Artist | null>((acc, alias) => acc ?? findArtist(alias), null)
+      if (!hit) continue
+      proposal.tracks.forEach((p, i) => {
+        if (!artistForTrack[i] && p.artist === name) artistForTrack[i] = hit
+      })
+    }
+  }
+
   // Walk each proposed track, resolve the album it lives on. Tracks are
   // fetched per album below.
   type WithAlbum = { proposed: ProposedTrack; album: Album | null }
-  const withAlbum: WithAlbum[] = proposal.tracks.map((p) => {
-    const artist = artistByNorm.get(norm(p.artist))
+  const withAlbum: WithAlbum[] = proposal.tracks.map((p, i) => {
+    const artist = artistForTrack[i]
     if (!artist) return { proposed: p, album: null }
     const albums = albumsByArtistId.get(artist.id) ?? []
     const pNorm = norm(p.album)

@@ -9,6 +9,7 @@ import {
   type PlaylistProposal,
   type ResolvedTrack,
 } from '../lib/socrates-actions'
+import { lookupArtistNames } from '../lib/artist-enrich'
 import type { Album, Artist } from '../lib/types'
 
 interface SocratesPlaylistCardProps {
@@ -51,6 +52,10 @@ export function SocratesPlaylistCard({
       artists,
       albums,
       fetchAlbumTracks: (id) => getAlbumTracks(conn, id),
+      // Online fallback for artists the library can't place locally; skips
+      // itself when offline (returns []), so this stays fully functional
+      // offline — it just won't reach for MusicBrainz.
+      enrichArtist: lookupArtistNames,
     }).then((r) => {
       if (!cancelled) setResolved(r)
     })
