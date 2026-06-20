@@ -228,6 +228,17 @@ export interface ArtistRelated {
 }
 
 /**
+ * Recently-played songs + albums for one artist — the same shape and dedup as
+ * the global Recently tab, narrowed to this artist's plays.
+ */
+export async function getArtistRecentlyPlayed(
+  conn: Connection,
+  artistId: string,
+): Promise<RecentResult> {
+  return getJson<RecentResult>(conn, `/artists/${artistId}/recently-played`)
+}
+
+/**
  * Related artists + genres for one artist. Served from the per-artist sidecar
  * cache; pass `refresh` to force a re-fetch from Last.fm.
  */
