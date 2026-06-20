@@ -43,15 +43,17 @@ interface ArtistViewProps {
 // The artist page's collapsible sections, in display order.
 type SectionKey = 'played-songs' | 'played-albums' | 'releases' | 'related'
 
-const SECTION_STORAGE_KEY = 'allegory:artistSections'
+// Bumped to .v2 when the default changed to all-collapsed, so a previously
+// saved {releases:true} doesn't override the new default for existing users.
+const SECTION_STORAGE_KEY = 'allegory:artistSections.v2'
 
-// Releases open by default (the headline); the rest collapsed so the section
-// headers — including Related Artists — are reachable without scrolling past a
-// prolific artist's whole discography. The choice persists across visits.
+// All sections collapsed by default: opening an artist shows just the section
+// headers — including Related Artists — so nothing is buried behind a prolific
+// artist's discography. Each choice persists across visits.
 const DEFAULT_OPEN: Record<SectionKey, boolean> = {
   'played-songs': false,
   'played-albums': false,
-  releases: true,
+  releases: false,
   related: false,
 }
 
