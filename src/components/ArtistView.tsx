@@ -1,15 +1,28 @@
 import { useRef, useState } from 'react'
 import type { ChangeEvent, MouseEvent } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, Play, Loader2, Camera, Pencil } from 'lucide-react'
+import { motion, AnimatePresence } from 'motion/react'
+import {
+  ArrowLeft,
+  Play,
+  Loader2,
+  Camera,
+  Pencil,
+  ChevronDown,
+  Users,
+  RefreshCw,
+  Music2,
+} from 'lucide-react'
 import { useConnected } from '../lib/connection'
 import {
   getArtistAlbums,
   getArtistTracks,
   getAlbumTracks,
+  getArtistRelated,
   albumImageUrl,
   uploadArtistImage,
 } from '../lib/api'
+import type { RelatedArtist } from '../lib/api'
 import { usePlayer } from '../lib/player'
 import { shuffle } from '../lib/shuffle'
 import { useLongPress } from '../lib/use-long-press'
@@ -22,9 +35,15 @@ interface ArtistViewProps {
   artist: Artist
   onBack: () => void
   onSelectAlbum: (album: Album) => void
+  onSelectArtist: (artist: Artist) => void
 }
 
-export function ArtistView({ artist, onBack, onSelectAlbum }: ArtistViewProps) {
+export function ArtistView({
+  artist,
+  onBack,
+  onSelectAlbum,
+  onSelectArtist,
+}: ArtistViewProps) {
   const conn = useConnected()
   const player = usePlayer()
   const queryClient = useQueryClient()
@@ -180,6 +199,231 @@ export function ArtistView({ artist, onBack, onSelectAlbum }: ArtistViewProps) {
           </div>
         )}
       </div>
+
+      <div className="mt-4">
+        <RelatedArtistsSection
+          artistId={artist.id}
+          onSelectArtist={onSelectArtist}
+        />
+      </div>
+    </div>
+  )
+}
+
+// Shared easing with the rest of the app, for the expand/collapse motion.
+const EASE = [0.22, 1, 0.36, 1] as const
+
+// Collapsed by default — albums are the headline; related artists are a dig.
+// Keeping it closed also means we only hit the network when it's opened.
+function RelatedArtistsSection({
+  artistId,
+  onSelectArtist,
+}: {
+  artistId: string
+  onSelectArtist: (artist: Artist) => void
+}) {
+  const conn = useConnected()
+  const queryClient = useQueryClient()
+  const [open, setOpen] = useState(false)
+  const [refreshing, setRefreshing] = useState(false)
+
+  const queryKey = ['artist-related', artistId, conn.serverUrl, conn.userId]
+  const { data, isLoading, isError } = useQuery({
+    queryKey,
+    queryFn: () => getArtistRelated(conn, artistId),
+    enabled: open,
+  })
+
+  async function refresh() {
+    if (refreshing) return
+    setRefreshing(true)
+    try {
+      const fresh = await getArtistRelated(conn, artistId, true)
+      queryClient.setQueryData(queryKey, fresh)
+    } catch {
+      // Best-effort — leave the cached view in place on failure.
+    } finally {
+      setRefreshing(false)
+    }
+  }
+
+  const inLibrary = (data?.related ?? []).filter((r) => r.artistId)
+  const discovery = (data?.related ?? []).filter((r) => !r.artistId)
+
+  return (
+    <div className="overflow-hidden rounded-xl border border-line bg-surface/40">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className="flex w-full items-center gap-3 px-4 py-3.5 text-left transition-colors hover:bg-white/[0.03]"
+      >
+        <Users className="h-6 w-6 text-white" />
+        <span className="flex-1 text-xl font-semibold tracking-tight text-white">
+          Related Artists
+        </span>
+        <motion.span
+          animate={{ rotate: open ? 180 : 0 }}
+          transition={{ duration: 0.26, ease: EASE }}
+          className="text-white"
+        >
+          <ChevronDown className="h-6 w-6" />
+        </motion.span>
+      </button>
+
+      <AnimatePresence initial={false}>
+        {open && (
+          <motion.div
+            key="body"
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.3, ease: EASE }}
+            className="overflow-hidden"
+          >
+            <div className="border-t border-line/60 px-4 pb-4 pt-3">
+              {isLoading && <RelatedSkeleton />}
+
+              {!isLoading && isError && (
+                <p className="py-6 text-center text-sm text-white/45">
+                  Couldn’t load related artists.
+                </p>
+              )}
+
+              {!isLoading && !isError && data && !data.configured && (
+                <p className="py-6 text-center text-sm text-white/55">
+                  Add a Last.fm API key in Settings → Library to see related
+                  artists and genres.
+                </p>
+              )}
+
+              {!isLoading && !isError && data?.configured && (
+                <>
+                  {data.genres.length > 0 && (
+                    <div className="mb-4 flex flex-wrap gap-2">
+                      {data.genres.map((g) => (
+                        <span
+                          key={g}
+                          className="rounded-full border border-line bg-elevated px-3 py-1 text-xs font-medium text-white/70"
+                        >
+                          {g}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+
+                  {data.related.length === 0 ? (
+                    <p className="py-6 text-center text-sm text-white/45">
+                      No related artists found.
+                    </p>
+                  ) : (
+                    <>
+                      {inLibrary.length > 0 && (
+                        <div className="grid grid-cols-3 gap-x-4 gap-y-6 sm:grid-cols-4 lg:grid-cols-6">
+                          {inLibrary.map((r) => (
+                            <RelatedCard
+                              key={r.name}
+                              related={r}
+                              onSelectArtist={onSelectArtist}
+                            />
+                          ))}
+                        </div>
+                      )}
+
+                      {discovery.length > 0 && (
+                        <div className="mt-5">
+                          <div className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-white/35">
+                            Not in your library
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            {discovery.map((r) => (
+                              <span
+                                key={r.name}
+                                className="rounded-full border border-line bg-elevated/60 px-3 py-1 text-sm text-white/55"
+                              >
+                                {r.name}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  )}
+
+                  <div className="mt-5 flex justify-end">
+                    <button
+                      type="button"
+                      onClick={refresh}
+                      disabled={refreshing}
+                      className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-white/35 transition-colors hover:text-white/70 disabled:opacity-50"
+                    >
+                      <RefreshCw
+                        className={`h-3.5 w-3.5 ${refreshing ? 'animate-spin' : ''}`}
+                      />
+                      Refresh
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  )
+}
+
+// One in-library related artist: a tappable circular avatar that opens their
+// page. Mirrors the artist tiles used on the Search results screen.
+function RelatedCard({
+  related,
+  onSelectArtist,
+}: {
+  related: RelatedArtist
+  onSelectArtist: (artist: Artist) => void
+}) {
+  const conn = useConnected()
+  return (
+    <button
+      type="button"
+      onClick={() =>
+        onSelectArtist({
+          id: related.artistId!,
+          name: related.name,
+          imageTag: related.imageTag,
+        })
+      }
+      className="group flex flex-col items-center text-center"
+    >
+      <div className="relative aspect-square w-full overflow-hidden rounded-full bg-elevated shadow-lg shadow-black/40 transition-transform duration-300 group-hover:-translate-y-1">
+        {related.imageTag ? (
+          <Cover
+            src={albumImageUrl(conn, related.artistId!, related.imageTag, 280)}
+            alt={related.name}
+            className="h-full w-full"
+          />
+        ) : (
+          <div className="flex h-full w-full items-center justify-center">
+            <Music2 className="h-7 w-7 text-white/15" />
+          </div>
+        )}
+      </div>
+      <div className="mt-2 w-full truncate text-base font-semibold text-white">
+        {related.name}
+      </div>
+    </button>
+  )
+}
+
+function RelatedSkeleton() {
+  return (
+    <div className="grid grid-cols-3 gap-x-4 gap-y-6 py-2 sm:grid-cols-4 lg:grid-cols-6">
+      {Array.from({ length: 6 }).map((_, i) => (
+        <div key={i} className="flex flex-col items-center gap-2">
+          <div className="aspect-square w-full animate-pulse rounded-full bg-white/5" />
+          <div className="h-3 w-2/3 animate-pulse rounded bg-white/5" />
+        </div>
+      ))}
     </div>
   )
 }

@@ -209,6 +209,39 @@ export async function getArtistTracks(
   return getJson<Track[]>(conn, `/artists/${artistId}/tracks`)
 }
 
+export interface RelatedArtist {
+  name: string
+  mbid?: string
+  /** Set when this artist is in the library — the card links to their page. */
+  artistId?: string
+  /** Truthy when the matched library artist has a cover image. */
+  imageTag?: string
+}
+
+export interface ArtistRelated {
+  genres: string[]
+  related: RelatedArtist[]
+  /** False when no Last.fm key is configured — the UI prompts to add one. */
+  configured: boolean
+  /** Epoch ms the data was fetched, or null when it never has been. */
+  fetchedAt: number | null
+}
+
+/**
+ * Related artists + genres for one artist. Served from the per-artist sidecar
+ * cache; pass `refresh` to force a re-fetch from Last.fm.
+ */
+export async function getArtistRelated(
+  conn: Connection,
+  artistId: string,
+  refresh = false,
+): Promise<ArtistRelated> {
+  return getJson<ArtistRelated>(
+    conn,
+    `/artists/${artistId}/related${refresh ? '?refresh=1' : ''}`,
+  )
+}
+
 /** The curated sidecar for a track ("Cliff's Notes for the model"). */
 export interface SongContext {
   /** The curator's own notes (.md/.txt) — safe to send to any provider. */
@@ -553,6 +586,8 @@ export function audioStreamUrl(conn: Connection, trackId: string): string {
 
 export interface AppSettings {
   musicDir: string
+  /** Last.fm API key for artist enrichment. Present once configured. */
+  lastfmApiKey?: string
 }
 
 export interface PathValidation {
@@ -570,6 +605,14 @@ export async function updateSettings(
   musicDir: string,
 ): Promise<{ ok: true; musicDir: string; artistCount?: number }> {
   return send(conn, 'POST', '/settings', { musicDir })
+}
+
+/** Save (or clear) the Last.fm API key without touching the music dir. */
+export async function updateLastfmKey(
+  conn: Connection,
+  lastfmApiKey: string,
+): Promise<{ ok: true }> {
+  return send(conn, 'POST', '/settings', { lastfmApiKey })
 }
 
 export async function validateMusicDir(

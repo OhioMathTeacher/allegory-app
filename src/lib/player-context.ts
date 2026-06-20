@@ -26,6 +26,14 @@ export interface PlayerContextValue {
   /** Append tracks to the end of the queue (or start playing if idle). */
   addToQueue: (tracks: Track[]) => void
   togglePlay: () => void
+  /** Pause for an in-app search so the phone's mic is free for voice dictation,
+   *  and the resume-after-interruption retries stand down. No-op if already
+   *  paused or idle; remembers that it paused so resumeFromSearch can undo it. */
+  pauseForSearch: () => void
+  /** Resume whatever pauseForSearch paused — unless playback has since started
+   *  on its own (e.g. the user picked a track from the results). No-op if it
+   *  wasn't the one that paused. */
+  resumeFromSearch: () => void
   next: () => void
   prev: () => void
   seek: (time: number) => void
