@@ -25,7 +25,11 @@ export function UpdatePanel() {
 
   async function doUpdate() {
     if (!data) return
-    const target = data.latest
+    // The commit we're updating *away* from. The updater always lands on the
+    // latest origin/main, which may be newer than the `latest` shown when this
+    // panel loaded (e.g. another push since) — so reload as soon as HEAD moves
+    // off `before`, rather than waiting for one specific target sha.
+    const before = data.current
     setPhase('updating')
     try {
       await applyUpdate(conn)
@@ -33,12 +37,12 @@ export function UpdatePanel() {
       // The server may die before the response lands — that's expected; keep
       // polling regardless.
     }
-    // Poll until the server is back AND reporting the new version, then reload.
+    // Poll until the server is back on a different commit, then reload.
     for (let i = 0; i < 90; i++) {
       await sleep(2000)
       try {
         const s = await getUpdateStatus(conn)
-        if (s.current && s.current === target) {
+        if (s.current && s.current !== before) {
           window.location.reload()
           return
         }
