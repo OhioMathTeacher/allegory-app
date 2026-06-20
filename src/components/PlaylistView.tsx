@@ -1,7 +1,16 @@
 import { useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, Play, Shuffle, ListMusic, Pencil } from 'lucide-react'
+import {
+  ArrowLeft,
+  Play,
+  Shuffle,
+  ListMusic,
+  Pencil,
+  Image as ImageIcon,
+  ImageOff,
+} from 'lucide-react'
 import { useConnected } from '../lib/connection'
+import { useShowArtwork, toggleShowArtwork } from '../lib/display-prefs'
 import {
   getPlaylistTracks,
   albumImageUrl,
@@ -28,6 +37,7 @@ export function PlaylistView({ playlist, onBack, onSelectArtist }: PlaylistViewP
   const conn = useConnected()
   const player = usePlayer()
   const queryClient = useQueryClient()
+  const showArtwork = useShowArtwork()
   // Local copy of the name so a rename shows immediately (the prop is stale).
   const [name, setName] = useState(playlist.name)
   const dragFrom = useRef<number | null>(null)
@@ -93,55 +103,59 @@ export function PlaylistView({ playlist, onBack, onSelectArtist }: PlaylistViewP
       </button>
 
       <div className="flex flex-col gap-6 sm:flex-row sm:items-end">
-        <div className="flex w-52 shrink-0 flex-col gap-2">
-          <div className="relative h-52 w-52">
-            <button
-              type="button"
-              onClick={() => fileRef.current?.click()}
-              title="Change artwork"
-              className="group flex h-full w-full items-center justify-center overflow-hidden rounded-2xl bg-elevated shadow-2xl shadow-black/60"
-            >
-              {playlist.imageTag || artVersion > 0 ? (
-                <Cover
-                  src={
-                    albumImageUrl(conn, playlist.id, playlist.imageTag, 520) +
-                    (artVersion ? `&v=${artVersion}` : '')
-                  }
-                  alt={name}
-                  className="h-full w-full"
-                />
-              ) : (
-                <ListMusic className="h-16 w-16 text-white/45" />
-              )}
-              <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-black/55 opacity-0 transition-opacity group-hover:opacity-100">
-                <Pencil className="h-6 w-6 text-white" />
-                <span className="text-xs font-medium text-white">
-                  {uploadingArt ? 'Uploading…' : 'Change artwork'}
-                </span>
-              </div>
-              {/* Phones have no hover, so without a persistent badge the cover
-                  gives no hint it's tappable. Always-visible affordance. */}
-              <div className="absolute bottom-1.5 right-1.5 flex items-center gap-1 rounded-full bg-black/70 px-2 py-1 text-[11px] font-semibold text-white ring-1 ring-white/25">
-                <Pencil className="h-3 w-3" />
-                {uploadingArt ? 'Uploading…' : 'Edit'}
-              </div>
-            </button>
-            <input
-              ref={fileRef}
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={handleArtFile}
+        {/* Hidden picker stays mounted even when the cover is hidden, so the
+            ⋮ → "Change artwork…" item still works. */}
+        <input
+          ref={fileRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={handleArtFile}
+        />
+        {showArtwork && (
+          <div className="flex w-52 shrink-0 flex-col gap-2">
+            <div className="relative h-52 w-52">
+              <button
+                type="button"
+                onClick={() => fileRef.current?.click()}
+                title="Change artwork"
+                className="group flex h-full w-full items-center justify-center overflow-hidden rounded-2xl bg-elevated shadow-2xl shadow-black/60"
+              >
+                {playlist.imageTag || artVersion > 0 ? (
+                  <Cover
+                    src={
+                      albumImageUrl(conn, playlist.id, playlist.imageTag, 520) +
+                      (artVersion ? `&v=${artVersion}` : '')
+                    }
+                    alt={name}
+                    className="h-full w-full"
+                  />
+                ) : (
+                  <ListMusic className="h-16 w-16 text-white/45" />
+                )}
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-black/55 opacity-0 transition-opacity group-hover:opacity-100">
+                  <Pencil className="h-6 w-6 text-white" />
+                  <span className="text-xs font-medium text-white">
+                    {uploadingArt ? 'Uploading…' : 'Change artwork'}
+                  </span>
+                </div>
+                {/* Phones have no hover, so without a persistent badge the cover
+                    gives no hint it's tappable. Always-visible affordance. */}
+                <div className="absolute bottom-1.5 right-1.5 flex items-center gap-1 rounded-full bg-black/70 px-2 py-1 text-[11px] font-semibold text-white ring-1 ring-white/25">
+                  <Pencil className="h-3 w-3" />
+                  {uploadingArt ? 'Uploading…' : 'Edit'}
+                </div>
+              </button>
+            </div>
+            <ArtFromUrl
+              onSubmit={(url) => uploadPlaylistImageFromUrl(conn, playlist.id, url)}
+              onDone={() => {
+                setArtVersion((v) => v + 1)
+                queryClient.invalidateQueries({ queryKey: ['playlists'] })
+              }}
             />
           </div>
-          <ArtFromUrl
-            onSubmit={(url) => uploadPlaylistImageFromUrl(conn, playlist.id, url)}
-            onDone={() => {
-              setArtVersion((v) => v + 1)
-              queryClient.invalidateQueries({ queryKey: ['playlists'] })
-            }}
-          />
-        </div>
+        )}
         <div className="min-w-0 pb-1">
           <div className="text-xs font-semibold uppercase tracking-[0.18em] text-white/82">
             Playlist
@@ -183,6 +197,14 @@ export function PlaylistView({ playlist, onBack, onSelectArtist }: PlaylistViewP
             >
               <Shuffle className="h-4 w-4" />
               Shuffle
+            </button>
+            <button
+              onClick={toggleShowArtwork}
+              title={showArtwork ? 'Hide artwork' : 'Show artwork'}
+              aria-label={showArtwork ? 'Hide artwork' : 'Show artwork'}
+              className="flex items-center justify-center rounded-full border border-line p-2.5 text-white/80 transition-colors hover:bg-white/5"
+            >
+              {showArtwork ? <ImageOff className="h-4 w-4" /> : <ImageIcon className="h-4 w-4" />}
             </button>
           </div>
         </div>

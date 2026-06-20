@@ -12,8 +12,11 @@ import {
   Music2,
   Disc3,
   Library,
+  Image as ImageIcon,
+  ImageOff,
 } from 'lucide-react'
 import { useConnected } from '../lib/connection'
+import { useShowArtwork, toggleShowArtwork } from '../lib/display-prefs'
 import {
   getArtistAlbums,
   getArtistTracks,
@@ -84,6 +87,7 @@ export function ArtistView({
   const conn = useConnected()
   const player = usePlayer()
   const queryClient = useQueryClient()
+  const showArtwork = useShowArtwork()
   const [busy, setBusy] = useState(false)
   const [editing, setEditing] = useState(false)
   const [imgBusy, setImgBusy] = useState(false)
@@ -160,39 +164,43 @@ export function ArtistView({
       </button>
 
       <div className="flex items-end gap-4 sm:gap-6">
-        <div className="shrink-0">
-          <button
-            type="button"
-            onClick={() => fileRef.current?.click()}
-            title="Change artist image"
-            className="group relative h-28 w-28 overflow-hidden rounded-full bg-elevated shadow-2xl shadow-black/60 sm:h-40 sm:w-40 md:h-44 md:w-44"
-          >
-            <Cover
-              src={`${albumImageUrl(conn, artist.id, undefined, 440)}&v=${version}`}
-              alt={artist.name}
-              className="h-full w-full"
-            />
-            <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-black/60 opacity-0 transition-opacity group-hover:opacity-100">
-              {imgBusy ? (
-                <Loader2 className="h-7 w-7 animate-spin text-white" />
-              ) : (
-                <>
-                  <Camera className="h-7 w-7 text-white" />
-                  <span className="text-[11px] font-medium text-white/90">
-                    Change photo
-                  </span>
-                </>
-              )}
-            </div>
-          </button>
-          <input
-            ref={fileRef}
-            type="file"
-            accept="image/*"
-            className="hidden"
-            onChange={handleFile}
-          />
-        </div>
+        {/* Hidden picker stays mounted regardless, so it's available even when
+            the photo is hidden. */}
+        <input
+          ref={fileRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={handleFile}
+        />
+        {showArtwork && (
+          <div className="shrink-0">
+            <button
+              type="button"
+              onClick={() => fileRef.current?.click()}
+              title="Change artist image"
+              className="group relative h-28 w-28 overflow-hidden rounded-full bg-elevated shadow-2xl shadow-black/60 sm:h-40 sm:w-40 md:h-44 md:w-44"
+            >
+              <Cover
+                src={`${albumImageUrl(conn, artist.id, undefined, 440)}&v=${version}`}
+                alt={artist.name}
+                className="h-full w-full"
+              />
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-black/60 opacity-0 transition-opacity group-hover:opacity-100">
+                {imgBusy ? (
+                  <Loader2 className="h-7 w-7 animate-spin text-white" />
+                ) : (
+                  <>
+                    <Camera className="h-7 w-7 text-white" />
+                    <span className="text-[11px] font-medium text-white/90">
+                      Change photo
+                    </span>
+                  </>
+                )}
+              </div>
+            </button>
+          </div>
+        )}
         <div className="min-w-0 pb-1">
           <div className="text-xs font-semibold uppercase tracking-[0.18em] text-white/82">
             Artist
@@ -227,6 +235,14 @@ export function ArtistView({
             >
               <Pencil className="h-4 w-4" />
               Edit
+            </button>
+            <button
+              onClick={toggleShowArtwork}
+              title={showArtwork ? 'Hide artwork' : 'Show artwork'}
+              aria-label={showArtwork ? 'Hide artwork' : 'Show artwork'}
+              className="flex items-center justify-center rounded-full border border-line p-2.5 text-white/80 transition-colors hover:bg-white/5"
+            >
+              {showArtwork ? <ImageOff className="h-4 w-4" /> : <ImageIcon className="h-4 w-4" />}
             </button>
           </div>
         </div>
