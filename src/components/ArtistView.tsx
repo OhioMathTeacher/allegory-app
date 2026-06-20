@@ -240,9 +240,10 @@ export function ArtistView({
               onClick={toggleShowArtwork}
               title={showArtwork ? 'Hide artwork' : 'Show artwork'}
               aria-label={showArtwork ? 'Hide artwork' : 'Show artwork'}
-              className="flex items-center justify-center rounded-full border border-line p-2.5 text-white/80 transition-colors hover:bg-white/5"
+              className="flex items-center gap-2 rounded-full border border-line px-4 py-2.5 text-sm font-medium text-white/80 transition-colors hover:bg-white/5"
             >
               {showArtwork ? <ImageOff className="h-4 w-4" /> : <ImageIcon className="h-4 w-4" />}
+              {showArtwork ? 'Hide art' : 'Show art'}
             </button>
           </div>
         </div>
