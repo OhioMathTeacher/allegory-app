@@ -22,3 +22,19 @@ createRoot(document.getElementById('root')!).render(
     </QueryClientProvider>
   </StrictMode>,
 )
+
+// Offline app shell: register the service worker only from production builds
+// over a secure context (HTTPS or localhost). Skipping dev keeps the Vite dev
+// server + HMR uncached; skipping insecure contexts avoids a guaranteed-to-fail
+// registration when the app is reached over plain http (e.g. a bare LAN IP).
+if (
+  import.meta.env.PROD &&
+  'serviceWorker' in navigator &&
+  window.isSecureContext
+) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(() => {
+      // Best-effort — the app still works online without the SW.
+    })
+  })
+}
