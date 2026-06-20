@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { MoreHorizontal, Plus, Check, Trash2 } from 'lucide-react'
+import { MoreVertical, Plus, Check, Trash2, Download, Loader2 } from 'lucide-react'
 import { useConnected } from '../lib/connection'
 import {
   getPlaylists,
@@ -10,6 +10,7 @@ import {
 } from '../lib/api'
 import type { Playlist, Track } from '../lib/types'
 import { bumpPlaylist, sortByRecency } from '../lib/playlist-recency'
+import { downloadTrack, removeDownload, useDownloadStatus } from '../lib/downloads'
 
 interface TrackMenuProps {
   track: Track
@@ -39,6 +40,7 @@ export function TrackMenu({ track, excludePlaylistId }: TrackMenuProps) {
   const [done, setDone] = useState<string | null>(null)
   const [showAll, setShowAll] = useState(false)
   const [filter, setFilter] = useState('')
+  const download = useDownloadStatus(track.id)
 
   // Playlists load only once a menu is opened (the query is shared by key
   // with the Playlists page, so it's fetched at most once and cached).
@@ -120,6 +122,15 @@ export function TrackMenu({ track, excludePlaylistId }: TrackMenuProps) {
     }, 'Removed from playlist')
   }
 
+  function toggleDownload() {
+    if (download.pending) return
+    if (download.downloaded) {
+      void run(() => removeDownload(track.id), 'Removed download')
+    } else {
+      void run(() => downloadTrack(conn, track), 'Downloaded')
+    }
+  }
+
   return (
     <div className="shrink-0">
       <button
@@ -129,10 +140,10 @@ export function TrackMenu({ track, excludePlaylistId }: TrackMenuProps) {
         aria-label="Track options"
         title="Track options"
         className={`rounded-md p-2 transition-colors ${
-          open ? 'text-white' : 'text-white/30 hover:text-white'
+          open ? 'text-white' : 'text-white/85 hover:text-white'
         }`}
       >
-        <MoreHorizontal className="h-4 w-4" />
+        <MoreVertical className="h-4 w-4" />
       </button>
 
       {open && (
@@ -182,6 +193,26 @@ export function TrackMenu({ track, excludePlaylistId }: TrackMenuProps) {
               </div>
             ) : (
               <>
+                <button
+                  type="button"
+                  onClick={toggleDownload}
+                  disabled={busy || download.pending}
+                  className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-sm text-white/85 transition-colors hover:bg-white/5 disabled:opacity-50"
+                >
+                  {download.pending ? (
+                    <Loader2 className="h-4 w-4 shrink-0 animate-spin" style={{ color: 'var(--accent)' }} />
+                  ) : download.downloaded ? (
+                    <Check className="h-4 w-4 shrink-0" style={{ color: 'var(--accent)' }} />
+                  ) : (
+                    <Download className="h-4 w-4 shrink-0" style={{ color: 'var(--accent)' }} />
+                  )}
+                  {download.pending
+                    ? `Downloading… ${Math.round(download.progress * 100)}%`
+                    : download.downloaded
+                      ? 'Remove download'
+                      : 'Download'}
+                </button>
+                <div className="my-1 h-px bg-line" />
                 {canRemove && (
                   <>
                     <button

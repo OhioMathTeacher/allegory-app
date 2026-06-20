@@ -6,6 +6,7 @@ import { useConnected } from '../lib/connection'
 import { usePlayer } from '../lib/player'
 import { getRecentlyAdded, getRecentlyPlayed, albumImageUrl } from '../lib/api'
 import { Cover } from './Cover'
+import { TrackMenu } from './TrackMenu'
 import type { Album, Track } from '../lib/types'
 
 interface RecentlyProps {
@@ -236,24 +237,31 @@ interface SongRowProps {
 }
 
 // A compact song row — title + artist on one line, tap to play just this
-// track. Denser than the album rows, in keeping with the spec.
+// track. Denser than the album rows, in keeping with the spec. Split into
+// separate buttons (play vs. the ⋮ menu) so no interactive element nests
+// inside another.
 function SongRow({ track, index }: SongRowProps) {
   const player = usePlayer()
   return (
-    <motion.button
-      type="button"
+    <motion.div
       initial={{ opacity: 0, x: -6 }}
       animate={{ opacity: 1, x: 0 }}
       transition={{ duration: 0.26, delay: Math.min(index * 0.02, 0.25), ease: EASE }}
-      onClick={() => player.playQueue([track], 0)}
-      className="flex w-full items-center gap-3 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-white/5"
+      className="group flex w-full items-center gap-3 rounded-lg px-2 py-1.5 transition-colors hover:bg-white/5"
     >
-      <Music2 className="h-3.5 w-3.5 shrink-0 text-white/25" />
-      <div className="min-w-0 flex-1">
-        <div className="truncate text-xl font-semibold text-white">{track.name}</div>
-        <div className="truncate text-lg text-white/65">{track.artist}</div>
-      </div>
-    </motion.button>
+      <button
+        type="button"
+        onClick={() => player.playQueue([track], 0)}
+        className="flex min-w-0 flex-1 items-center gap-3 text-left"
+      >
+        <Music2 className="h-3.5 w-3.5 shrink-0 text-white/25" />
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-xl font-semibold text-white">{track.name}</div>
+          <div className="truncate text-lg text-white/65">{track.artist}</div>
+        </div>
+      </button>
+      <TrackMenu track={track} />
+    </motion.div>
   )
 }
 

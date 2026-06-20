@@ -9,6 +9,7 @@ import { formatDuration, ticksToSeconds } from '../lib/format'
 import { Cover } from './Cover'
 import { TrackRow, TrackSkeleton } from './TrackList'
 import { AlbumEditor } from './AlbumEditor'
+import { AlbumMenu } from './AlbumMenu'
 import type { Album, Artist } from '../lib/types'
 
 interface AlbumViewProps {
@@ -100,6 +101,9 @@ export function AlbumView({ album, onBack, onSelectArtist }: AlbumViewProps) {
           <Pencil className="h-4 w-4" />
           Edit
         </button>
+        <div className="flex items-center rounded-full border border-line px-1 py-1 text-white/80">
+          <AlbumMenu album={album} />
+        </div>
       </div>
 
       {editing && (

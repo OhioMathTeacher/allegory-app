@@ -22,6 +22,7 @@ import { Recently } from './Recently'
 import { Playlists } from './Playlists'
 import { PlaylistView } from './PlaylistView'
 import { NotesView } from './NotesView'
+import { DownloadsView } from './DownloadsView'
 import { PlayerBar } from './PlayerBar'
 import { usePlayer } from '../lib/player'
 import { Settings } from './Settings'
@@ -39,6 +40,7 @@ type View =
   | { type: 'playlists' }
   | { type: 'playlist'; playlist: Playlist }
   | { type: 'notes' }
+  | { type: 'downloads' }
   | { type: 'socrates' }
 
 // Allow deep-linking the opening view via ?view=… — the slide deck embeds
@@ -46,7 +48,7 @@ type View =
 // data-less views are addressable; anything else falls back to the default.
 function initialView(): View {
   const v = new URLSearchParams(window.location.search).get('view') ?? ''
-  return ['artists', 'playlists', 'recent', 'search', 'socrates'].includes(v)
+  return ['artists', 'playlists', 'recent', 'search', 'downloads', 'socrates'].includes(v)
     ? ({ type: v } as View)
     : { type: 'artists' }
 }
@@ -116,14 +118,18 @@ export function AppShell() {
   //   0  Artists          (and the artist / album drill-down beneath it)
   //   1  Recently         (recently added & played)
   //   2  Playlists
+  //   3  Downloads        (the offline library)
   function currentWindow(): number {
+    if (section === 'downloads') return 3
     if (section === 'playlists') return 2
     if (section === 'recent') return 1
     return 0
   }
 
   function goToWindow(idx: number) {
-    if (idx === 2) {
+    if (idx === 3) {
+      setView({ type: 'downloads' })
+    } else if (idx === 2) {
       setView({ type: 'playlists' })
     } else if (idx === 1) {
       setView({ type: 'recent' })
@@ -133,7 +139,7 @@ export function AppShell() {
   }
 
   function cycleWindow(dir: -1 | 1) {
-    const next = (currentWindow() + dir + 3) % 3
+    const next = (currentWindow() + dir + 4) % 4
     goToWindow(next)
   }
 
@@ -252,14 +258,23 @@ export function AppShell() {
 
         {/* Direct section tabs — on the three top-level pages, one tap jumps
             straight to any other (no cycling through the corner buttons). */}
-        {(view.type === 'artists' || view.type === 'recent' || view.type === 'playlists') && (
+        {(view.type === 'artists' ||
+          view.type === 'recent' ||
+          view.type === 'playlists' ||
+          view.type === 'downloads') && (
           <div className="flex shrink-0 items-center justify-center gap-1 border-b border-line bg-bg/95 px-2 py-2 backdrop-blur">
-            {([['artists', 'Artists'], ['recent', 'Recently'], ['playlists', 'Playlists']] as const).map(
-              ([key, label]) => (
+            {(
+              [
+                ['artists', 'Artists', 0],
+                ['recent', 'Recently', 1],
+                ['playlists', 'Playlists', 2],
+                ['downloads', 'Downloads', 3],
+              ] as const
+            ).map(([key, label, idx]) => (
                 <button
                   key={key}
                   type="button"
-                  onClick={() => goToWindow(key === 'playlists' ? 2 : key === 'recent' ? 1 : 0)}
+                  onClick={() => goToWindow(idx)}
                   aria-pressed={view.type === key}
                   className={`rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${
                     view.type === key
@@ -342,6 +357,7 @@ export function AppShell() {
                   onSelectArtist={(artist) => setView({ type: 'artist', artist })}
                 />
               )}
+              {view.type === 'downloads' && <DownloadsView />}
             </motion.div>
           </AnimatePresence>
         </main>
