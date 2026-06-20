@@ -84,5 +84,18 @@ export default defineConfig(({ mode }) => {
       port: 5173,
       strictPort: true,
     },
+    preview: {
+      https,
+      host: true,
+      port: 4173,
+      strictPort: true,
+      // The offline build is served by `vite preview` behind Tailscale's HTTPS
+      // proxy, so the Host header is the tailnet MagicDNS name (e.g.
+      // imac-fedora.tail7162dd.ts.net), not localhost. Vite's anti-DNS-rebinding
+      // guard blocks unknown hosts by default; allow this tailnet's *.ts.net
+      // names — they're only reachable over the private tailnet anyway. (A
+      // leading dot matches the domain and all its subdomains.)
+      allowedHosts: ['.ts.net'],
+    },
   }
 })
