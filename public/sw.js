@@ -16,6 +16,11 @@
  * so the Vite dev server + HMR are never intercepted.
  */
 const SHELL_CACHE = 'allegory-shell-v1'
+// User-downloaded audio + its cover art. Unlike the shell cache these are
+// explicit, user-managed downloads (see src/lib/downloads.ts) and survive SW
+// version bumps — the activate cleanup below only prunes old shell caches.
+const AUDIO_CACHE = 'allegory-audio-v1'
+const ART_CACHE = 'allegory-art-v1'
 
 self.addEventListener('install', () => {
   // Take over as soon as we're ready; the shell fills in as pages load.
@@ -96,6 +101,100 @@ self.addEventListener('fetch', (event) => {
     return
   }
 
-  // Everything else (notably /api and /stream): go to the network untouched.
-  // Offline audio is the next phase — an explicit, user-managed download cache.
+  // Downloaded audio: serve cache-first from the user-managed download cache.
+  // Only tracks the user explicitly downloaded are ever in here, so anything
+  // not downloaded falls through to the network. Range requests (seeking, and
+  // iOS's mandatory probe) are answered from the cached body as a synthesised
+  // 206 — a cached 200 does NOT auto-satisfy a Range request.
+  if (url.pathname.startsWith('/api/stream/')) {
+    event.respondWith(serveAudio(req))
+    return
+  }
+
+  // Cover art for downloaded items: cache-first so the Downloads view and the
+  // player have artwork offline. Populated only by the download manager (not on
+  // ordinary online browsing), so this cache stays scoped to downloads.
+  if (url.pathname.startsWith('/api/art/')) {
+    event.respondWith(
+      (async () => {
+        const cache = await caches.open(ART_CACHE)
+        const hit = await cache.match(req, { ignoreSearch: true })
+        if (hit) return hit
+        try {
+          return await fetch(req)
+        } catch {
+          return hit || Response.error()
+        }
+      })(),
+    )
+    return
+  }
+
+  // Everything else (notably the rest of /api): go to the network untouched.
 })
+
+/** Serve a /stream/* request from the download cache, answering Range requests. */
+async function serveAudio(req) {
+  const cache = await caches.open(AUDIO_CACHE)
+  // ignoreSearch: the player appends ?can=<caps>, which can differ from when
+  // the track was downloaded (and across devices). The id in the path is the key.
+  const cached = await cache.match(req, { ignoreSearch: true })
+  if (!cached) {
+    // Not downloaded — straight to network (don't cache; downloads are explicit).
+    // Offline this rejects, and the UI surfaces a "not available offline" state.
+    return fetch(req)
+  }
+  const range = req.headers.get('range')
+  return range ? buildRangeResponse(cached, range) : cached
+}
+
+/**
+ * Hand-build a 206 Partial Content response by slicing the cached full body.
+ * The <audio> element (mandatory on iOS) sends `Range:` headers and expects a
+ * 206; a cached 200 won't auto-answer one, which is the difference between
+ * offline audio that plays/seeks and one that silently fails.
+ */
+async function buildRangeResponse(cached, rangeHeader) {
+  const buf = await cached.arrayBuffer()
+  const size = buf.byteLength
+  const type = cached.headers.get('Content-Type') || 'audio/mpeg'
+
+  const m = /^bytes=(\d*)-(\d*)$/.exec(rangeHeader.trim())
+  if (!m) {
+    // Unparseable Range — return the full body and let the element cope.
+    return new Response(buf, {
+      status: 200,
+      headers: { 'Content-Type': type, 'Content-Length': String(size), 'Accept-Ranges': 'bytes' },
+    })
+  }
+
+  let start = m[1] === '' ? NaN : parseInt(m[1], 10)
+  let end = m[2] === '' ? NaN : parseInt(m[2], 10)
+  if (Number.isNaN(start)) {
+    // Suffix range: bytes=-N → the final N bytes.
+    const n = Number.isNaN(end) ? 0 : end
+    start = Math.max(0, size - n)
+    end = size - 1
+  } else if (Number.isNaN(end)) {
+    end = size - 1
+  }
+  if (start > end || start >= size) {
+    return new Response(null, {
+      status: 416,
+      statusText: 'Range Not Satisfiable',
+      headers: { 'Content-Range': `bytes */${size}` },
+    })
+  }
+  end = Math.min(end, size - 1)
+
+  return new Response(buf.slice(start, end + 1), {
+    status: 206,
+    statusText: 'Partial Content',
+    headers: {
+      'Content-Type': type,
+      'Content-Range': `bytes ${start}-${end}/${size}`,
+      'Accept-Ranges': 'bytes',
+      'Content-Length': String(end - start + 1),
+    },
+  })
+}

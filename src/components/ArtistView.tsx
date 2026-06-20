@@ -29,6 +29,7 @@ import { shuffle } from '../lib/shuffle'
 import { useLongPress } from '../lib/use-long-press'
 import { Cover } from './Cover'
 import { AlbumEditor } from './AlbumEditor'
+import { AlbumMenu } from './AlbumMenu'
 import { ArtistEditor } from './ArtistEditor'
 import { AccordionSection, SongRows, AlbumRows } from './Recently'
 import type { Album, Artist } from '../lib/types'
@@ -565,6 +566,7 @@ function AlbumRow({ album, onSelect }: AlbumRowProps) {
           <Play className="h-3.5 w-3.5 translate-x-[1px] fill-black text-black" />
         )}
       </button>
+      <AlbumMenu album={album} onEdit={() => setEditing(true)} />
       {editing && <AlbumEditor album={album} onClose={() => setEditing(false)} />}
     </div>
   )
