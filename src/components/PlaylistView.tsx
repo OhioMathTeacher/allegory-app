@@ -7,7 +7,6 @@ import {
   ListMusic,
   Pencil,
   Image as ImageIcon,
-  ImageOff,
 } from 'lucide-react'
 import { useConnected } from '../lib/connection'
 import { useShowArtwork, toggleShowArtwork } from '../lib/display-prefs'
@@ -25,6 +24,7 @@ import { formatDuration, ticksToSeconds } from '../lib/format'
 import { Cover } from './Cover'
 import { TrackRow, TrackSkeleton } from './TrackList'
 import { PlaylistEditMenu } from './PlaylistEditMenu'
+import { AccordionSection } from './Recently'
 import type { Artist, Playlist } from '../lib/types'
 
 interface PlaylistViewProps {
@@ -102,18 +102,68 @@ export function PlaylistView({ playlist, onBack, onSelectArtist }: PlaylistViewP
         Playlists
       </button>
 
-      <div className="flex flex-col gap-6 sm:flex-row sm:items-end">
-        {/* Hidden picker stays mounted even when the cover is hidden, so the
-            ⋮ → "Change artwork…" item still works. */}
-        <input
-          ref={fileRef}
-          type="file"
-          accept="image/*"
-          className="hidden"
-          onChange={handleArtFile}
-        />
-        {showArtwork && (
-          <div className="flex w-52 shrink-0 flex-col gap-2">
+      {/* Hidden picker stays mounted even when the cover is collapsed, so the
+          ⋮ → "Change artwork…" item and the Artwork section's Edit badge work. */}
+      <input
+        ref={fileRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={handleArtFile}
+      />
+      <div className="min-w-0 pb-1">
+        <div className="text-xs font-semibold uppercase tracking-[0.18em] text-white/82">
+          Playlist
+        </div>
+        <div className="mt-2 flex items-center gap-2">
+          <h1 className="min-w-0 truncate text-4xl font-bold tracking-tight">
+            {name}
+          </h1>
+          <PlaylistEditMenu
+            playlistId={playlist.id}
+            playlistName={name}
+            onRenamed={setName}
+            onDeleted={onBack}
+            onEditArtwork={() => fileRef.current?.click()}
+          />
+        </div>
+        <div className="mt-2 text-sm text-white/85">
+          {[
+            tracks ? `${tracks.length} track${tracks.length === 1 ? '' : 's'}` : null,
+            totalSeconds ? formatDuration(totalSeconds) : null,
+          ]
+            .filter(Boolean)
+            .join('  ·  ')}
+        </div>
+        <div className="mt-5 flex items-center gap-3">
+          <button
+            onClick={() => play(false)}
+            disabled={!tracks?.length}
+            className="flex items-center gap-2 rounded-full px-6 py-2.5 text-sm font-semibold text-black transition-transform hover:scale-105 disabled:opacity-40"
+            style={{ background: 'var(--accent)' }}
+          >
+            <Play className="h-4 w-4 fill-black" />
+            Play
+          </button>
+          <button
+            onClick={() => play(true)}
+            disabled={!tracks?.length}
+            className="flex items-center gap-2 rounded-full border border-line px-5 py-2.5 text-sm font-medium text-white/80 transition-colors hover:bg-white/5 disabled:opacity-40"
+          >
+            <Shuffle className="h-4 w-4" />
+            Shuffle
+          </button>
+        </div>
+      </div>
+
+      <div className="mt-6">
+        <AccordionSection
+          title="Artwork"
+          icon={<ImageIcon className="h-6 w-6" />}
+          open={showArtwork}
+          onToggle={toggleShowArtwork}
+        >
+          <div className="flex flex-col items-center gap-2 py-3">
             <div className="relative h-52 w-52">
               <button
                 type="button"
@@ -139,76 +189,25 @@ export function PlaylistView({ playlist, onBack, onSelectArtist }: PlaylistViewP
                     {uploadingArt ? 'Uploading…' : 'Change artwork'}
                   </span>
                 </div>
-                {/* Phones have no hover, so without a persistent badge the cover
-                    gives no hint it's tappable. Always-visible affordance. */}
+                {/* Touch devices have no hover — a persistent badge keeps the
+                    change-artwork affordance visible. */}
                 <div className="absolute bottom-1.5 right-1.5 flex items-center gap-1 rounded-full bg-black/70 px-2 py-1 text-[11px] font-semibold text-white ring-1 ring-white/25">
                   <Pencil className="h-3 w-3" />
                   {uploadingArt ? 'Uploading…' : 'Edit'}
                 </div>
               </button>
             </div>
-            <ArtFromUrl
-              onSubmit={(url) => uploadPlaylistImageFromUrl(conn, playlist.id, url)}
-              onDone={() => {
-                setArtVersion((v) => v + 1)
-                queryClient.invalidateQueries({ queryKey: ['playlists'] })
-              }}
-            />
+            <div className="w-52">
+              <ArtFromUrl
+                onSubmit={(url) => uploadPlaylistImageFromUrl(conn, playlist.id, url)}
+                onDone={() => {
+                  setArtVersion((v) => v + 1)
+                  queryClient.invalidateQueries({ queryKey: ['playlists'] })
+                }}
+              />
+            </div>
           </div>
-        )}
-        <div className="min-w-0 pb-1">
-          <div className="text-xs font-semibold uppercase tracking-[0.18em] text-white/82">
-            Playlist
-          </div>
-          <div className="mt-2 flex items-center gap-2">
-            <h1 className="min-w-0 truncate text-4xl font-bold tracking-tight">
-              {name}
-            </h1>
-            <PlaylistEditMenu
-              playlistId={playlist.id}
-              playlistName={name}
-              onRenamed={setName}
-              onDeleted={onBack}
-              onEditArtwork={() => fileRef.current?.click()}
-            />
-          </div>
-          <div className="mt-2 text-sm text-white/85">
-            {[
-              tracks ? `${tracks.length} track${tracks.length === 1 ? '' : 's'}` : null,
-              totalSeconds ? formatDuration(totalSeconds) : null,
-            ]
-              .filter(Boolean)
-              .join('  ·  ')}
-          </div>
-          <div className="mt-5 flex items-center gap-3">
-            <button
-              onClick={() => play(false)}
-              disabled={!tracks?.length}
-              className="flex items-center gap-2 rounded-full px-6 py-2.5 text-sm font-semibold text-black transition-transform hover:scale-105 disabled:opacity-40"
-              style={{ background: 'var(--accent)' }}
-            >
-              <Play className="h-4 w-4 fill-black" />
-              Play
-            </button>
-            <button
-              onClick={() => play(true)}
-              disabled={!tracks?.length}
-              className="flex items-center gap-2 rounded-full border border-line px-5 py-2.5 text-sm font-medium text-white/80 transition-colors hover:bg-white/5 disabled:opacity-40"
-            >
-              <Shuffle className="h-4 w-4" />
-              Shuffle
-            </button>
-            <button
-              onClick={toggleShowArtwork}
-              title={showArtwork ? 'Hide artwork' : 'Show artwork'}
-              aria-label={showArtwork ? 'Hide artwork' : 'Show artwork'}
-              className="flex items-center gap-2 rounded-full border border-line px-4 py-2.5 text-sm font-medium text-white/80 transition-colors hover:bg-white/5"
-            >
-              {showArtwork ? <ImageOff className="h-4 w-4" /> : <ImageIcon className="h-4 w-4" />}
-              {showArtwork ? 'Hide art' : 'Show art'}
-            </button>
-          </div>
-        </div>
+        </AccordionSection>
       </div>
 
       <div className="mt-9">
