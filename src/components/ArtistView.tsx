@@ -40,6 +40,11 @@ interface ArtistViewProps {
   onSelectArtist: (artist: Artist) => void
 }
 
+// Caps for the artist's "Played ·" sections. Kept small — these are a quick
+// "what have I been spinning by them" glance, not the full history.
+const PLAYED_ALBUM_LIMIT = 5
+const PLAYED_SONG_LIMIT = 20
+
 // The artist page's collapsible sections, in display order.
 type SectionKey = 'played-songs' | 'played-albums' | 'releases' | 'related'
 
@@ -238,7 +243,7 @@ export function ArtistView({
           onToggle={() => toggleSection('played-songs')}
         >
           <SongRows
-            tracks={recent.data?.tracks}
+            tracks={recent.data?.tracks?.slice(0, PLAYED_SONG_LIMIT)}
             isLoading={recent.isLoading}
             isError={recent.isError}
             emptyText="You haven’t played anything by this artist yet."
@@ -252,7 +257,7 @@ export function ArtistView({
           onToggle={() => toggleSection('played-albums')}
         >
           <AlbumRows
-            albums={recent.data?.albums}
+            albums={recent.data?.albums?.slice(0, PLAYED_ALBUM_LIMIT)}
             isLoading={recent.isLoading}
             isError={recent.isError}
             emptyText="You haven’t played anything by this artist yet."
