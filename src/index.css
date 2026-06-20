@@ -53,11 +53,20 @@ html {
 body {
   margin: 0;
   background: var(--color-bg);
-  color: #e8e8ec;
+  color: #fff;
   font-family: var(--font-sans);
+  font-weight: 600;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
   overflow: hidden;
+}
+
+/* ---- Max-contrast text (bright-light / outdoor legibility) --------------
+   No dim grays: every white-tinted text/icon is forced to solid white, and
+   text runs heavier. Only touches white-tinted classes — accent text, the
+   black-on-accent buttons, and red destructive text keep their colors. */
+[class*="text-white/"] {
+  color: #fff !important;
 }
 
 button {
@@ -133,9 +142,9 @@ button {
   background: rgba(255, 255, 255, 0.06);
 }
 .input::placeholder {
-  /* Kept readable in bright/outdoor light — a too-dim placeholder hides the
-     hint of what to type (e.g. "Paste an image URL…"). */
-  color: rgba(255, 255, 255, 0.5);
+  /* Readable in bright light — a too-dim placeholder hides the hint of what
+     to type (e.g. "Paste an image URL…"). */
+  color: rgba(255, 255, 255, 0.78);
 }
 
 /* The main Search field — deliberately lighter, bigger, and brighter than a
@@ -156,7 +165,7 @@ button {
   background: rgba(255, 255, 255, 0.16);
 }
 .search-input::placeholder {
-  color: rgba(255, 255, 255, 0.55);
+  color: rgba(255, 255, 255, 0.8);
 }
 
 @keyframes eq {
