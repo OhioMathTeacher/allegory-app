@@ -1,17 +1,17 @@
 import { useRef, useState } from 'react'
 import type { ChangeEvent, MouseEvent } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { motion, AnimatePresence } from 'motion/react'
 import {
   ArrowLeft,
   Play,
   Loader2,
   Camera,
   Pencil,
-  ChevronDown,
   Users,
   RefreshCw,
   Music2,
+  Disc3,
+  Library,
 } from 'lucide-react'
 import { useConnected } from '../lib/connection'
 import {
@@ -19,6 +19,7 @@ import {
   getArtistTracks,
   getAlbumTracks,
   getArtistRelated,
+  getArtistRecentlyPlayed,
   albumImageUrl,
   uploadArtistImage,
 } from '../lib/api'
@@ -29,6 +30,7 @@ import { useLongPress } from '../lib/use-long-press'
 import { Cover } from './Cover'
 import { AlbumEditor } from './AlbumEditor'
 import { ArtistEditor } from './ArtistEditor'
+import { AccordionSection, SongRows, AlbumRows } from './Recently'
 import type { Album, Artist } from '../lib/types'
 
 interface ArtistViewProps {
@@ -36,6 +38,33 @@ interface ArtistViewProps {
   onBack: () => void
   onSelectAlbum: (album: Album) => void
   onSelectArtist: (artist: Artist) => void
+}
+
+// The artist page's collapsible sections, in display order.
+type SectionKey = 'played-songs' | 'played-albums' | 'releases' | 'related'
+
+const SECTION_STORAGE_KEY = 'allegory:artistSections'
+
+// Releases open by default (the headline); the rest collapsed so the section
+// headers — including Related Artists — are reachable without scrolling past a
+// prolific artist's whole discography. The choice persists across visits.
+const DEFAULT_OPEN: Record<SectionKey, boolean> = {
+  'played-songs': false,
+  'played-albums': false,
+  releases: true,
+  related: false,
+}
+
+function loadSectionOpen(): Record<SectionKey, boolean> {
+  try {
+    const raw = window.localStorage.getItem(SECTION_STORAGE_KEY)
+    if (raw) {
+      return { ...DEFAULT_OPEN, ...(JSON.parse(raw) as Partial<Record<SectionKey, boolean>>) }
+    }
+  } catch {
+    // Private mode / bad JSON — fall back to defaults.
+  }
+  return DEFAULT_OPEN
 }
 
 export function ArtistView({
@@ -58,6 +87,28 @@ export function ArtistView({
   const { data: albums, isLoading } = useQuery({
     queryKey: ['artist-albums', artist.id],
     queryFn: () => getArtistAlbums(conn, artist.id),
+  })
+
+  // Persisted open/closed state for the collapsible sections.
+  const [openMap, setOpenMap] = useState(loadSectionOpen)
+  const toggleSection = (key: SectionKey) =>
+    setOpenMap((prev) => {
+      const next = { ...prev, [key]: !prev[key] }
+      try {
+        window.localStorage.setItem(SECTION_STORAGE_KEY, JSON.stringify(next))
+      } catch {
+        // Non-fatal — the toggle still works for this session.
+      }
+      return next
+    })
+
+  // Recently-played songs + albums for this artist. Only fetched once one of
+  // the two "Played ·" sections is open.
+  const playedOpen = openMap['played-songs'] || openMap['played-albums']
+  const recent = useQuery({
+    queryKey: ['artist-recently-played', artist.id, conn.serverUrl, conn.userId],
+    queryFn: () => getArtistRecentlyPlayed(conn, artist.id),
+    enabled: playedOpen,
   })
 
   async function playArtist(shuffled: boolean) {
@@ -177,45 +228,79 @@ export function ArtistView({
         <ArtistEditor artist={artist} onClose={() => setEditing(false)} />
       )}
 
-      <div className="mt-9">
-        {isLoading && <SkeletonGrid />}
+      <div className="mt-9 flex flex-col gap-3">
+        <AccordionSection
+          title="Played · Songs"
+          icon={<Music2 className="h-6 w-6" />}
+          open={openMap['played-songs']}
+          onToggle={() => toggleSection('played-songs')}
+        >
+          <SongRows
+            tracks={recent.data?.tracks}
+            isLoading={recent.isLoading}
+            isError={recent.isError}
+            emptyText="You haven’t played anything by this artist yet."
+          />
+        </AccordionSection>
 
-        {albums && albums.length === 0 && (
-          <div className="rounded-xl border border-line bg-surface/60 p-10 text-center text-sm text-white/45">
-            No albums for this artist.
-          </div>
-        )}
+        <AccordionSection
+          title="Played · Albums"
+          icon={<Disc3 className="h-6 w-6" />}
+          open={openMap['played-albums']}
+          onToggle={() => toggleSection('played-albums')}
+        >
+          <AlbumRows
+            albums={recent.data?.albums}
+            isLoading={recent.isLoading}
+            isError={recent.isError}
+            emptyText="You haven’t played anything by this artist yet."
+            onSelectAlbum={onSelectAlbum}
+          />
+        </AccordionSection>
 
-        {albums && albums.length > 0 && (
-          <div className="overflow-hidden rounded-xl border border-line">
-            {albums.map((album, i) => (
-              <AlbumRow
-                key={album.id}
-                album={album}
-                index={i}
-                onSelect={onSelectAlbum}
-              />
-            ))}
-          </div>
-        )}
-      </div>
+        <AccordionSection
+          title="Releases"
+          icon={<Library className="h-6 w-6" />}
+          open={openMap.releases}
+          onToggle={() => toggleSection('releases')}
+        >
+          {isLoading && <SkeletonGrid />}
+          {albums && albums.length === 0 && (
+            <div className="px-2 py-8 text-center text-sm text-white/45">
+              No albums for this artist.
+            </div>
+          )}
+          {albums && albums.length > 0 && (
+            <div className="overflow-hidden rounded-xl border border-line">
+              {albums.map((album, i) => (
+                <AlbumRow
+                  key={album.id}
+                  album={album}
+                  index={i}
+                  onSelect={onSelectAlbum}
+                />
+              ))}
+            </div>
+          )}
+        </AccordionSection>
 
-      <div className="mt-4">
-        <RelatedArtistsSection
-          artistId={artist.id}
-          onSelectArtist={onSelectArtist}
-        />
+        <AccordionSection
+          title="Related Artists"
+          icon={<Users className="h-6 w-6" />}
+          open={openMap.related}
+          onToggle={() => toggleSection('related')}
+        >
+          <RelatedArtistsBody artistId={artist.id} onSelectArtist={onSelectArtist} />
+        </AccordionSection>
       </div>
     </div>
   )
 }
 
-// Shared easing with the rest of the app, for the expand/collapse motion.
-const EASE = [0.22, 1, 0.36, 1] as const
-
-// Collapsed by default — albums are the headline; related artists are a dig.
-// Keeping it closed also means we only hit the network when it's opened.
-function RelatedArtistsSection({
+// Body of the Related Artists accordion (the shared AccordionSection supplies
+// the header + expand/collapse). Mounts only while the section is open, so the
+// query fires lazily on first open.
+function RelatedArtistsBody({
   artistId,
   onSelectArtist,
 }: {
@@ -224,14 +309,12 @@ function RelatedArtistsSection({
 }) {
   const conn = useConnected()
   const queryClient = useQueryClient()
-  const [open, setOpen] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
 
   const queryKey = ['artist-related', artistId, conn.serverUrl, conn.userId]
   const { data, isLoading, isError } = useQuery({
     queryKey,
     queryFn: () => getArtistRelated(conn, artistId),
-    enabled: open,
   })
 
   async function refresh() {
@@ -251,124 +334,90 @@ function RelatedArtistsSection({
   const discovery = (data?.related ?? []).filter((r) => !r.artistId)
 
   return (
-    <div className="overflow-hidden rounded-xl border border-line bg-surface/40">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        aria-expanded={open}
-        className="flex w-full items-center gap-3 px-4 py-3.5 text-left transition-colors hover:bg-white/[0.03]"
-      >
-        <Users className="h-6 w-6 text-white" />
-        <span className="flex-1 text-xl font-semibold tracking-tight text-white">
-          Related Artists
-        </span>
-        <motion.span
-          animate={{ rotate: open ? 180 : 0 }}
-          transition={{ duration: 0.26, ease: EASE }}
-          className="text-white"
-        >
-          <ChevronDown className="h-6 w-6" />
-        </motion.span>
-      </button>
+    <div className="px-2 pb-1">
+      {isLoading && <RelatedSkeleton />}
 
-      <AnimatePresence initial={false}>
-        {open && (
-          <motion.div
-            key="body"
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.3, ease: EASE }}
-            className="overflow-hidden"
-          >
-            <div className="border-t border-line/60 px-4 pb-4 pt-3">
-              {isLoading && <RelatedSkeleton />}
+      {!isLoading && isError && (
+        <p className="py-6 text-center text-sm text-white/45">
+          Couldn’t load related artists.
+        </p>
+      )}
 
-              {!isLoading && isError && (
-                <p className="py-6 text-center text-sm text-white/45">
-                  Couldn’t load related artists.
-                </p>
-              )}
+      {!isLoading && !isError && data && !data.configured && (
+        <p className="py-6 text-center text-sm text-white/55">
+          Add a Last.fm API key in Settings → Library to see related artists and
+          genres.
+        </p>
+      )}
 
-              {!isLoading && !isError && data && !data.configured && (
-                <p className="py-6 text-center text-sm text-white/55">
-                  Add a Last.fm API key in Settings → Library to see related
-                  artists and genres.
-                </p>
-              )}
-
-              {!isLoading && !isError && data?.configured && (
-                <>
-                  {data.genres.length > 0 && (
-                    <div className="mb-4 flex flex-wrap gap-2">
-                      {data.genres.map((g) => (
-                        <span
-                          key={g}
-                          className="rounded-full border border-line bg-elevated px-3 py-1 text-xs font-medium text-white/70"
-                        >
-                          {g}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-
-                  {data.related.length === 0 ? (
-                    <p className="py-6 text-center text-sm text-white/45">
-                      No related artists found.
-                    </p>
-                  ) : (
-                    <>
-                      {inLibrary.length > 0 && (
-                        <div className="grid grid-cols-3 gap-x-4 gap-y-6 sm:grid-cols-4 lg:grid-cols-6">
-                          {inLibrary.map((r) => (
-                            <RelatedCard
-                              key={r.name}
-                              related={r}
-                              onSelectArtist={onSelectArtist}
-                            />
-                          ))}
-                        </div>
-                      )}
-
-                      {discovery.length > 0 && (
-                        <div className="mt-5">
-                          <div className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-white/35">
-                            Not in your library
-                          </div>
-                          <div className="flex flex-wrap gap-2">
-                            {discovery.map((r) => (
-                              <span
-                                key={r.name}
-                                className="rounded-full border border-line bg-elevated/60 px-3 py-1 text-sm text-white/55"
-                              >
-                                {r.name}
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </>
-                  )}
-
-                  <div className="mt-5 flex justify-end">
-                    <button
-                      type="button"
-                      onClick={refresh}
-                      disabled={refreshing}
-                      className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-white/35 transition-colors hover:text-white/70 disabled:opacity-50"
-                    >
-                      <RefreshCw
-                        className={`h-3.5 w-3.5 ${refreshing ? 'animate-spin' : ''}`}
-                      />
-                      Refresh
-                    </button>
-                  </div>
-                </>
-              )}
+      {!isLoading && !isError && data?.configured && (
+        <>
+          {data.genres.length > 0 && (
+            <div className="mb-4 flex flex-wrap gap-2">
+              {data.genres.map((g) => (
+                <span
+                  key={g}
+                  className="rounded-full border border-line bg-elevated px-3 py-1 text-xs font-medium text-white/70"
+                >
+                  {g}
+                </span>
+              ))}
             </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+          )}
+
+          {data.related.length === 0 ? (
+            <p className="py-6 text-center text-sm text-white/45">
+              No related artists found.
+            </p>
+          ) : (
+            <>
+              {inLibrary.length > 0 && (
+                <div className="grid grid-cols-3 gap-x-4 gap-y-6 sm:grid-cols-4 lg:grid-cols-6">
+                  {inLibrary.map((r) => (
+                    <RelatedCard
+                      key={r.name}
+                      related={r}
+                      onSelectArtist={onSelectArtist}
+                    />
+                  ))}
+                </div>
+              )}
+
+              {discovery.length > 0 && (
+                <div className="mt-5">
+                  <div className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-white/35">
+                    Not in your library
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {discovery.map((r) => (
+                      <span
+                        key={r.name}
+                        className="rounded-full border border-line bg-elevated/60 px-3 py-1 text-sm text-white/55"
+                      >
+                        {r.name}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+
+          <div className="mt-5 flex justify-end">
+            <button
+              type="button"
+              onClick={refresh}
+              disabled={refreshing}
+              className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-white/35 transition-colors hover:text-white/70 disabled:opacity-50"
+            >
+              <RefreshCw
+                className={`h-3.5 w-3.5 ${refreshing ? 'animate-spin' : ''}`}
+              />
+              Refresh
+            </button>
+          </div>
+        </>
+      )}
     </div>
   )
 }

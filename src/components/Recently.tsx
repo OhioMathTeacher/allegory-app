@@ -99,7 +99,8 @@ export function Recently({ onSelectAlbum }: RecentlyProps) {
 }
 
 interface AccordionSectionProps {
-  id: SectionId
+  /** Optional id for the caller's own bookkeeping; unused by the section. */
+  id?: string
   title: string
   icon: React.ReactNode
   open: boolean
@@ -108,8 +109,9 @@ interface AccordionSectionProps {
 }
 
 // One accordion section: a tappable header chip and an animated body that
-// expands to its natural height when open.
-function AccordionSection({ title, icon, open, onToggle, children }: AccordionSectionProps) {
+// expands to its natural height when open. Shared with the artist page so its
+// "Played · Songs/Albums" sections look and behave identically to this tab.
+export function AccordionSection({ title, icon, open, onToggle, children }: AccordionSectionProps) {
   return (
     <div className="overflow-hidden rounded-xl border border-line bg-surface/40">
       <button
@@ -157,7 +159,7 @@ interface AlbumRowsProps {
   onSelectAlbum: (album: Album) => void
 }
 
-function AlbumRows({ albums, isLoading, isError, emptyText, onSelectAlbum }: AlbumRowsProps) {
+export function AlbumRows({ albums, isLoading, isError, emptyText, onSelectAlbum }: AlbumRowsProps) {
   if (isLoading) return <AlbumSkeleton />
   if (isError) return <ErrorState />
   if (!albums || albums.length === 0) return <EmptyState text={emptyText} />
@@ -215,7 +217,7 @@ interface SongRowsProps {
   emptyText: string
 }
 
-function SongRows({ tracks, isLoading, isError, emptyText }: SongRowsProps) {
+export function SongRows({ tracks, isLoading, isError, emptyText }: SongRowsProps) {
   if (isLoading) return <SongSkeleton />
   if (isError) return <ErrorState />
   if (!tracks || tracks.length === 0) return <EmptyState text={emptyText} />

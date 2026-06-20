@@ -891,6 +891,22 @@ export function createRouter(deps: RouterDeps): Router {
       if (
         segs.length === 4 &&
         segs[1] === 'artists' &&
+        segs[3] === 'recently-played' &&
+        method === 'GET'
+      ) {
+        // The play log, narrowed to this artist's tracks, then run through the
+        // same resolver as the Recently tab so songs/albums dedup identically.
+        const artistId = seg(2)
+        const history = await getPlayHistory()
+        const ids = history
+          .map((h) => h.trackId)
+          .filter((id) => library.track(id)?.artistId === artistId)
+        sendJson(res, await library.recentlyPlayed(ids, 25))
+        return true
+      }
+      if (
+        segs.length === 4 &&
+        segs[1] === 'artists' &&
         segs[3] === 'image' &&
         method === 'POST'
       ) {
