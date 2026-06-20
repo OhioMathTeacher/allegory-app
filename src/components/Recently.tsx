@@ -44,7 +44,7 @@ export function Recently({ onSelectAlbum }: RecentlyProps) {
     <div>
       <header className="sticky top-0 z-10 bg-bg/95 px-4 pt-6 pb-4 backdrop-blur sm:px-8 sm:pt-8">
         <h1 className="text-3xl font-semibold tracking-tight">Recently</h1>
-        <p className="mt-1 text-sm text-white/60">Played &amp; added</p>
+        <p className="mt-1 text-sm text-white/85">Played &amp; added</p>
       </header>
 
       <div className="flex flex-col gap-2 px-4 pb-8 sm:px-8">
@@ -200,12 +200,12 @@ function AlbumRow({ album, index, onSelect }: AlbumRowProps) {
             className="h-full w-full"
           />
         ) : (
-          <Disc3 className="h-5 w-5 text-white/20" />
+          <Disc3 className="h-5 w-5 text-white/45" />
         )}
       </div>
       <div className="min-w-0 flex-1">
         <div className="truncate text-xl font-semibold text-white">{album.name}</div>
-        <div className="truncate text-lg text-white/65">{album.artist}</div>
+        <div className="truncate text-lg text-white/88">{album.artist}</div>
       </div>
     </motion.button>
   )
@@ -254,10 +254,10 @@ function SongRow({ track, index }: SongRowProps) {
         onClick={() => player.playQueue([track], 0)}
         className="flex min-w-0 flex-1 items-center gap-3 text-left"
       >
-        <Music2 className="h-3.5 w-3.5 shrink-0 text-white/25" />
+        <Music2 className="h-3.5 w-3.5 shrink-0 text-white/55" />
         <div className="min-w-0 flex-1">
           <div className="truncate text-xl font-semibold text-white">{track.name}</div>
-          <div className="truncate text-lg text-white/65">{track.artist}</div>
+          <div className="truncate text-lg text-white/88">{track.artist}</div>
         </div>
       </button>
       <TrackMenu track={track} />
@@ -269,14 +269,14 @@ function EmptyState({ text }: { text: string }) {
   return (
     <div className="flex flex-col items-center gap-2 px-4 py-8 text-center">
       <Clock className="h-6 w-6 text-white/15" />
-      <p className="text-sm text-white/45">{text}</p>
+      <p className="text-sm text-white/74">{text}</p>
     </div>
   )
 }
 
 function ErrorState() {
   return (
-    <div className="px-4 py-8 text-center text-sm text-white/50">
+    <div className="px-4 py-8 text-center text-sm text-white/78">
       Couldn’t load this. Make sure the server is reachable.
     </div>
   )

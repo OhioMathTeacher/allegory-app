@@ -60,13 +60,13 @@ export function DiagnosticsPanel() {
   return (
     <div className="mt-5">
       <UpdatePanel />
-      <p className="mb-3 text-sm text-white/55">
+      <p className="mb-3 text-sm text-white/82">
         A rolling log of playback + lifecycle events, kept in this browser so
         it survives a crash. When playback dies in the car, open this, find the
         last events, and Copy or Download them.
       </p>
       <div className="mb-3 flex items-center justify-between gap-2">
-        <div className="text-xs text-white/45">
+        <div className="text-xs text-white/74">
           {entries.length} event{entries.length === 1 ? '' : 's'} · most recent at the bottom
         </div>
         <div className="flex items-center gap-1">
@@ -75,7 +75,7 @@ export function DiagnosticsPanel() {
             onClick={() => setEntries(getCrashLog())}
             title="Refresh"
             aria-label="Refresh"
-            className="rounded-md p-1.5 text-white/50 transition-colors hover:bg-white/5 hover:text-white"
+            className="rounded-md p-1.5 text-white/78 transition-colors hover:bg-white/5 hover:text-white"
           >
             <RefreshCw className="h-4 w-4" />
           </button>
@@ -85,7 +85,7 @@ export function DiagnosticsPanel() {
             disabled={entries.length === 0}
             title="Copy log"
             aria-label="Copy log"
-            className="rounded-md p-1.5 text-white/50 transition-colors hover:bg-white/5 hover:text-white disabled:opacity-30"
+            className="rounded-md p-1.5 text-white/78 transition-colors hover:bg-white/5 hover:text-white disabled:opacity-30"
           >
             {copied ? <Check className="h-4 w-4 text-emerald-300" /> : <Copy className="h-4 w-4" />}
           </button>
@@ -95,7 +95,7 @@ export function DiagnosticsPanel() {
             disabled={entries.length === 0}
             title="Download log"
             aria-label="Download log"
-            className="rounded-md p-1.5 text-white/50 transition-colors hover:bg-white/5 hover:text-white disabled:opacity-30"
+            className="rounded-md p-1.5 text-white/78 transition-colors hover:bg-white/5 hover:text-white disabled:opacity-30"
           >
             <Download className="h-4 w-4" />
           </button>
@@ -108,7 +108,7 @@ export function DiagnosticsPanel() {
             disabled={entries.length === 0}
             title="Clear log"
             aria-label="Clear log"
-            className="rounded-md p-1.5 text-white/50 transition-colors hover:bg-white/5 hover:text-white disabled:opacity-30"
+            className="rounded-md p-1.5 text-white/78 transition-colors hover:bg-white/5 hover:text-white disabled:opacity-30"
           >
             <Trash2 className="h-4 w-4" />
           </button>
@@ -116,7 +116,7 @@ export function DiagnosticsPanel() {
       </div>
 
       {entries.length === 0 ? (
-        <div className="rounded-lg border border-line/60 bg-surface/30 p-6 text-center text-sm text-white/45">
+        <div className="rounded-lg border border-line/60 bg-surface/30 p-6 text-center text-sm text-white/74">
           No events recorded yet.
         </div>
       ) : (
@@ -133,14 +133,14 @@ export function DiagnosticsPanel() {
               }`}
             >
               <div className="flex gap-2">
-                <span className="shrink-0 text-white/35">{formatTime(e.t)}</span>
-                <span className="shrink-0 uppercase tracking-wide text-white/45">
+                <span className="shrink-0 text-white/66">{formatTime(e.t)}</span>
+                <span className="shrink-0 uppercase tracking-wide text-white/74">
                   {e.source}
                 </span>
                 <span className="min-w-0 flex-1 break-words">{e.message}</span>
               </div>
               {e.data && (
-                <pre className="mt-1 whitespace-pre-wrap break-words pl-[6.5rem] text-white/40">
+                <pre className="mt-1 whitespace-pre-wrap break-words pl-[6.5rem] text-white/70">
                   {e.data}
                 </pre>
               )}

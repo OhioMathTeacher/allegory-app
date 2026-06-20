@@ -194,13 +194,13 @@ export function ArtistView({
           />
         </div>
         <div className="min-w-0 pb-1">
-          <div className="text-xs font-semibold uppercase tracking-[0.18em] text-white/55">
+          <div className="text-xs font-semibold uppercase tracking-[0.18em] text-white/82">
             Artist
           </div>
           <h1 className="mt-2 break-words text-2xl font-bold tracking-tight sm:text-3xl md:text-4xl">
             {artist.name}
           </h1>
-          <div className="mt-2 text-sm text-white/60">
+          <div className="mt-2 text-sm text-white/85">
             {albums ? `${albums.length} album${albums.length === 1 ? '' : 's'}` : ''}
           </div>
           {imgError && (
@@ -274,7 +274,7 @@ export function ArtistView({
         >
           {isLoading && <SkeletonGrid />}
           {albums && albums.length === 0 && (
-            <div className="px-2 py-8 text-center text-sm text-white/45">
+            <div className="px-2 py-8 text-center text-sm text-white/74">
               No albums for this artist.
             </div>
           )}
@@ -346,13 +346,13 @@ function RelatedArtistsBody({
       {isLoading && <RelatedSkeleton />}
 
       {!isLoading && isError && (
-        <p className="py-6 text-center text-sm text-white/45">
+        <p className="py-6 text-center text-sm text-white/74">
           Couldn’t load related artists.
         </p>
       )}
 
       {!isLoading && !isError && data && !data.configured && (
-        <p className="py-6 text-center text-sm text-white/55">
+        <p className="py-6 text-center text-sm text-white/82">
           Add a Last.fm API key in Settings → Library to see related artists and
           genres.
         </p>
@@ -374,7 +374,7 @@ function RelatedArtistsBody({
           )}
 
           {data.related.length === 0 ? (
-            <p className="py-6 text-center text-sm text-white/45">
+            <p className="py-6 text-center text-sm text-white/74">
               No related artists found.
             </p>
           ) : (
@@ -393,14 +393,14 @@ function RelatedArtistsBody({
 
               {discovery.length > 0 && (
                 <div className="mt-5">
-                  <div className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-white/35">
+                  <div className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-white/66">
                     Not in your library
                   </div>
                   <div className="flex flex-wrap gap-2">
                     {discovery.map((r) => (
                       <span
                         key={r.name}
-                        className="rounded-full border border-line bg-elevated/60 px-3 py-1 text-sm text-white/55"
+                        className="rounded-full border border-line bg-elevated/60 px-3 py-1 text-sm text-white/82"
                       >
                         {r.name}
                       </span>
@@ -416,7 +416,7 @@ function RelatedArtistsBody({
               type="button"
               onClick={refresh}
               disabled={refreshing}
-              className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-white/35 transition-colors hover:text-white/70 disabled:opacity-50"
+              className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-white/66 transition-colors hover:text-white/70 disabled:opacity-50"
             >
               <RefreshCw
                 className={`h-3.5 w-3.5 ${refreshing ? 'animate-spin' : ''}`}
@@ -543,7 +543,7 @@ function AlbumRow({ album, onSelect }: AlbumRowProps) {
         <div className="truncate text-xl font-semibold text-white">
           {album.name}
         </div>
-        <div className="flex items-center gap-1.5 truncate text-lg text-white/65">
+        <div className="flex items-center gap-1.5 truncate text-lg text-white/88">
           {album.year != null && <span>{album.year}</span>}
           {album.year != null && album.trackCount != null && <span>·</span>}
           {album.trackCount != null && (

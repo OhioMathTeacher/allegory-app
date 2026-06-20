@@ -65,7 +65,7 @@ export function ArtistEditor({ artist, onClose, onSaved }: ArtistEditorProps) {
         <div className="mb-1 flex items-start justify-between gap-4">
           <div>
             <h2 className="text-lg font-semibold">Edit artist</h2>
-            <p className="mt-1 text-sm text-white/55">
+            <p className="mt-1 text-sm text-white/82">
               Rewrites the artist tag on every track and renames the folder
               on disk. Renaming to an existing artist merges the two.
             </p>
@@ -75,14 +75,14 @@ export function ArtistEditor({ artist, onClose, onSaved }: ArtistEditorProps) {
             onClick={onClose}
             disabled={saving}
             aria-label="Close"
-            className="rounded-md p-1.5 text-white/50 transition-colors hover:bg-white/5 hover:text-white disabled:opacity-40"
+            className="rounded-md p-1.5 text-white/78 transition-colors hover:bg-white/5 hover:text-white disabled:opacity-40"
           >
             <X className="h-4 w-4" />
           </button>
         </div>
 
         <div className="mt-5">
-          <label className="text-[11px] font-medium uppercase tracking-wide text-white/45">
+          <label className="text-[11px] font-medium uppercase tracking-wide text-white/74">
             Display name
           </label>
           <div className="mt-1">
@@ -99,7 +99,7 @@ export function ArtistEditor({ artist, onClose, onSaved }: ArtistEditorProps) {
               className="input w-full"
             />
           </div>
-          <p className="mt-1.5 text-[11px] text-white/35">
+          <p className="mt-1.5 text-[11px] text-white/66">
             Was “{artist.name}”
           </p>
         </div>
@@ -139,7 +139,7 @@ export function ArtistEditor({ artist, onClose, onSaved }: ArtistEditorProps) {
         </div>
 
         <div className="mt-6 border-t border-line/60 pt-5">
-          <label className="text-[11px] font-medium uppercase tracking-wide text-white/45">
+          <label className="text-[11px] font-medium uppercase tracking-wide text-white/74">
             Cover image
           </label>
           <CoverPicker artist={artist} />
@@ -241,7 +241,7 @@ function CoverPicker({ artist }: CoverPickerProps) {
           <Upload className="h-3.5 w-3.5" />
           Choose file…
         </button>
-        <span className="text-[11px] text-white/40">…or drop on the circle</span>
+        <span className="text-[11px] text-white/70">…or drop on the circle</span>
       </div>
 
       <ArtFromUrl
@@ -265,7 +265,7 @@ function CoverPicker({ artist }: CoverPickerProps) {
         </div>
       )}
 
-      <p className="mt-3 flex items-start gap-1 text-[11px] text-white/35">
+      <p className="mt-3 flex items-start gap-1 text-[11px] text-white/66">
         <ImageIcon className="mt-0.5 h-3 w-3 shrink-0" />
         Any image works — sharp resizes and re-encodes.
       </p>

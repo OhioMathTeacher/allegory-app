@@ -64,7 +64,7 @@ export function TrackRow({
           ) : (
             <>
               <span
-                className="text-sm tabular-nums text-white/35 group-hover:hidden"
+                className="text-sm tabular-nums text-white/66 group-hover:hidden"
                 style={isCurrent ? accentStyle : undefined}
               >
                 {number}
@@ -89,19 +89,19 @@ export function TrackRow({
               if (onSelectArtist && artistId)
                 onSelectArtist({ id: artistId, name: track.artist })
             }}
-            className="block max-w-full truncate text-left text-lg text-white/65 transition-colors hover:text-white/80 hover:underline"
+            className="block max-w-full truncate text-left text-lg text-white/88 transition-colors hover:text-white/80 hover:underline"
           >
             {track.artist}
           </button>
         ) : (
-          <div className="truncate text-lg text-white/65">{track.artist}</div>
+          <div className="truncate text-lg text-white/88">{track.artist}</div>
         )}
       </div>
 
       <button
         onClick={onPlay}
         aria-label="Play"
-        className="shrink-0 px-3 py-2.5 text-xs tabular-nums text-white/35"
+        className="shrink-0 px-3 py-2.5 text-xs tabular-nums text-white/66"
       >
         {formatTime(ticksToSeconds(track.durationTicks))}
       </button>

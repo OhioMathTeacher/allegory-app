@@ -69,7 +69,7 @@ export function UpdatePanel() {
           <span>
             The restart is taking longer than expected. Give it a moment, then
             reload this page. If it doesn’t come back, check{' '}
-            <code className="text-white/60">.allegory-cache/update.log</code>.
+            <code className="text-white/85">.allegory-cache/update.log</code>.
           </span>
         </div>
       </Shell>
@@ -79,7 +79,7 @@ export function UpdatePanel() {
   if (isLoading) {
     return (
       <Shell>
-        <div className="flex items-center gap-2 text-sm text-white/55">
+        <div className="flex items-center gap-2 text-sm text-white/82">
           <Loader2 className="h-4 w-4 animate-spin" />
           Checking for updates…
         </div>
@@ -91,7 +91,7 @@ export function UpdatePanel() {
   if (data?.error) {
     return (
       <Shell>
-        <div className="text-sm text-white/45">{data.error}</div>
+        <div className="text-sm text-white/74">{data.error}</div>
       </Shell>
     )
   }
@@ -113,12 +113,12 @@ export function UpdatePanel() {
               You’re up to date.
             </div>
           )}
-          <div className="mt-1 truncate text-xs text-white/45">
+          <div className="mt-1 truncate text-xs text-white/74">
             Installed {data?.current}
             {data?.currentMessage ? ` · ${data.currentMessage}` : ''}
           </div>
           {available && data?.latestMessage && (
-            <div className="mt-0.5 truncate text-xs text-white/45">
+            <div className="mt-0.5 truncate text-xs text-white/74">
               Latest {data.latest} · {data.latestMessage}
             </div>
           )}
@@ -138,7 +138,7 @@ export function UpdatePanel() {
             disabled={isFetching}
             title="Check again"
             aria-label="Check again"
-            className="rounded-md p-1.5 text-white/50 transition-colors hover:bg-white/5 hover:text-white disabled:opacity-40"
+            className="rounded-md p-1.5 text-white/78 transition-colors hover:bg-white/5 hover:text-white disabled:opacity-40"
           >
             <RefreshCw className={`h-4 w-4 ${isFetching ? 'animate-spin' : ''}`} />
           </button>
@@ -162,7 +162,7 @@ export function UpdatePanel() {
 function Shell({ children }: { children: React.ReactNode }) {
   return (
     <div className="mb-5 rounded-lg border border-line bg-white/[0.02] p-4">
-      <div className="mb-2 text-[11px] font-medium uppercase tracking-wide text-white/45">
+      <div className="mb-2 text-[11px] font-medium uppercase tracking-wide text-white/74">
         Software updates
       </div>
       {children}

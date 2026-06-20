@@ -97,7 +97,7 @@ export function SocratesPlaylistCard({
         <Disc3 className="h-4 w-4 shrink-0" style={{ color: 'var(--accent)' }} />
         <div className="min-w-0 flex-1">
           <div className="truncate text-sm font-semibold text-white/90">{proposal.name}</div>
-          <div className="text-[11px] text-white/45">
+          <div className="text-[11px] text-white/74">
             {resolved == null
               ? `${proposal.tracks.length} proposed · resolving…`
               : `${proposal.tracks.length} proposed · ${resolvedTracks.length} found${
@@ -116,15 +116,15 @@ export function SocratesPlaylistCard({
               ) : resolved ? (
                 <X className="mt-0.5 h-3 w-3 shrink-0 text-red-300/70" />
               ) : (
-                <Loader2 className="mt-0.5 h-3 w-3 shrink-0 animate-spin text-white/30" />
+                <Loader2 className="mt-0.5 h-3 w-3 shrink-0 animate-spin text-white/62" />
               )}
               <div
                 className={`min-w-0 flex-1 truncate ${
-                  r.resolved ? 'text-white/85' : resolved ? 'text-white/40 line-through' : 'text-white/55'
+                  r.resolved ? 'text-white/85' : resolved ? 'text-white/70 line-through' : 'text-white/82'
                 }`}
               >
                 <span className="font-medium">{r.proposed.track}</span>
-                <span className="text-white/40"> — {r.proposed.artist}</span>
+                <span className="text-white/70"> — {r.proposed.artist}</span>
               </div>
             </div>
           ),

@@ -53,13 +53,13 @@ export function NotesView({ onBack, onSelectArtist }: NotesViewProps) {
           <Pencil className="h-20 w-20" style={{ color: 'var(--accent)' }} />
         </div>
         <div className="min-w-0 pb-1">
-          <div className="text-xs font-semibold uppercase tracking-[0.18em] text-white/55">
+          <div className="text-xs font-semibold uppercase tracking-[0.18em] text-white/82">
             Smart playlist
           </div>
           <h1 className="mt-2 min-w-0 truncate text-4xl font-bold tracking-tight">
             Notes
           </h1>
-          <div className="mt-2 text-sm text-white/60">
+          <div className="mt-2 text-sm text-white/85">
             {[
               tracks ? `${tracks.length} song${tracks.length === 1 ? '' : 's'} with notes` : null,
               totalSeconds ? formatDuration(totalSeconds) : null,
@@ -92,7 +92,7 @@ export function NotesView({ onBack, onSelectArtist }: NotesViewProps) {
       <div className="mt-9">
         {isLoading && <TrackSkeleton />}
         {tracks && tracks.length === 0 && (
-          <div className="rounded-xl border border-line bg-surface/60 p-10 text-center text-sm text-white/45">
+          <div className="rounded-xl border border-line bg-surface/60 p-10 text-center text-sm text-white/74">
             No songs have notes yet. Tap the pencil on a song to add some.
           </div>
         )}

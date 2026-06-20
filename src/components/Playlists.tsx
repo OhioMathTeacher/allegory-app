@@ -136,7 +136,7 @@ export function Playlists({ onSelectPlaylist, onOpenNotes }: PlaylistsProps) {
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <h1 className="text-3xl font-semibold tracking-tight">Playlists</h1>
-            <p className="mt-1 text-sm text-white/60">
+            <p className="mt-1 text-sm text-white/85">
               {playlists
                 ? `${playlists.length} playlist${playlists.length === 1 ? '' : 's'}`
                 : 'Your playlists'}
@@ -167,7 +167,7 @@ export function Playlists({ onSelectPlaylist, onOpenNotes }: PlaylistsProps) {
                 }}
                 rows={2}
                 placeholder="Describe the playlist you want… (e.g. “late-night, melancholy, mostly acoustic”)"
-                className="max-h-32 min-w-0 flex-1 resize-none rounded-lg border border-line bg-elevated px-3 py-2 text-sm text-white outline-none placeholder:text-white/35 focus:border-[var(--accent)]"
+                className="max-h-32 min-w-0 flex-1 resize-none rounded-lg border border-line bg-elevated px-3 py-2 text-sm text-white outline-none placeholder:text-white/66 focus:border-[var(--accent)]"
               />
               <button
                 type="button"
@@ -208,7 +208,7 @@ export function Playlists({ onSelectPlaylist, onOpenNotes }: PlaylistsProps) {
             <button
               type="button"
               onClick={() => setMode('name')}
-              className="mt-2 text-xs text-white/45 underline-offset-2 transition-colors hover:text-white/70 hover:underline"
+              className="mt-2 text-xs text-white/74 underline-offset-2 transition-colors hover:text-white/70 hover:underline"
             >
               or name an empty one instead
             </button>
@@ -227,7 +227,7 @@ export function Playlists({ onSelectPlaylist, onOpenNotes }: PlaylistsProps) {
                   else if (e.key === 'Escape') toggleCreating()
                 }}
                 placeholder="New playlist name…"
-                className="min-w-0 flex-1 rounded-lg border border-line bg-elevated px-3 py-2 text-sm text-white outline-none placeholder:text-white/35 focus:border-[var(--accent)]"
+                className="min-w-0 flex-1 rounded-lg border border-line bg-elevated px-3 py-2 text-sm text-white outline-none placeholder:text-white/66 focus:border-[var(--accent)]"
               />
               <button
                 type="button"
@@ -243,7 +243,7 @@ export function Playlists({ onSelectPlaylist, onOpenNotes }: PlaylistsProps) {
               <button
                 type="button"
                 onClick={() => setMode('describe')}
-                className="mt-2 inline-flex items-center gap-1 text-xs text-white/45 underline-offset-2 transition-colors hover:text-white/70 hover:underline"
+                className="mt-2 inline-flex items-center gap-1 text-xs text-white/74 underline-offset-2 transition-colors hover:text-white/70 hover:underline"
               >
                 <Sparkles className="h-3 w-3" />
                 or describe it and let Socrates build it
@@ -270,7 +270,7 @@ export function Playlists({ onSelectPlaylist, onOpenNotes }: PlaylistsProps) {
             </div>
             <div className="min-w-0 flex-1">
               <div className="truncate text-xl font-semibold text-white">Notes</div>
-              <div className="truncate text-lg text-white/65">
+              <div className="truncate text-lg text-white/88">
                 {notesCount} song{notesCount === 1 ? '' : 's'} with notes
               </div>
             </div>
@@ -280,15 +280,15 @@ export function Playlists({ onSelectPlaylist, onOpenNotes }: PlaylistsProps) {
         {isLoading && <SkeletonList />}
 
         {isError && (
-          <div className="rounded-xl border border-line bg-surface/60 p-10 text-center text-sm text-white/50">
+          <div className="rounded-xl border border-line bg-surface/60 p-10 text-center text-sm text-white/78">
             Couldn’t load your playlists. Make sure the server is reachable.
           </div>
         )}
 
         {playlists && playlists.length === 0 && notesCount === 0 && (
           <div className="flex flex-col items-center gap-3 rounded-xl border border-line bg-surface/60 p-12 text-center">
-            <ListMusic className="h-8 w-8 text-white/20" />
-            <p className="text-sm text-white/45">No playlists yet.</p>
+            <ListMusic className="h-8 w-8 text-white/45" />
+            <p className="text-sm text-white/74">No playlists yet.</p>
           </div>
         )}
 
@@ -345,14 +345,14 @@ function PlaylistRow({ playlist, index, onSelect }: PlaylistRowProps) {
               className="h-full w-full"
             />
           ) : (
-            <ListMusic className="h-5 w-5 text-white/25" />
+            <ListMusic className="h-5 w-5 text-white/55" />
           )}
         </div>
         <div className="min-w-0 flex-1">
           <div className="truncate text-xl font-semibold text-white">
             {playlist.name}
           </div>
-          <div className="truncate text-lg text-white/65">
+          <div className="truncate text-lg text-white/88">
             {playlist.trackCount != null
               ? `${playlist.trackCount} track${playlist.trackCount === 1 ? '' : 's'}`
               : 'Playlist'}

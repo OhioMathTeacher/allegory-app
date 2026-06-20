@@ -150,7 +150,7 @@ export function AlbumCard({
         <div className="truncate text-xl font-semibold text-white">
           {album.name}
         </div>
-        <div className="truncate text-lg text-white/65">{album.artist}</div>
+        <div className="truncate text-lg text-white/88">{album.artist}</div>
       </div>
       {editing && (
         <AlbumEditor album={album} onClose={() => setEditing(false)} />

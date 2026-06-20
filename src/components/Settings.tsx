@@ -171,7 +171,7 @@ export function Settings({ firstRun, initialSection, onClose }: SettingsProps) {
             <h2 className="text-lg font-semibold">
               {firstRun ? 'Welcome to Allegory' : 'Settings'}
             </h2>
-            <p className="mt-1 text-sm text-white/60">
+            <p className="mt-1 text-sm text-white/85">
               {firstRun
                 ? 'Point Allegory at your music library to get started.'
                 : section === 'ai'
@@ -185,7 +185,7 @@ export function Settings({ firstRun, initialSection, onClose }: SettingsProps) {
             <button
               onClick={onClose}
               aria-label="Close"
-              className="rounded-md p-1.5 text-white/50 transition-colors hover:bg-white/5 hover:text-white"
+              className="rounded-md p-1.5 text-white/78 transition-colors hover:bg-white/5 hover:text-white"
             >
               <X className="h-4 w-4" />
             </button>
@@ -215,7 +215,7 @@ export function Settings({ firstRun, initialSection, onClose }: SettingsProps) {
           <DiagnosticsPanel />
         ) : (
         <div className="mt-5">
-          <label className="text-[11px] font-medium uppercase tracking-wide text-white/45">
+          <label className="text-[11px] font-medium uppercase tracking-wide text-white/74">
             Music library folder
           </label>
           <div className="mt-1.5 flex gap-2">
@@ -258,7 +258,7 @@ export function Settings({ firstRun, initialSection, onClose }: SettingsProps) {
 
           <div className="mt-2 min-h-[28px] text-sm">
             {validating ? (
-              <span className="flex items-center gap-1.5 text-white/45">
+              <span className="flex items-center gap-1.5 text-white/74">
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
                 Checking…
               </span>
@@ -274,7 +274,7 @@ export function Settings({ firstRun, initialSection, onClose }: SettingsProps) {
                 {validation.error}
               </span>
             ) : (
-              <span className="text-white/35">
+              <span className="text-white/66">
                 Expected layout: Artist / Album / 01 Title.ext
               </span>
             )}
@@ -288,13 +288,13 @@ export function Settings({ firstRun, initialSection, onClose }: SettingsProps) {
 
           {!firstRun && (
             <div className="mt-6 border-t border-line/60 pt-5">
-              <label className="text-[11px] font-medium uppercase tracking-wide text-white/45">
+              <label className="text-[11px] font-medium uppercase tracking-wide text-white/74">
                 Maintenance
               </label>
               <div className="mt-2 flex items-center justify-between gap-3">
                 <div className="min-w-0 flex-1">
                   <div className="text-sm text-white/80">Rescan library</div>
-                  <div className="mt-0.5 text-xs text-white/45">
+                  <div className="mt-0.5 text-xs text-white/74">
                     {scanError
                       ? scanError
                       : scanning
@@ -312,7 +312,7 @@ export function Settings({ firstRun, initialSection, onClose }: SettingsProps) {
                   {scanning ? 'Scanning…' : 'Rescan'}
                 </button>
               </div>
-              <p className="mt-3 text-[11px] text-white/35">
+              <p className="mt-3 text-[11px] text-white/66">
                 You can also drag a folder anywhere in the app to add it to your library.
               </p>
             </div>
@@ -320,10 +320,10 @@ export function Settings({ firstRun, initialSection, onClose }: SettingsProps) {
 
           {!firstRun && (
             <div className="mt-6 border-t border-line/60 pt-5">
-              <label className="text-[11px] font-medium uppercase tracking-wide text-white/45">
+              <label className="text-[11px] font-medium uppercase tracking-wide text-white/74">
                 Last.fm API key
               </label>
-              <p className="mt-1 text-xs text-white/45">
+              <p className="mt-1 text-xs text-white/74">
                 Enables Related Artists &amp; genres on artist pages. Fetched once
                 and cached with your music, so it works offline afterwards.{' '}
                 <a
@@ -409,7 +409,7 @@ function SectionTab({ active, onClick, children }: SectionTabProps) {
       type="button"
       onClick={onClick}
       className={`-mb-px border-b-2 px-3 py-2 text-sm transition-colors ${
-        active ? 'text-white' : 'border-transparent text-white/55 hover:text-white/85'
+        active ? 'text-white' : 'border-transparent text-white/82 hover:text-white/85'
       }`}
       style={active ? { borderColor: 'var(--accent)', color: 'var(--accent)' } : undefined}
     >

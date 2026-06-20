@@ -54,7 +54,7 @@ export function AlbumView({ album, onBack, onSelectArtist }: AlbumViewProps) {
           />
         </div>
         <div className="min-w-0 pb-1">
-          <div className="text-xs font-semibold uppercase tracking-[0.18em] text-white/55">
+          <div className="text-xs font-semibold uppercase tracking-[0.18em] text-white/82">
             Album
           </div>
           <h1 className="mt-2 text-2xl font-bold tracking-tight sm:text-4xl">{album.name}</h1>
@@ -64,14 +64,14 @@ export function AlbumView({ album, onBack, onSelectArtist }: AlbumViewProps) {
                 if (album.artistId)
                   onSelectArtist({ id: album.artistId, name: album.artist })
               }}
-              className="mt-2 block text-left text-white/55 transition-colors hover:text-white hover:underline"
+              className="mt-2 block text-left text-white/82 transition-colors hover:text-white hover:underline"
             >
               {album.artist}
             </button>
           ) : (
-            <div className="mt-2 text-white/55">{album.artist}</div>
+            <div className="mt-2 text-white/82">{album.artist}</div>
           )}
-          <div className="mt-1 text-sm text-white/60">
+          <div className="mt-1 text-sm text-white/85">
             {[
               album.year,
               tracks ? `${tracks.length} track${tracks.length === 1 ? '' : 's'}` : null,

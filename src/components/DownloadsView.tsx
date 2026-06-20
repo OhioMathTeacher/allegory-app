@@ -102,9 +102,9 @@ export function DownloadsView() {
       <div className="px-8 py-8">
         <Header online={online} />
         <div className="mt-10 flex flex-col items-center gap-3 rounded-xl border border-line bg-surface/60 px-6 py-16 text-center">
-          <Download className="h-8 w-8 text-white/20" />
+          <Download className="h-8 w-8 text-white/45" />
           <p className="text-base font-medium text-white/70">No downloads yet</p>
-          <p className="max-w-sm text-sm text-white/45">
+          <p className="max-w-sm text-sm text-white/74">
             Use the <span className="font-semibold text-white/70">⋮</span> menu on any
             song or album to download it. Downloads play here even when the server
             is unreachable.
@@ -122,12 +122,12 @@ export function DownloadsView() {
       <div className="mt-5 rounded-xl border border-line bg-surface/60 p-4">
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2 text-sm text-white/70">
-            <HardDrive className="h-4 w-4 text-white/40" />
+            <HardDrive className="h-4 w-4 text-white/70" />
             <span>
               {downloads.length} song{downloads.length === 1 ? '' : 's'} ·{' '}
               {formatBytes(totalBytes)}
               {usage && usage.quota > 0 && (
-                <span className="text-white/40">
+                <span className="text-white/70">
                   {'  '}of {formatBytes(usage.quota)} available
                 </span>
               )}
@@ -170,7 +170,7 @@ export function DownloadsView() {
                 <div className="truncate text-base font-semibold text-white">
                   {group.album}
                 </div>
-                <div className="truncate text-sm text-white/55">{group.artist}</div>
+                <div className="truncate text-sm text-white/82">{group.artist}</div>
               </div>
             </div>
             <div className="overflow-hidden rounded-xl border border-line">
@@ -205,7 +205,7 @@ export function DownloadsView() {
                     >
                       {rec.track.name}
                     </button>
-                    <span className="shrink-0 px-3 text-xs tabular-nums text-white/35">
+                    <span className="shrink-0 px-3 text-xs tabular-nums text-white/66">
                       {formatTime(ticksToSeconds(rec.track.durationTicks))}
                     </span>
                     <button
@@ -213,7 +213,7 @@ export function DownloadsView() {
                       onClick={() => void removeDownload(rec.id)}
                       aria-label="Remove download"
                       title="Remove download"
-                      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-white/30 transition-colors hover:bg-white/10 hover:text-white"
+                      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-white/62 transition-colors hover:bg-white/10 hover:text-white"
                     >
                       <Trash2 className="h-4 w-4" />
                     </button>
@@ -233,7 +233,7 @@ function Header({ online }: { online: boolean }) {
     <div className="flex items-center justify-between gap-3">
       <h1 className="text-2xl font-bold tracking-tight">Downloads</h1>
       {!online && (
-        <span className="flex items-center gap-1.5 rounded-full border border-line bg-surface/80 px-3 py-1 text-xs font-medium text-white/60">
+        <span className="flex items-center gap-1.5 rounded-full border border-line bg-surface/80 px-3 py-1 text-xs font-medium text-white/85">
           <WifiOff className="h-3.5 w-3.5" />
           Offline
         </span>

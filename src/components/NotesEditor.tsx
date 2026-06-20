@@ -109,7 +109,7 @@ export function NotesEditor({ track, onClose }: NotesEditorProps) {
               <Pencil className="h-4 w-4 shrink-0" style={{ color: 'var(--accent)' }} />
               Notes for Socrates
             </h2>
-            <p className="mt-1 truncate text-sm text-white/55">
+            <p className="mt-1 truncate text-sm text-white/82">
               “{track.name}” · {track.artist}
             </p>
           </div>
@@ -118,14 +118,14 @@ export function NotesEditor({ track, onClose }: NotesEditorProps) {
             onClick={onClose}
             disabled={saving}
             aria-label="Close"
-            className="rounded-md p-1.5 text-white/50 transition-colors hover:bg-white/5 hover:text-white disabled:opacity-40"
+            className="rounded-md p-1.5 text-white/78 transition-colors hover:bg-white/5 hover:text-white disabled:opacity-40"
           >
             <X className="h-4 w-4" />
           </button>
         </div>
 
         {isLoading || value === null ? (
-          <div className="flex items-center gap-2 px-6 py-10 text-sm text-white/55">
+          <div className="flex items-center gap-2 px-6 py-10 text-sm text-white/82">
             <Loader2 className="h-4 w-4 animate-spin" />
             Loading notes…
           </div>
@@ -162,7 +162,7 @@ export function NotesEditor({ track, onClose }: NotesEditorProps) {
               )}
 
               <div className="flex items-center justify-between gap-3">
-                <p className="text-[11px] text-white/35">
+                <p className="text-[11px] text-white/66">
                   Grounds Socrates while this song plays · empty clears the note.
                 </p>
                 <div className="flex shrink-0 gap-2">
