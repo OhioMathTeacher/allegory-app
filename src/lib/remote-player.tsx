@@ -148,6 +148,10 @@ export function RemotePlayerProvider({ children }: RemotePlayerProviderProps) {
       playNext: (tracks) => sendTracks('playNext', tracks),
       addToQueue: (tracks) => sendTracks('addToQueue', tracks),
       togglePlay: () => sendCmd('togglePlay'),
+      // Remote audio plays on the host, not this phone, so there's no mic to
+      // free here — searching shouldn't reach across and pause the host.
+      pauseForSearch: noop,
+      resumeFromSearch: noop,
       next: () => sendCmd('next'),
       prev: () => sendCmd('prev'),
       seek: (t: number) => sendCmd('seek', t),

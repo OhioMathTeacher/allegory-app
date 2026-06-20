@@ -8,6 +8,9 @@ import { isAbsolute, join } from 'node:path'
 
 export interface Settings {
   musicDir: string
+  /** Last.fm API key for artist enrichment (related artists + genres).
+   *  Optional; falls back to the LASTFM_API_KEY env var when unset. */
+  lastfmApiKey?: string
 }
 
 export interface ValidationResult {
@@ -21,16 +24,23 @@ export function createSettings(cacheDir: string, fallbackMusicDir: string) {
   const file = join(cacheDir, 'settings.json')
 
   async function load(): Promise<Settings> {
+    // A key in settings.json wins; otherwise honor the LASTFM_API_KEY env var.
+    const envKey = process.env.LASTFM_API_KEY?.trim() || undefined
+    const withKey = (s: Settings, fileKey?: unknown): Settings => {
+      const key =
+        typeof fileKey === 'string' && fileKey.trim() ? fileKey.trim() : envKey
+      return key ? { ...s, lastfmApiKey: key } : s
+    }
     try {
       const raw = await readFile(file, 'utf8')
       const parsed = JSON.parse(raw) as Partial<Settings>
       if (typeof parsed.musicDir === 'string' && parsed.musicDir.trim()) {
-        return { musicDir: parsed.musicDir }
+        return withKey({ musicDir: parsed.musicDir }, parsed.lastfmApiKey)
       }
     } catch {
       // Missing or unparseable — fall through to the env default.
     }
-    return { musicDir: fallbackMusicDir }
+    return withKey({ musicDir: fallbackMusicDir })
   }
 
   async function save(s: Settings): Promise<void> {

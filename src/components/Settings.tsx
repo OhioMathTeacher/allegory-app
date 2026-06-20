@@ -5,6 +5,7 @@ import { useConnected } from '../lib/connection'
 import {
   getSettings,
   updateSettings,
+  updateLastfmKey,
   validateMusicDir,
   refreshLibrary,
   getLibraryScanProgress,
@@ -91,6 +92,34 @@ export function Settings({ firstRun, initialSection, onClose }: SettingsProps) {
   }
 
   const canSave = !!validation?.ok && !saving && path !== current?.musicDir
+
+  // Last.fm API key — powers the Related Artists / genre enrichment. Saved on
+  // its own (no rescan). `draft === null` means "untouched, show the persisted
+  // value", which avoids a seed effect; editing populates the draft, and a save
+  // clears it back to null so the field re-syncs to the refetched setting.
+  const [keyDraft, setKeyDraft] = useState<string | null>(null)
+  const [savingKey, setSavingKey] = useState(false)
+  const [keySaved, setKeySaved] = useState(false)
+  const lastfmKey = keyDraft ?? current?.lastfmApiKey ?? ''
+  const keyDirty = lastfmKey.trim() !== (current?.lastfmApiKey ?? '')
+
+  async function saveLastfmKey() {
+    setSavingKey(true)
+    setKeySaved(false)
+    try {
+      await updateLastfmKey(conn, lastfmKey.trim())
+      // Refresh settings + drop cached related-artist results so the new key
+      // (or its removal) takes effect on the next artist page open.
+      queryClient.invalidateQueries({ queryKey: ['settings'] })
+      queryClient.invalidateQueries({ queryKey: ['artist-related'] })
+      setKeyDraft(null)
+      setKeySaved(true)
+    } catch {
+      // Keep the field as-is; the user can retry.
+    } finally {
+      setSavingKey(false)
+    }
+  }
 
   // Standalone rescan — kicks off a scan without changing the music dir,
   // then polls until idle and invalidates queries so the UI picks up new
@@ -286,6 +315,55 @@ export function Settings({ firstRun, initialSection, onClose }: SettingsProps) {
               <p className="mt-3 text-[11px] text-white/35">
                 You can also drag a folder anywhere in the app to add it to your library.
               </p>
+            </div>
+          )}
+
+          {!firstRun && (
+            <div className="mt-6 border-t border-line/60 pt-5">
+              <label className="text-[11px] font-medium uppercase tracking-wide text-white/45">
+                Last.fm API key
+              </label>
+              <p className="mt-1 text-xs text-white/45">
+                Enables Related Artists &amp; genres on artist pages. Fetched once
+                and cached with your music, so it works offline afterwards.{' '}
+                <a
+                  href="https://www.last.fm/api/account/create"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-white/70 underline transition-colors hover:text-white"
+                >
+                  Get a free key
+                </a>
+                .
+              </p>
+              <div className="mt-2 flex gap-2">
+                <input
+                  type="password"
+                  value={lastfmKey}
+                  onChange={(e) => {
+                    setKeyDraft(e.target.value)
+                    setKeySaved(false)
+                  }}
+                  placeholder="Paste your Last.fm API key"
+                  autoCapitalize="off"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  className="input flex-1 font-mono text-sm"
+                />
+                <button
+                  type="button"
+                  onClick={saveLastfmKey}
+                  disabled={savingKey || !keyDirty}
+                  className="flex items-center gap-2 rounded-md border border-line px-3 py-2 text-sm text-white/80 transition-colors hover:bg-white/5 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {savingKey ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : keySaved && !keyDirty ? (
+                    <Check className="h-3.5 w-3.5 text-emerald-300/90" />
+                  ) : null}
+                  {savingKey ? 'Saving…' : keySaved && !keyDirty ? 'Saved' : 'Save key'}
+                </button>
+              </div>
             </div>
           )}
         </div>

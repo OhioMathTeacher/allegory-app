@@ -136,6 +136,10 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const resumeWantedRef = useRef(false)
   const resumeAtRef = useRef(0)
 
+  // Set while the music was paused *by* opening search, so leaving search can
+  // put it back exactly as it was. Distinct from a normal user pause.
+  const pausedForSearchRef = useRef(false)
+
   // Persist the queue + cursor on every change so a reload restores them.
   useEffect(() => {
     try {
@@ -469,6 +473,29 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
+  // Opening search frees the phone's mic for voice dictation. We pause *before*
+  // dictation starts, which sidesteps the whole mic-interruption fight: iOS has
+  // nothing to suspend, so the resume-retry machinery never arms. Marked as an
+  // intentional pause so even a late interruption event won't try to resume.
+  const pauseForSearch = useCallback(() => {
+    const audio = audioRef.current!
+    if (audio.paused || !audio.src) return
+    pausedForSearchRef.current = true
+    intentionalPauseRef.current = true
+    audio.pause()
+  }, [])
+
+  const resumeFromSearch = useCallback(() => {
+    if (!pausedForSearchRef.current) return
+    pausedForSearchRef.current = false
+    const audio = audioRef.current!
+    // If something already started playing (e.g. a track picked from the
+    // results), leave it be — don't fight the user's choice.
+    if (!audio.paused || !audio.src) return
+    userStartedRef.current = true
+    audio.play().catch(() => undefined)
+  }, [])
+
   const next = useCallback(() => {
     if (indexRef.current < queueRef.current.length - 1) {
       setCurrentIndex(indexRef.current + 1)
@@ -619,6 +646,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       playNext,
       addToQueue,
       togglePlay,
+      pauseForSearch,
+      resumeFromSearch,
       next,
       prev,
       seek,
@@ -649,6 +678,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       playNext,
       addToQueue,
       togglePlay,
+      pauseForSearch,
+      resumeFromSearch,
       next,
       prev,
       seek,

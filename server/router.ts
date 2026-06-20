@@ -13,6 +13,7 @@ import type { Library } from './scanner.ts'
 import type { Playlists } from './playlists.ts'
 import type { SettingsStore } from './settings.ts'
 import { editAlbum, renameArtist, applyAlbumTags, readFullTags } from './metadata.ts'
+import { getArtistRelated } from './artist-related.ts'
 import { saveUpload } from './upload.ts'
 import { recordPlay, getPlayHistory } from './play-history.ts'
 import { transcodedPath } from './transcode.ts'
@@ -557,14 +558,30 @@ export function createRouter(deps: RouterDeps): Router {
         return true
       }
       if (segs.length === 2 && segs[1] === 'settings' && method === 'POST') {
-        const body = (await readBody(req)) as { musicDir?: string }
-        const musicDir = (body.musicDir ?? '').trim()
+        const body = (await readBody(req)) as {
+          musicDir?: string
+          lastfmApiKey?: string
+        }
+        const current = await settings.load()
+        const lastfmApiKey =
+          body.lastfmApiKey !== undefined
+            ? body.lastfmApiKey.trim() || undefined
+            : current.lastfmApiKey
+
+        // Key-only update: persist it without re-validating or rescanning.
+        if (body.musicDir === undefined) {
+          await settings.save({ ...current, lastfmApiKey })
+          sendJson(res, { ok: true })
+          return true
+        }
+
+        const musicDir = body.musicDir.trim()
         const v = await settings.validate(musicDir)
         if (!v.ok) {
           sendJson(res, { error: v.error ?? 'Invalid path.' }, 400)
           return true
         }
-        await settings.save({ musicDir })
+        await settings.save({ musicDir, lastfmApiKey })
         await onMusicDirChange(musicDir)
         sendJson(res, { ok: true, musicDir, artistCount: v.artistCount })
         return true
@@ -850,6 +867,25 @@ export function createRouter(deps: RouterDeps): Router {
         method === 'GET'
       ) {
         sendJson(res, await library.artistTracks(seg(2)))
+        return true
+      }
+      if (
+        segs.length === 4 &&
+        segs[1] === 'artists' &&
+        segs[3] === 'related' &&
+        method === 'GET'
+      ) {
+        // Local-first: reads the cached sidecar; only hits Last.fm when it's
+        // missing/stale (or ?refresh=1) and a key is configured.
+        const { lastfmApiKey } = await settings.load()
+        const dto = await getArtistRelated(library, seg(2), lastfmApiKey, {
+          refresh: url.searchParams.get('refresh') === '1',
+        })
+        if (!dto) {
+          sendJson(res, { error: 'Unknown artist.' }, 404)
+          return true
+        }
+        sendJson(res, dto)
         return true
       }
       if (

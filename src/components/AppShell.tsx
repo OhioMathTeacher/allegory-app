@@ -23,6 +23,7 @@ import { Playlists } from './Playlists'
 import { PlaylistView } from './PlaylistView'
 import { NotesView } from './NotesView'
 import { PlayerBar } from './PlayerBar'
+import { usePlayer } from '../lib/player'
 import { Settings } from './Settings'
 import { useFolderDrop, DragOverlay, UploadToast } from './FolderUpload'
 import { getSettings } from '../lib/api'
@@ -60,6 +61,7 @@ export function AppShell() {
   const [splashOpen, setSplashOpen] = useState(false)
   const [settingsInitial, setSettingsInitial] = useState<'library' | 'ai'>('library')
   const { mode: playerMode } = useRemoteMode()
+  const { pauseForSearch, resumeFromSearch } = usePlayer()
   const [remoteSheetOpen, setRemoteSheetOpen] = useState(false)
   const drop = useFolderDrop()
 
@@ -93,6 +95,15 @@ export function AppShell() {
     : view.type === 'playlist' ? 'playlists'
     : view.type === 'notes' ? 'playlists'
     : view.type
+  // Opening Search frees the phone's mic for voice dictation: pause the music
+  // while you're in search, then put it back on exit — unless you started
+  // something from the results (resumeFromSearch leaves that alone).
+  const inSearch = section === 'search'
+  useEffect(() => {
+    if (inSearch) pauseForSearch()
+    else resumeFromSearch()
+  }, [inSearch, pauseForSearch, resumeFromSearch])
+
   // A stable key per view, so AnimatePresence transitions cleanly.
   const viewKey =
     view.type === 'album' ? view.album.id
@@ -302,6 +313,7 @@ export function AppShell() {
                   artist={view.artist}
                   onBack={() => setView({ type: 'artists' })}
                   onSelectAlbum={(album) => setView({ type: 'album', album })}
+                  onSelectArtist={(artist) => setView({ type: 'artist', artist })}
                 />
               )}
               {view.type === 'recent' && (
