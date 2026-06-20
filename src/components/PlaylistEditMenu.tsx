@@ -8,14 +8,22 @@ import {
   Check,
   ChevronLeft,
   ImagePlus,
+  Download,
+  Loader2,
 } from 'lucide-react'
 import { useConnected } from '../lib/connection'
 import {
   getPlaylists,
+  getPlaylistTracks,
   renamePlaylist,
   deletePlaylist,
   combinePlaylists,
 } from '../lib/api'
+import {
+  downloadTracks,
+  removeDownloads,
+  useCollectionStatus,
+} from '../lib/downloads'
 import type { Playlist } from '../lib/types'
 
 interface PlaylistEditMenuProps {
@@ -60,6 +68,35 @@ export function PlaylistEditMenu({
     enabled: open && mode === 'combine',
   })
   const others = (playlists ?? []).filter((p) => p.id !== playlistId)
+
+  // Lazily load the playlist's tracks once the menu opens, so "Download
+  // playlist" knows what to fetch and can reflect how much is already cached.
+  const { data: tracks } = useQuery({
+    queryKey: ['playlist-tracks', playlistId],
+    queryFn: () => getPlaylistTracks(conn, playlistId),
+    enabled: open,
+  })
+  const trackIds = (tracks ?? []).map((t) => t.id)
+  const dl = useCollectionStatus(trackIds)
+
+  function toggleDownload() {
+    if (!tracks || tracks.length === 0) return
+    if (dl.complete) {
+      void run(() => removeDownloads(trackIds), 'Removed download')
+    } else {
+      void run(() => downloadTracks(conn, tracks), `Downloaded ${playlistName}`)
+    }
+  }
+
+  const downloadLabel = !tracks
+    ? 'Download playlist'
+    : dl.busy
+      ? `Downloading… ${dl.downloaded}/${dl.total}`
+      : dl.complete
+        ? 'Remove download'
+        : dl.downloaded > 0
+          ? `Download playlist (${dl.downloaded}/${dl.total})`
+          : 'Download playlist'
 
   function openMenu() {
     const r = buttonRef.current?.getBoundingClientRect()
@@ -132,7 +169,7 @@ export function PlaylistEditMenu({
         aria-label="Playlist options"
         title="Playlist options"
         className={`rounded-md p-2 transition-colors ${
-          open ? 'text-white' : 'text-white/40 hover:text-white'
+          open ? 'text-white' : 'text-white/85 hover:text-white'
         }`}
       >
         <MoreVertical className="h-5 w-5" />
@@ -239,6 +276,22 @@ export function PlaylistEditMenu({
               </>
             ) : (
               <>
+                <button
+                  type="button"
+                  onClick={toggleDownload}
+                  disabled={busy || !tracks || dl.busy}
+                  className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-sm text-white/85 transition-colors hover:bg-white/5 disabled:opacity-50"
+                >
+                  {dl.busy ? (
+                    <Loader2 className="h-4 w-4 shrink-0 animate-spin" style={{ color: 'var(--accent)' }} />
+                  ) : dl.complete ? (
+                    <Trash2 className="h-4 w-4 shrink-0" style={{ color: 'var(--accent)' }} />
+                  ) : (
+                    <Download className="h-4 w-4 shrink-0" style={{ color: 'var(--accent)' }} />
+                  )}
+                  {downloadLabel}
+                </button>
+                <div className="my-1 h-px bg-line" />
                 <button
                   type="button"
                   onClick={() => setMode('rename')}
