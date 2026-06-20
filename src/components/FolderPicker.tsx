@@ -86,7 +86,7 @@ export function FolderPicker({ initialPath, onPick, onCancel }: FolderPickerProp
         <button
           type="button"
           onClick={() => nav('/')}
-          className="text-white/55 hover:text-white"
+          className="text-white/82 hover:text-white"
         >
           /
         </button>
@@ -94,12 +94,12 @@ export function FolderPicker({ initialPath, onPick, onCancel }: FolderPickerProp
           const segPath = '/' + segs.slice(0, i + 1).join('/')
           return (
             <div key={segPath} className="flex shrink-0 items-center gap-1">
-              <ChevronRight className="h-3 w-3 text-white/30" />
+              <ChevronRight className="h-3 w-3 text-white/62" />
               <button
                 type="button"
                 onClick={() => nav(segPath)}
                 className={`hover:text-white ${
-                  i === segs.length - 1 ? 'font-medium text-white/90' : 'text-white/55'
+                  i === segs.length - 1 ? 'font-medium text-white/90' : 'text-white/82'
                 }`}
               >
                 {name}
@@ -112,7 +112,7 @@ export function FolderPicker({ initialPath, onPick, onCancel }: FolderPickerProp
       {/* Folder list */}
       <div className="max-h-[260px] overflow-y-auto">
         {loading ? (
-          <div className="flex items-center gap-2 px-3 py-3 text-sm text-white/45">
+          <div className="flex items-center gap-2 px-3 py-3 text-sm text-white/74">
             <Loader2 className="h-4 w-4 animate-spin" />
             Loading…
           </div>
@@ -127,14 +127,14 @@ export function FolderPicker({ initialPath, onPick, onCancel }: FolderPickerProp
               <button
                 type="button"
                 onClick={() => nav(listing.parent!)}
-                className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-white/65 transition-colors hover:bg-white/5 hover:text-white"
+                className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-white/88 transition-colors hover:bg-white/5 hover:text-white"
               >
                 <ChevronLeft className="h-4 w-4" />
-                <span className="text-white/45">..</span>
+                <span className="text-white/74">..</span>
               </button>
             )}
             {listing?.entries.length === 0 ? (
-              <div className="px-3 py-3 text-sm text-white/40">
+              <div className="px-3 py-3 text-sm text-white/70">
                 No subfolders here.
               </div>
             ) : (
@@ -145,7 +145,7 @@ export function FolderPicker({ initialPath, onPick, onCancel }: FolderPickerProp
                   onClick={() => nav(e.path)}
                   className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-white/85 transition-colors hover:bg-white/5"
                 >
-                  <Folder className="h-4 w-4 shrink-0 text-white/55" />
+                  <Folder className="h-4 w-4 shrink-0 text-white/82" />
                   <span className="truncate">{e.name}</span>
                 </button>
               ))
@@ -156,7 +156,7 @@ export function FolderPicker({ initialPath, onPick, onCancel }: FolderPickerProp
 
       {/* Actions */}
       <div className="flex items-center justify-between gap-2 border-t border-line/60 px-3 py-2">
-        <span className="truncate font-mono text-[11px] text-white/45">
+        <span className="truncate font-mono text-[11px] text-white/74">
           {path}
         </span>
         <div className="flex shrink-0 gap-2">

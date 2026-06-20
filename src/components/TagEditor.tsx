@@ -51,7 +51,7 @@ export function TagEditor({ album, onClose, onSaved }: TagEditorProps) {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center gap-2 py-16 text-sm text-white/55">
+      <div className="flex items-center justify-center gap-2 py-16 text-sm text-white/82">
         <Loader2 className="h-4 w-4 animate-spin" />
         Reading tags…
       </div>
@@ -159,7 +159,7 @@ function Loaded({ album, data, onClose, onSaved }: LoadedProps) {
     <div className="mt-4 flex flex-col gap-4 sm:flex-row">
       {/* Song list */}
       <div className="sm:w-56 sm:shrink-0">
-        <div className="mb-2 text-[11px] font-medium uppercase tracking-wide text-white/45">
+        <div className="mb-2 text-[11px] font-medium uppercase tracking-wide text-white/74">
           {rows.length} song{rows.length === 1 ? '' : 's'}
         </div>
         <div className="max-h-[44vh] overflow-y-auto rounded-lg border border-line">
@@ -175,7 +175,7 @@ function Loaded({ album, data, onClose, onSaved }: LoadedProps) {
                   active ? 'bg-white/[0.06] text-white' : 'text-white/70 hover:bg-white/[0.03]'
                 }`}
               >
-                <span className="w-5 shrink-0 text-right text-[11px] text-white/40">
+                <span className="w-5 shrink-0 text-right text-[11px] text-white/70">
                   {row.common.trackNo || '·'}
                 </span>
                 <span className="min-w-0 flex-1 truncate">
@@ -197,7 +197,7 @@ function Loaded({ album, data, onClose, onSaved }: LoadedProps) {
       {/* Selected song's full tag form */}
       <div className="min-w-0 flex-1">
         <div className="mb-2 flex items-center gap-1.5 text-sm font-medium text-white/85">
-          <Music className="h-3.5 w-3.5 text-white/45" />
+          <Music className="h-3.5 w-3.5 text-white/74" />
           <span className="truncate">{sel.common.title || sel.file}</span>
         </div>
 
@@ -211,7 +211,7 @@ function Loaded({ album, data, onClose, onSaved }: LoadedProps) {
             onField={setField}
             disabled={saving}
           />
-          <label className="mt-2 flex cursor-pointer items-center gap-2 text-xs text-white/65">
+          <label className="mt-2 flex cursor-pointer items-center gap-2 text-xs text-white/88">
             <input
               type="checkbox"
               checked={applyAll}
@@ -229,16 +229,16 @@ function Loaded({ album, data, onClose, onSaved }: LoadedProps) {
             <button
               type="button"
               onClick={() => setShowRaw((s) => !s)}
-              className="flex items-center gap-1 text-[11px] font-medium uppercase tracking-wide text-white/40 transition-colors hover:text-white/70"
+              className="flex items-center gap-1 text-[11px] font-medium uppercase tracking-wide text-white/70 transition-colors hover:text-white/70"
             >
               {showRaw ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
               Raw tags in the file ({sel.native.length}){sel.format ? ` · ${sel.format}` : ''}
             </button>
             {showRaw && (
-              <div className="mt-2 max-h-48 overflow-y-auto rounded-md border border-line/60 bg-black/30 p-2 font-mono text-[11px] leading-relaxed text-white/60">
+              <div className="mt-2 max-h-48 overflow-y-auto rounded-md border border-line/60 bg-black/30 p-2 font-mono text-[11px] leading-relaxed text-white/85">
                 {sel.native.map((n, i) => (
                   <div key={`${n.id}-${i}`} className="flex gap-2 break-all">
-                    <span className="shrink-0 text-white/40">{n.id}</span>
+                    <span className="shrink-0 text-white/70">{n.id}</span>
                     <span>{n.value}</span>
                   </div>
                 ))}
@@ -296,13 +296,13 @@ interface FieldGridProps {
 function FieldGrid({ title, fields, common, onField, disabled }: FieldGridProps) {
   return (
     <div className="rounded-lg border border-line bg-white/[0.02] p-4">
-      <div className="mb-3 text-[11px] font-medium uppercase tracking-wide text-white/45">
+      <div className="mb-3 text-[11px] font-medium uppercase tracking-wide text-white/74">
         {title}
       </div>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         {fields.map((f) => (
           <div key={f.key} className={f.wide ? 'sm:col-span-2' : undefined}>
-            <label className="text-[11px] font-medium uppercase tracking-wide text-white/45">
+            <label className="text-[11px] font-medium uppercase tracking-wide text-white/74">
               {f.label}
             </label>
             <input

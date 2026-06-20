@@ -227,7 +227,7 @@ export function TrackMenu({ track, excludePlaylistId }: TrackMenuProps) {
                     <div className="my-1 h-px bg-line" />
                   </>
                 )}
-                <div className="px-2.5 py-1.5 text-[11px] font-medium uppercase tracking-wide text-white/35">
+                <div className="px-2.5 py-1.5 text-[11px] font-medium uppercase tracking-wide text-white/66">
                   Add to playlist
                 </div>
                 <button
@@ -264,18 +264,18 @@ export function TrackMenu({ track, excludePlaylistId }: TrackMenuProps) {
                   <button
                     type="button"
                     onClick={() => setShowAll(true)}
-                    className="block w-full rounded-md px-2.5 py-2 text-left text-sm font-medium text-white/55 transition-colors hover:bg-white/5 hover:text-white/80"
+                    className="block w-full rounded-md px-2.5 py-2 text-left text-sm font-medium text-white/82 transition-colors hover:bg-white/5 hover:text-white/80"
                   >
                     More… ({hiddenCount} more)
                   </button>
                 )}
                 {showAll && query && visible.length === 0 && (
-                  <div className="px-2.5 py-2 text-xs text-white/40">
+                  <div className="px-2.5 py-2 text-xs text-white/70">
                     No playlists match “{filter.trim()}”.
                   </div>
                 )}
                 {playlists && options.length === 0 && (
-                  <div className="px-2.5 py-2 text-xs text-white/40">
+                  <div className="px-2.5 py-2 text-xs text-white/70">
                     No other playlists yet — create one above.
                   </div>
                 )}

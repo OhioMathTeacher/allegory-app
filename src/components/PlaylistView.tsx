@@ -111,7 +111,7 @@ export function PlaylistView({ playlist, onBack, onSelectArtist }: PlaylistViewP
                   className="h-full w-full"
                 />
               ) : (
-                <ListMusic className="h-16 w-16 text-white/20" />
+                <ListMusic className="h-16 w-16 text-white/45" />
               )}
               <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-black/55 opacity-0 transition-opacity group-hover:opacity-100">
                 <Pencil className="h-6 w-6 text-white" />
@@ -143,7 +143,7 @@ export function PlaylistView({ playlist, onBack, onSelectArtist }: PlaylistViewP
           />
         </div>
         <div className="min-w-0 pb-1">
-          <div className="text-xs font-semibold uppercase tracking-[0.18em] text-white/55">
+          <div className="text-xs font-semibold uppercase tracking-[0.18em] text-white/82">
             Playlist
           </div>
           <div className="mt-2 flex items-center gap-2">
@@ -158,7 +158,7 @@ export function PlaylistView({ playlist, onBack, onSelectArtist }: PlaylistViewP
               onEditArtwork={() => fileRef.current?.click()}
             />
           </div>
-          <div className="mt-2 text-sm text-white/60">
+          <div className="mt-2 text-sm text-white/85">
             {[
               tracks ? `${tracks.length} track${tracks.length === 1 ? '' : 's'}` : null,
               totalSeconds ? formatDuration(totalSeconds) : null,
@@ -191,13 +191,13 @@ export function PlaylistView({ playlist, onBack, onSelectArtist }: PlaylistViewP
       <div className="mt-9">
         {isLoading && <TrackSkeleton />}
         {tracks && tracks.length === 0 && (
-          <div className="rounded-xl border border-line bg-surface/60 p-10 text-center text-sm text-white/45">
+          <div className="rounded-xl border border-line bg-surface/60 p-10 text-center text-sm text-white/74">
             This playlist is empty.
           </div>
         )}
         {tracks && tracks.length > 0 && (
           <>
-            <p className="mb-3 text-xs text-white/30">Drag a track to reorder.</p>
+            <p className="mb-3 text-xs text-white/62">Drag a track to reorder.</p>
             <div className="overflow-hidden rounded-xl border border-line">
               {tracks.map((track, i) => (
                 <div

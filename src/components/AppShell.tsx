@@ -280,7 +280,7 @@ export function AppShell() {
                   className={`rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${
                     view.type === key
                       ? 'bg-[color:var(--accent-soft)] text-[color:var(--accent)]'
-                      : 'text-white/65 hover:bg-white/5 hover:text-white/90'
+                      : 'text-white/88 hover:bg-white/5 hover:text-white/90'
                   }`}
                 >
                   {label}
@@ -516,7 +516,7 @@ function Splash({ onClose }: { onClose: () => void }) {
           {/* Build stamp — confirms which build is loaded (handy on the phone,
               through caching). The short SHA changes every commit. Injected into
               index.html by vite.config's allegory-build-info plugin. */}
-          <p className="mt-4 text-xs tracking-wide text-white/40">
+          <p className="mt-4 text-xs tracking-wide text-white/70">
             Version {build.version} · {build.sha} · {build.date}
           </p>
         </div>

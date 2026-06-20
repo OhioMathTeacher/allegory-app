@@ -87,7 +87,7 @@ export function RemoteControlSheet({ onClose }: { onClose: () => void }) {
           <button
             onClick={onClose}
             aria-label="Close"
-            className="flex h-9 w-9 items-center justify-center rounded-full text-white/60 transition-colors hover:bg-white/10 hover:text-white"
+            className="flex h-9 w-9 items-center justify-center rounded-full text-white/85 transition-colors hover:bg-white/10 hover:text-white"
           >
             <X className="h-5 w-5" />
           </button>
@@ -140,7 +140,7 @@ export function RemoteControlSheet({ onClose }: { onClose: () => void }) {
 
           {/* Manual add by host/IP. */}
           <div className="mt-1 rounded-xl border border-dashed border-line/70 p-3">
-            <label className="text-[11px] font-medium uppercase tracking-wide text-white/45">
+            <label className="text-[11px] font-medium uppercase tracking-wide text-white/74">
               Add by IP or host
             </label>
             <div className="mt-1 flex gap-2">
@@ -214,11 +214,11 @@ function ServerRow({ icon, title, sub, up, selected, onClick, onForget }: Server
           <span className="truncate font-medium text-white/90">{title}</span>
           {selected && <Check className="h-4 w-4" style={{ color: 'var(--accent)' }} />}
         </div>
-        <div className="truncate text-xs text-white/50">{sub}</div>
+        <div className="truncate text-xs text-white/78">{sub}</div>
       </div>
       {/* Reachability dot. */}
       {up === undefined ? (
-        <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-white/35" />
+        <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-white/66" />
       ) : (
         <span
           title={up ? 'Reachable' : 'Not reachable'}
@@ -235,7 +235,7 @@ function ServerRow({ icon, title, sub, up, selected, onClick, onForget }: Server
             onForget()
           }}
           title="Forget this computer"
-          className="shrink-0 rounded p-1 text-white/30 opacity-0 transition-colors hover:bg-red-500/10 hover:text-red-300 group-hover:opacity-100"
+          className="shrink-0 rounded p-1 text-white/62 opacity-0 transition-colors hover:bg-red-500/10 hover:text-red-300 group-hover:opacity-100"
         >
           <Trash2 className="h-4 w-4" />
         </button>

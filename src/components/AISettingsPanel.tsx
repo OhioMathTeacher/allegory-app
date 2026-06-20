@@ -167,7 +167,7 @@ export function AISettingsPanel() {
         <TabButton active={tab === 'paid'} onClick={() => setTab('paid')}>
           Pay (Own Key)
         </TabButton>
-        <div className="ml-auto self-center pr-1 text-[11px] text-white/40">
+        <div className="ml-auto self-center pr-1 text-[11px] text-white/70">
           Selected: <span className="text-white/70">{providerLine(provider)}</span>
         </div>
       </div>
@@ -181,7 +181,7 @@ export function AISettingsPanel() {
               return [
                 <div
                   key={url}
-                  className="flex items-center justify-between rounded-md border border-line/60 bg-white/[0.02] px-3 py-2 text-sm text-white/55"
+                  className="flex items-center justify-between rounded-md border border-line/60 bg-white/[0.02] px-3 py-2 text-sm text-white/82"
                 >
                   <span className="flex items-center gap-2">
                     <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -191,7 +191,7 @@ export function AISettingsPanel() {
                     type="button"
                     onClick={() => removeEndpoint(url)}
                     title="Remove"
-                    className="rounded p-1 text-white/35 transition-colors hover:bg-red-500/10 hover:text-red-300"
+                    className="rounded p-1 text-white/66 transition-colors hover:bg-red-500/10 hover:text-red-300"
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                   </button>
@@ -209,7 +209,7 @@ export function AISettingsPanel() {
                     type="button"
                     onClick={() => removeEndpoint(url)}
                     title="Remove"
-                    className="rounded p-1 text-white/35 transition-colors hover:bg-red-500/10 hover:text-red-300"
+                    className="rounded p-1 text-white/66 transition-colors hover:bg-red-500/10 hover:text-red-300"
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                   </button>
@@ -259,7 +259,7 @@ export function AISettingsPanel() {
             />
           ) : (
             <div className="rounded-md border border-dashed border-line bg-white/[0.02] p-3">
-              <label className="text-[11px] font-medium uppercase tracking-wide text-white/45">
+              <label className="text-[11px] font-medium uppercase tracking-wide text-white/74">
                 Server URL
               </label>
               <input
@@ -307,7 +307,7 @@ export function AISettingsPanel() {
             </div>
           )}
 
-          <div className="mt-2 text-[11px] text-white/40">
+          <div className="mt-2 text-[11px] text-white/70">
             {probing
               ? 'Looking for local models on this device and the computer that served this page…'
               : `Auto-checked ports ${WELL_KNOWN_LOCAL_PORTS.map((p) => p.port).join(', ')} on this device and ${window.location.hostname}`}
@@ -338,13 +338,13 @@ export function AISettingsPanel() {
           {/* Key entry for the selected cloud provider, on its tier's tab. */}
           {selectedCloud && (selectedCloud.tier === (tab === 'free' ? 'free' : 'paid')) && (
             <div className="mt-2 rounded-md border border-line bg-white/[0.02] p-3">
-              <label className="flex items-center justify-between text-[11px] font-medium uppercase tracking-wide text-white/45">
+              <label className="flex items-center justify-between text-[11px] font-medium uppercase tracking-wide text-white/74">
                 API key for {selectedCloud.title}
                 <a
                   href={selectedCloud.keyUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex items-center gap-1 normal-case tracking-normal text-white/55 hover:text-white"
+                  className="flex items-center gap-1 normal-case tracking-normal text-white/82 hover:text-white"
                 >
                   Get a key <ExternalLink className="h-3 w-3" />
                 </a>
@@ -368,7 +368,7 @@ export function AISettingsPanel() {
                 className="input mt-1 w-full font-mono text-sm"
               />
               <div className="mt-2 flex items-center justify-between">
-                <div className="text-[11px] text-white/40">
+                <div className="text-[11px] text-white/70">
                   Stored only in this browser's localStorage. Never sent to the Allegory server.
                 </div>
                 <button
@@ -390,7 +390,7 @@ export function AISettingsPanel() {
         <button
           type="button"
           onClick={() => choose('none')}
-          className={`text-xs ${provider === 'none' ? 'text-white/85' : 'text-white/45 hover:text-white/75'}`}
+          className={`text-xs ${provider === 'none' ? 'text-white/85' : 'text-white/74 hover:text-white/75'}`}
         >
           {provider === 'none' ? '✓ AI disabled' : 'Disable AI'}
         </button>
@@ -421,7 +421,7 @@ function TabButton({ active, onClick, children }: TabButtonProps) {
       className={`-mb-px border-b-2 px-3 py-2 text-sm transition-colors ${
         active
           ? 'border-current text-white'
-          : 'border-transparent text-white/55 hover:text-white/85'
+          : 'border-transparent text-white/82 hover:text-white/85'
       }`}
       style={active ? { color: 'var(--accent)' } : undefined}
     >
@@ -478,7 +478,7 @@ function ProviderCard({
           <div className="truncate font-medium text-white/90">{title}</div>
           {checked && <Check className="h-3.5 w-3.5 text-emerald-300/80" />}
         </div>
-        <div className="mt-0.5 truncate text-xs text-white/50">{desc}</div>
+        <div className="mt-0.5 truncate text-xs text-white/78">{desc}</div>
       </div>
       {badge && (
         <span
@@ -501,7 +501,7 @@ function ProviderCard({
             onRemove()
           }}
           title="Remove this server"
-          className="shrink-0 rounded p-1 text-white/30 opacity-0 transition-colors hover:bg-red-500/10 hover:text-red-300 group-hover:opacity-100"
+          className="shrink-0 rounded p-1 text-white/62 opacity-0 transition-colors hover:bg-red-500/10 hover:text-red-300 group-hover:opacity-100"
         >
           <Trash2 className="h-3.5 w-3.5" />
         </button>

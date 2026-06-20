@@ -246,7 +246,7 @@ export function IconViewToggle({ mode, onChange }: IconViewToggleProps) {
             className={
               active
                 ? 'flex h-8 w-8 items-center justify-center rounded-md bg-white/10 text-white transition-colors'
-                : 'flex h-8 w-8 items-center justify-center rounded-md text-white/50 transition-colors hover:text-white'
+                : 'flex h-8 w-8 items-center justify-center rounded-md text-white/78 transition-colors hover:text-white'
             }
           >
             <Icon className="h-4 w-4" />

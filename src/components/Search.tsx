@@ -121,7 +121,7 @@ export function Search({ onSelectAlbum, onSelectArtist }: SearchProps) {
       </header>
 
       <div className="relative mb-9 max-w-xl">
-        <SearchIcon className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-white/55" />
+        <SearchIcon className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-white/82" />
         <input
           autoFocus
           value={input}
@@ -145,7 +145,7 @@ export function Search({ onSelectAlbum, onSelectArtist }: SearchProps) {
               <button
                 type="button"
                 onClick={clearRecents}
-                className="text-[11px] font-medium uppercase tracking-wider text-white/35 transition-colors hover:text-white/70"
+                className="text-[11px] font-medium uppercase tracking-wider text-white/66 transition-colors hover:text-white/70"
               >
                 Clear
               </button>
@@ -158,10 +158,10 @@ export function Search({ onSelectAlbum, onSelectArtist }: SearchProps) {
                   onClick={() => runRecent(term)}
                   className="group flex items-center gap-3 rounded-lg px-2 py-2 text-left transition-colors hover:bg-surface/60"
                 >
-                  <Clock className="h-4 w-4 shrink-0 text-white/30" />
+                  <Clock className="h-4 w-4 shrink-0 text-white/62" />
                   <span className="min-w-0 flex-1 truncate text-sm text-white/80">{term}</span>
                   <X
-                    className="h-3.5 w-3.5 shrink-0 text-white/0 transition-colors group-hover:text-white/40 hover:!text-white/80"
+                    className="h-3.5 w-3.5 shrink-0 text-white/0 transition-colors group-hover:text-white/70 hover:!text-white/80"
                     onClick={(e) => {
                       e.stopPropagation()
                       setRecents((prev) => {
@@ -176,12 +176,12 @@ export function Search({ onSelectAlbum, onSelectArtist }: SearchProps) {
             </div>
           </section>
         ) : (
-          <p className="text-sm text-white/60">Type to search your library.</p>
+          <p className="text-sm text-white/85">Type to search your library.</p>
         )
       )}
 
       {query.length > 0 && empty && !isFetching && placeholders.length === 0 && (
-        <div className="rounded-xl border border-line bg-surface/60 p-10 text-center text-sm text-white/45">
+        <div className="rounded-xl border border-line bg-surface/60 p-10 text-center text-sm text-white/74">
           Nothing matched “{query}”.
         </div>
       )}
@@ -195,13 +195,13 @@ export function Search({ onSelectAlbum, onSelectArtist }: SearchProps) {
                 key={name}
                 className="flex items-start gap-3 rounded-lg border border-dashed border-line bg-surface/40 px-4 py-3"
               >
-                <FolderOpen className="mt-0.5 h-4 w-4 shrink-0 text-white/40" />
+                <FolderOpen className="mt-0.5 h-4 w-4 shrink-0 text-white/70" />
                 <div className="min-w-0 flex-1">
                   <div className="font-medium text-white/85">{name}</div>
-                  <div className="mt-0.5 truncate font-mono text-[11px] text-white/40">
+                  <div className="mt-0.5 truncate font-mono text-[11px] text-white/70">
                     {settings?.musicDir ? `${settings.musicDir}/${name}/` : `…/${name}/`}
                   </div>
-                  <div className="mt-1 text-[11px] text-white/45">
+                  <div className="mt-1 text-[11px] text-white/74">
                     Folder exists but has no audio yet — drop files in to populate.
                   </div>
                 </div>
@@ -275,7 +275,7 @@ export function Search({ onSelectAlbum, onSelectArtist }: SearchProps) {
 
 function SectionTitle({ children }: { children: ReactNode }) {
   return (
-    <h2 className="mb-4 text-xs font-semibold uppercase tracking-[0.18em] text-white/55">
+    <h2 className="mb-4 text-xs font-semibold uppercase tracking-[0.18em] text-white/82">
       {children}
     </h2>
   )

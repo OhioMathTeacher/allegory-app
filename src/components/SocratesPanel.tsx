@@ -425,7 +425,7 @@ export function SocratesPanel({
               Philosophy through music — pick an AI provider →
             </button>
           ) : (
-            <p className="mt-1 truncate text-base text-white/60">
+            <p className="mt-1 truncate text-base text-white/85">
               Philosophy through music · via {providerLabel}
             </p>
           )}
@@ -437,7 +437,7 @@ export function SocratesPanel({
             title={playbarHidden ? 'Show player bar' : 'Hide player bar for more room'}
             aria-label={playbarHidden ? 'Show player bar' : 'Hide player bar'}
             aria-pressed={playbarHidden}
-            className="rounded-md p-1.5 text-white/55 transition-colors hover:bg-white/5 hover:text-white"
+            className="rounded-md p-1.5 text-white/82 transition-colors hover:bg-white/5 hover:text-white"
           >
             {playbarHidden ? (
               <Minimize2 className="h-5 w-5" />
@@ -450,7 +450,7 @@ export function SocratesPanel({
               type="button"
               onClick={clearConversation}
               title="Clear conversation"
-              className="rounded-md px-2 py-1 text-sm text-white/55 transition-colors hover:bg-white/5 hover:text-white"
+              className="rounded-md px-2 py-1 text-sm text-white/82 transition-colors hover:bg-white/5 hover:text-white"
             >
               clear
             </button>
@@ -466,7 +466,7 @@ export function SocratesPanel({
         className="scrollbar-thin min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-6"
       >
         {messages.length === 0 && !thinking && (
-          <p className="px-1 text-base text-white/55">
+          <p className="px-1 text-base text-white/82">
             What are we listening to — and what does it make you think about?{' '}
             <button
               type="button"
@@ -489,7 +489,7 @@ export function SocratesPanel({
           />
         ))}
         {thinking && (
-          <div className="mt-3 flex items-center gap-2 text-sm text-white/55">
+          <div className="mt-3 flex items-center gap-2 text-sm text-white/82">
             <Loader2 className="h-4 w-4 animate-spin" />
             Thinking…
           </div>
@@ -585,7 +585,7 @@ export function SocratesPanel({
             placeholder={noProvider ? 'Configure AI to chat…' : 'Ask Socrates…'}
             rows={1}
             disabled={noProvider || thinking}
-            className="max-h-32 flex-1 resize-none bg-transparent text-base text-white/95 outline-none placeholder:text-white/45 disabled:opacity-50"
+            className="max-h-32 flex-1 resize-none bg-transparent text-base text-white/95 outline-none placeholder:text-white/74 disabled:opacity-50"
           />
           {thinking ? (
             <button
@@ -611,7 +611,7 @@ export function SocratesPanel({
             </button>
           )}
         </div>
-        <p className="mt-1.5 px-1 text-xs text-white/45">
+        <p className="mt-1.5 px-1 text-xs text-white/74">
           Enter to send · Shift+Enter for a new line
         </p>
       </div>
@@ -637,7 +637,7 @@ function AskAction({
       onClick={onClick}
       className="flex items-center gap-2 rounded-lg px-3 py-1.5 text-left text-sm text-white/90 transition-colors hover:bg-white/10"
     >
-      <span className={accent ? '' : 'text-white/55'} style={accent ? { color: 'var(--accent)' } : undefined}>
+      <span className={accent ? '' : 'text-white/82'} style={accent ? { color: 'var(--accent)' } : undefined}>
         {icon}
       </span>
       {label}
@@ -703,7 +703,7 @@ function Bubble({ message, artists, albums, building, built, onMakePlaylist }: B
         />
       ))}
       {building ? (
-        <div className="mt-2 flex items-center gap-2 text-sm text-white/55">
+        <div className="mt-2 flex items-center gap-2 text-sm text-white/82">
           <Loader2 className="h-4 w-4 animate-spin" />
           Building a playlist…
         </div>
@@ -761,7 +761,7 @@ function AboutSocrates({ onClose }: { onClose: () => void }) {
             playing and draws lines from the music to the great questions: what a
             song is really after, and which thinkers were chasing the same thing.
           </p>
-          <p className="mt-3 text-sm leading-relaxed text-white/55">
+          <p className="mt-3 text-sm leading-relaxed text-white/82">
             Try: <em>"what's this song really about?"</em>, <em>"connect what I'm
             hearing to a philosopher,"</em> or <em>"build me something restless."</em>
           </p>

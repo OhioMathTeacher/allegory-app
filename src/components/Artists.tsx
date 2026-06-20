@@ -31,7 +31,7 @@ export function Artists({ onSelectArtist }: ArtistsProps) {
     <div>
       <header className="sticky top-0 z-10 bg-bg/95 px-8 pt-8 pb-4 backdrop-blur">
         <h1 className="text-3xl font-semibold tracking-tight">Artists</h1>
-        <p className="mt-1 text-sm text-white/60">
+        <p className="mt-1 text-sm text-white/85">
           {artists
             ? `${artists.length} artist${artists.length === 1 ? '' : 's'}`
             : 'Your music library'}
@@ -42,15 +42,15 @@ export function Artists({ onSelectArtist }: ArtistsProps) {
         {isLoading && <SkeletonList />}
 
         {isError && (
-          <div className="rounded-xl border border-line bg-surface/60 p-10 text-center text-sm text-white/50">
+          <div className="rounded-xl border border-line bg-surface/60 p-10 text-center text-sm text-white/78">
             Couldn’t load your artists. Make sure the server is reachable.
           </div>
         )}
 
         {artists && artists.length === 0 && (
           <div className="flex flex-col items-center gap-3 rounded-xl border border-line bg-surface/60 p-12 text-center">
-            <Music2 className="h-8 w-8 text-white/20" />
-            <p className="text-sm text-white/45">No artists here yet.</p>
+            <Music2 className="h-8 w-8 text-white/45" />
+            <p className="text-sm text-white/74">No artists here yet.</p>
           </div>
         )}
 

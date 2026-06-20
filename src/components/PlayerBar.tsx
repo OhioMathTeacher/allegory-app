@@ -73,7 +73,7 @@ export function PlayerBar({ onOpenAlbum, onOpenArtist }: PlayerBarProps) {
             />
           </button>
         ) : (
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-white/5 text-white/30">
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-white/5 text-white/62">
             <Music2 className="h-5 w-5" />
           </div>
         )}
@@ -89,12 +89,12 @@ export function PlayerBar({ onOpenAlbum, onOpenArtist }: PlayerBarProps) {
                   if (track.artistId)
                     onOpenArtist({ id: track.artistId, name: track.artist })
                 }}
-                className="truncate text-left text-lg text-white/65 transition-colors hover:text-white hover:underline"
+                className="truncate text-left text-lg text-white/88 transition-colors hover:text-white hover:underline"
               >
                 {track.artist}
               </button>
             ) : (
-              <div className="truncate text-lg text-white/65">{track.artist}</div>
+              <div className="truncate text-lg text-white/88">{track.artist}</div>
             ))}
         </div>
         {/* Notes pencil — edit the curator notes that ground Socrates for this
@@ -123,7 +123,7 @@ export function PlayerBar({ onOpenAlbum, onOpenArtist }: PlayerBarProps) {
       )}
 
       <div className="flex items-center gap-2">
-        <span className="w-9 text-right text-[11px] tabular-nums text-white/60">
+        <span className="w-9 text-right text-[11px] tabular-nums text-white/85">
           {formatTime(player.currentTime)}
         </span>
         <SeekBar
@@ -132,7 +132,7 @@ export function PlayerBar({ onOpenAlbum, onOpenArtist }: PlayerBarProps) {
           onSeek={player.seek}
           className="flex-1"
         />
-        <span className="w-9 text-[11px] tabular-nums text-white/60">
+        <span className="w-9 text-[11px] tabular-nums text-white/85">
           {formatTime(player.duration)}
         </span>
       </div>

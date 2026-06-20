@@ -38,7 +38,7 @@ export function AlbumEditor({ album, onClose, onSaved }: AlbumEditorProps) {
         <div className="mb-1 flex items-start justify-between gap-4">
           <div>
             <h2 className="text-lg font-semibold">Edit album</h2>
-            <p className="mt-1 text-sm text-white/55">
+            <p className="mt-1 text-sm text-white/82">
               {tab === 'meta'
                 ? 'Edit album-wide and per-track tags. Writes to the files on disk.'
                 : 'Saved as folder.jpg in the album folder.'}
@@ -48,7 +48,7 @@ export function AlbumEditor({ album, onClose, onSaved }: AlbumEditorProps) {
             type="button"
             onClick={onClose}
             aria-label="Close"
-            className="rounded-md p-1.5 text-white/50 transition-colors hover:bg-white/5 hover:text-white"
+            className="rounded-md p-1.5 text-white/78 transition-colors hover:bg-white/5 hover:text-white"
           >
             <X className="h-4 w-4" />
           </button>
@@ -174,7 +174,7 @@ function CoverTab({ album, onClose }: CoverTabProps) {
           <Upload className="h-3.5 w-3.5" />
           Choose file…
         </button>
-        <span className="text-[11px] text-white/40">
+        <span className="text-[11px] text-white/70">
           …or drop an image on the cover above
         </span>
       </div>
@@ -200,7 +200,7 @@ function CoverTab({ album, onClose }: CoverTabProps) {
         </div>
       )}
 
-      <p className="mt-3 flex items-start gap-1 text-[11px] text-white/35">
+      <p className="mt-3 flex items-start gap-1 text-[11px] text-white/66">
         <ImageIcon className="mt-0.5 h-3 w-3 shrink-0" />
         Any image works — sharp resizes to 1200² and saves as folder.jpg.
       </p>
@@ -230,7 +230,7 @@ function TabButton({ active, onClick, children }: TabButtonProps) {
       type="button"
       onClick={onClick}
       className={`-mb-px border-b-2 px-3 py-2 text-sm transition-colors ${
-        active ? 'text-white' : 'border-transparent text-white/55 hover:text-white/85'
+        active ? 'text-white' : 'border-transparent text-white/82 hover:text-white/85'
       }`}
       style={active ? { borderColor: 'var(--accent)', color: 'var(--accent)' } : undefined}
     >

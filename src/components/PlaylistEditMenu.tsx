@@ -251,7 +251,7 @@ export function PlaylistEditMenu({
                 <button
                   type="button"
                   onClick={() => setMode('menu')}
-                  className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-sm text-white/60 transition-colors hover:bg-white/5"
+                  className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-sm text-white/85 transition-colors hover:bg-white/5"
                 >
                   <ChevronLeft className="h-4 w-4 shrink-0" />
                   Combine with…
@@ -269,7 +269,7 @@ export function PlaylistEditMenu({
                   </button>
                 ))}
                 {playlists && others.length === 0 && (
-                  <div className="px-2.5 py-2 text-xs text-white/40">
+                  <div className="px-2.5 py-2 text-xs text-white/70">
                     No other playlists to combine with.
                   </div>
                 )}

@@ -171,7 +171,7 @@ export function DragOverlay() {
       >
         <FolderPlus className="h-12 w-12" style={{ color: 'var(--accent)' }} />
         <div className="text-lg font-semibold text-white">Drop to add to your library</div>
-        <div className="text-xs text-white/55">
+        <div className="text-xs text-white/82">
           Folder structure is preserved · audio + images only · existing files won't be overwritten
         </div>
       </div>
@@ -192,7 +192,7 @@ export function UploadToast({ upload }: UploadToastProps) {
             <Check className="h-4 w-4 text-emerald-300" />
             Upload complete
           </div>
-          <div className="mt-1 text-xs text-white/55">
+          <div className="mt-1 text-xs text-white/82">
             {upload.finished.written} added
             {upload.finished.skipped > 0 && ` · ${upload.finished.skipped} already existed (skipped)`}
             {upload.errors.length > 0 && ` · ${upload.errors.length} failed`}
@@ -213,7 +213,7 @@ export function UploadToast({ upload }: UploadToastProps) {
             <Upload className="h-4 w-4 animate-pulse" style={{ color: 'var(--accent)' }} />
             Uploading {upload.done + 1}/{upload.total}
           </div>
-          <div className="mt-1 truncate font-mono text-[11px] text-white/45" title={upload.current}>
+          <div className="mt-1 truncate font-mono text-[11px] text-white/74" title={upload.current}>
             {upload.current}
           </div>
           <div className="mt-2 h-1 overflow-hidden rounded-full bg-white/5">
