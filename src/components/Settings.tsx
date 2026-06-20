@@ -14,6 +14,7 @@ import {
 import { AISettingsPanel } from './AISettingsPanel'
 import { DiagnosticsPanel } from './DiagnosticsPanel'
 import { FolderPicker } from './FolderPicker'
+import { useShowArtwork, setShowArtwork } from '../lib/display-prefs'
 
 type Section = 'library' | 'ai' | 'diagnostics'
 
@@ -34,6 +35,7 @@ export function Settings({ firstRun, initialSection, onClose }: SettingsProps) {
     queryFn: () => getSettings(conn),
   })
 
+  const showArtwork = useShowArtwork()
   const [section, setSection] = useState<Section>(initialSection ?? 'library')
   const [path, setPath] = useState('')
   const [picking, setPicking] = useState(false)
@@ -315,6 +317,38 @@ export function Settings({ firstRun, initialSection, onClose }: SettingsProps) {
               <p className="mt-3 text-[11px] text-white/66">
                 You can also drag a folder anywhere in the app to add it to your library.
               </p>
+            </div>
+          )}
+
+          {!firstRun && (
+            <div className="mt-6 border-t border-line/60 pt-5">
+              <label className="text-[11px] font-medium uppercase tracking-wide text-white/74">
+                Display
+              </label>
+              <div className="mt-2 flex items-center justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm text-white/80">Show artwork</div>
+                  <div className="mt-0.5 text-xs text-white/74">
+                    Artist photos and playlist covers on their pages.
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={showArtwork}
+                  onClick={() => setShowArtwork(!showArtwork)}
+                  className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${
+                    showArtwork ? '' : 'bg-white/20'
+                  }`}
+                  style={showArtwork ? { background: 'var(--accent)' } : undefined}
+                >
+                  <span
+                    className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition-all ${
+                      showArtwork ? 'left-[1.375rem]' : 'left-0.5'
+                    }`}
+                  />
+                </button>
+              </div>
             </div>
           )}
 
