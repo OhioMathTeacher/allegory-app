@@ -133,7 +133,9 @@ button {
   background: rgba(255, 255, 255, 0.06);
 }
 .input::placeholder {
-  color: rgba(255, 255, 255, 0.25);
+  /* Kept readable in bright/outdoor light — a too-dim placeholder hides the
+     hint of what to type (e.g. "Paste an image URL…"). */
+  color: rgba(255, 255, 255, 0.5);
 }
 
 /* The main Search field — deliberately lighter, bigger, and brighter than a

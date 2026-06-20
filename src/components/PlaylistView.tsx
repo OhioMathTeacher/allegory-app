@@ -119,6 +119,12 @@ export function PlaylistView({ playlist, onBack, onSelectArtist }: PlaylistViewP
                   {uploadingArt ? 'Uploading…' : 'Change artwork'}
                 </span>
               </div>
+              {/* Phones have no hover, so without a persistent badge the cover
+                  gives no hint it's tappable. Always-visible affordance. */}
+              <div className="absolute bottom-1.5 right-1.5 flex items-center gap-1 rounded-full bg-black/70 px-2 py-1 text-[11px] font-semibold text-white ring-1 ring-white/25">
+                <Pencil className="h-3 w-3" />
+                {uploadingArt ? 'Uploading…' : 'Edit'}
+              </div>
             </button>
             <input
               ref={fileRef}
