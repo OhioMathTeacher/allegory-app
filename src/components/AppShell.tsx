@@ -23,6 +23,7 @@ import { Playlists } from './Playlists'
 import { PlaylistView } from './PlaylistView'
 import { NotesView } from './NotesView'
 import { DownloadsView } from './DownloadsView'
+import { UpdatePanel } from './UpdatePanel'
 import { PlayerBar } from './PlayerBar'
 import { usePlayer } from '../lib/player'
 import { Settings } from './Settings'
@@ -506,6 +507,12 @@ function Splash({ onClose }: { onClose: () => void }) {
           >
             View on GitHub
           </a>
+
+          {/* In-app updater — pull + rebuild + restart from the phone, no
+              terminal. Left-aligned in the otherwise-centred splash. */}
+          <div className="mt-6 text-left">
+            <UpdatePanel />
+          </div>
           {/* Build stamp — confirms which build is loaded (handy on the phone,
               through caching). The short SHA changes every commit. Injected into
               index.html by vite.config's allegory-build-info plugin. */}

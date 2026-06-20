@@ -50,6 +50,18 @@ else
   log "dependencies unchanged — skipping npm install"
 fi
 
+# Rebuild the production bundle so a preview/prod server (the only mode where
+# the offline service worker runs — it's gated to production builds) picks up
+# the new code. Harmless under `npm run dev`, which ignores dist/. Non-fatal:
+# a failed build leaves the previous dist in place rather than blocking the
+# restart, so a bad commit can never strand the server down.
+log "building production bundle"
+if npm run build >>"$LOG_FILE" 2>&1; then
+  log "build ok"
+else
+  log "build FAILED — keeping previous dist, continuing to restart"
+fi
+
 # Restart. If a systemd user service manages the server, restart it (in a
 # transient scope so the service cgroup's teardown doesn't kill this script
 # mid-flight). Otherwise stop any vite serving this repo and relaunch detached.
