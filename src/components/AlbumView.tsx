@@ -45,31 +45,31 @@ export function AlbumView({ album, onBack, onSelectArtist }: AlbumViewProps) {
         Library
       </button>
 
-      <div className="flex items-center gap-4 sm:items-end sm:gap-6">
-        <div className="h-24 w-24 shrink-0 overflow-hidden rounded-2xl shadow-2xl shadow-black/60 sm:h-52 sm:w-52">
+      <div className="flex items-center gap-4">
+        <div className="h-16 w-16 shrink-0 overflow-hidden rounded-xl shadow-lg shadow-black/40 sm:h-20 sm:w-20">
           <Cover
-            src={albumImageUrl(conn, album.id, album.imageTag, 520)}
+            src={albumImageUrl(conn, album.id, album.imageTag, 200)}
             alt={album.name}
             className="h-full w-full"
           />
         </div>
-        <div className="min-w-0 pb-1">
+        <div className="min-w-0">
           <div className="text-xs font-semibold uppercase tracking-[0.18em] text-white/82">
             Album
           </div>
-          <h1 className="mt-2 text-2xl font-bold tracking-tight sm:text-4xl">{album.name}</h1>
+          <h1 className="mt-1 text-2xl font-bold tracking-tight sm:text-3xl">{album.name}</h1>
           {album.artistId ? (
             <button
               onClick={() => {
                 if (album.artistId)
                   onSelectArtist({ id: album.artistId, name: album.artist })
               }}
-              className="mt-2 block text-left text-white/82 transition-colors hover:text-white hover:underline"
+              className="mt-1 block text-left text-white/82 transition-colors hover:text-white hover:underline"
             >
               {album.artist}
             </button>
           ) : (
-            <div className="mt-2 text-white/82">{album.artist}</div>
+            <div className="mt-1 text-white/82">{album.artist}</div>
           )}
           <div className="mt-1 text-sm text-white/85">
             {[

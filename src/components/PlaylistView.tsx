@@ -1,30 +1,19 @@
 import { useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import {
-  ArrowLeft,
-  Play,
-  Shuffle,
-  ListMusic,
-  Pencil,
-  Image as ImageIcon,
-} from 'lucide-react'
+import { ArrowLeft, Play, Shuffle, ListMusic, Pencil } from 'lucide-react'
 import { useConnected } from '../lib/connection'
-import { useShowArtwork, toggleShowArtwork } from '../lib/display-prefs'
 import {
   getPlaylistTracks,
   albumImageUrl,
   movePlaylistTrack,
   uploadPlaylistImage,
-  uploadPlaylistImageFromUrl,
 } from '../lib/api'
-import { ArtFromUrl } from './ArtFromUrl'
 import { usePlayer } from '../lib/player'
 import { shuffle } from '../lib/shuffle'
 import { formatDuration, ticksToSeconds } from '../lib/format'
 import { Cover } from './Cover'
 import { TrackRow, TrackSkeleton } from './TrackList'
 import { PlaylistEditMenu } from './PlaylistEditMenu'
-import { AccordionSection } from './Recently'
 import type { Artist, Playlist } from '../lib/types'
 
 interface PlaylistViewProps {
@@ -37,7 +26,6 @@ export function PlaylistView({ playlist, onBack, onSelectArtist }: PlaylistViewP
   const conn = useConnected()
   const player = usePlayer()
   const queryClient = useQueryClient()
-  const showArtwork = useShowArtwork()
   // Local copy of the name so a rename shows immediately (the prop is stale).
   const [name, setName] = useState(playlist.name)
   const dragFrom = useRef<number | null>(null)
@@ -102,8 +90,8 @@ export function PlaylistView({ playlist, onBack, onSelectArtist }: PlaylistViewP
         Playlists
       </button>
 
-      {/* Hidden picker stays mounted even when the cover is collapsed, so the
-          ⋮ → "Change artwork…" item and the Artwork section's Edit badge work. */}
+      {/* Hidden picker stays mounted so the small cover + ⋮ → "Change artwork…"
+          can open it. */}
       <input
         ref={fileRef}
         type="file"
@@ -111,103 +99,74 @@ export function PlaylistView({ playlist, onBack, onSelectArtist }: PlaylistViewP
         className="hidden"
         onChange={handleArtFile}
       />
-      <div className="min-w-0 pb-1">
-        <div className="text-xs font-semibold uppercase tracking-[0.18em] text-white/82">
-          Playlist
-        </div>
-        <div className="mt-2 flex items-center gap-2">
-          <h1 className="min-w-0 truncate text-4xl font-bold tracking-tight">
-            {name}
-          </h1>
-          <PlaylistEditMenu
-            playlistId={playlist.id}
-            playlistName={name}
-            onRenamed={setName}
-            onDeleted={onBack}
-            onEditArtwork={() => fileRef.current?.click()}
-          />
-        </div>
-        <div className="mt-2 text-sm text-white/85">
-          {[
-            tracks ? `${tracks.length} track${tracks.length === 1 ? '' : 's'}` : null,
-            totalSeconds ? formatDuration(totalSeconds) : null,
-          ]
-            .filter(Boolean)
-            .join('  ·  ')}
-        </div>
-        <div className="mt-5 flex items-center gap-3">
-          <button
-            onClick={() => play(false)}
-            disabled={!tracks?.length}
-            className="flex items-center gap-2 rounded-full px-6 py-2.5 text-sm font-semibold text-black transition-transform hover:scale-105 disabled:opacity-40"
-            style={{ background: 'var(--accent)' }}
-          >
-            <Play className="h-4 w-4 fill-black" />
-            Play
-          </button>
-          <button
-            onClick={() => play(true)}
-            disabled={!tracks?.length}
-            className="flex items-center gap-2 rounded-full border border-line px-5 py-2.5 text-sm font-medium text-white/80 transition-colors hover:bg-white/5 disabled:opacity-40"
-          >
-            <Shuffle className="h-4 w-4" />
-            Shuffle
-          </button>
+      <div className="flex items-center gap-4">
+        <button
+          type="button"
+          onClick={() => fileRef.current?.click()}
+          title={uploadingArt ? 'Uploading…' : 'Change artwork'}
+          className="group relative h-16 w-16 shrink-0 overflow-hidden rounded-xl bg-elevated shadow-lg shadow-black/40 sm:h-20 sm:w-20"
+        >
+          {playlist.imageTag || artVersion > 0 ? (
+            <Cover
+              src={
+                albumImageUrl(conn, playlist.id, playlist.imageTag, 160) +
+                (artVersion ? `&v=${artVersion}` : '')
+              }
+              alt={name}
+              className="h-full w-full"
+            />
+          ) : (
+            <ListMusic className="h-7 w-7 text-white/45" />
+          )}
+          <div className="absolute inset-0 flex items-center justify-center bg-black/55 opacity-0 transition-opacity group-hover:opacity-100">
+            <Pencil className="h-4 w-4 text-white" />
+          </div>
+        </button>
+        <div className="min-w-0">
+          <div className="text-xs font-semibold uppercase tracking-[0.18em] text-white/82">
+            Playlist
+          </div>
+          <div className="mt-1 flex items-center gap-2">
+            <h1 className="min-w-0 truncate text-2xl font-bold tracking-tight sm:text-3xl">
+              {name}
+            </h1>
+            <PlaylistEditMenu
+              playlistId={playlist.id}
+              playlistName={name}
+              onRenamed={setName}
+              onDeleted={onBack}
+              onEditArtwork={() => fileRef.current?.click()}
+            />
+          </div>
+          <div className="mt-1 text-sm text-white/85">
+            {[
+              tracks ? `${tracks.length} track${tracks.length === 1 ? '' : 's'}` : null,
+              totalSeconds ? formatDuration(totalSeconds) : null,
+            ]
+              .filter(Boolean)
+              .join('  ·  ')}
+          </div>
         </div>
       </div>
 
-      <div className="mt-6">
-        <AccordionSection
-          title="Artwork"
-          icon={<ImageIcon className="h-6 w-6" />}
-          open={showArtwork}
-          onToggle={toggleShowArtwork}
+      <div className="mt-5 flex items-center gap-3">
+        <button
+          onClick={() => play(false)}
+          disabled={!tracks?.length}
+          className="flex items-center gap-2 rounded-full px-6 py-2.5 text-sm font-semibold text-black transition-transform hover:scale-105 disabled:opacity-40"
+          style={{ background: 'var(--accent)' }}
         >
-          <div className="flex flex-col items-center gap-2 py-3">
-            <div className="relative h-52 w-52">
-              <button
-                type="button"
-                onClick={() => fileRef.current?.click()}
-                title="Change artwork"
-                className="group flex h-full w-full items-center justify-center overflow-hidden rounded-2xl bg-elevated shadow-2xl shadow-black/60"
-              >
-                {playlist.imageTag || artVersion > 0 ? (
-                  <Cover
-                    src={
-                      albumImageUrl(conn, playlist.id, playlist.imageTag, 520) +
-                      (artVersion ? `&v=${artVersion}` : '')
-                    }
-                    alt={name}
-                    className="h-full w-full"
-                  />
-                ) : (
-                  <ListMusic className="h-16 w-16 text-white/45" />
-                )}
-                <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-black/55 opacity-0 transition-opacity group-hover:opacity-100">
-                  <Pencil className="h-6 w-6 text-white" />
-                  <span className="text-xs font-medium text-white">
-                    {uploadingArt ? 'Uploading…' : 'Change artwork'}
-                  </span>
-                </div>
-                {/* Touch devices have no hover — a persistent badge keeps the
-                    change-artwork affordance visible. */}
-                <div className="absolute bottom-1.5 right-1.5 flex items-center gap-1 rounded-full bg-black/70 px-2 py-1 text-[11px] font-semibold text-white ring-1 ring-white/25">
-                  <Pencil className="h-3 w-3" />
-                  {uploadingArt ? 'Uploading…' : 'Edit'}
-                </div>
-              </button>
-            </div>
-            <div className="w-52">
-              <ArtFromUrl
-                onSubmit={(url) => uploadPlaylistImageFromUrl(conn, playlist.id, url)}
-                onDone={() => {
-                  setArtVersion((v) => v + 1)
-                  queryClient.invalidateQueries({ queryKey: ['playlists'] })
-                }}
-              />
-            </div>
-          </div>
-        </AccordionSection>
+          <Play className="h-4 w-4 fill-black" />
+          Play
+        </button>
+        <button
+          onClick={() => play(true)}
+          disabled={!tracks?.length}
+          className="flex items-center gap-2 rounded-full border border-line px-5 py-2.5 text-sm font-medium text-white/80 transition-colors hover:bg-white/5 disabled:opacity-40"
+        >
+          <Shuffle className="h-4 w-4" />
+          Shuffle
+        </button>
       </div>
 
       <div className="mt-9">

@@ -12,10 +12,8 @@ import {
   Music2,
   Disc3,
   Library,
-  Image as ImageIcon,
 } from 'lucide-react'
 import { useConnected } from '../lib/connection'
-import { useShowArtwork, toggleShowArtwork } from '../lib/display-prefs'
 import {
   getArtistAlbums,
   getArtistTracks,
@@ -86,7 +84,6 @@ export function ArtistView({
   const conn = useConnected()
   const player = usePlayer()
   const queryClient = useQueryClient()
-  const showArtwork = useShowArtwork()
   const [busy, setBusy] = useState(false)
   const [editing, setEditing] = useState(false)
   const [imgBusy, setImgBusy] = useState(false)
@@ -162,8 +159,7 @@ export function ArtistView({
         Artists
       </button>
 
-      {/* Hidden picker stays mounted regardless, so the Artwork section's Edit
-          badge works even when the artwork accordion is collapsed. */}
+      {/* Hidden picker stays mounted so the small avatar + Edit can open it. */}
       <input
         ref={fileRef}
         type="file"
@@ -171,42 +167,64 @@ export function ArtistView({
         className="hidden"
         onChange={handleFile}
       />
-      <div className="min-w-0 pb-1">
-        <div className="text-xs font-semibold uppercase tracking-[0.18em] text-white/82">
-          Artist
-        </div>
-        <h1 className="mt-2 break-words text-2xl font-bold tracking-tight sm:text-3xl md:text-4xl">
-          {artist.name}
-        </h1>
-        <div className="mt-2 text-sm text-white/85">
-          {albums ? `${albums.length} album${albums.length === 1 ? '' : 's'}` : ''}
-        </div>
-        {imgError && (
-          <div className="mt-1 text-sm text-red-400/80">{imgError}</div>
-        )}
-        <div className="mt-5 flex items-center gap-3">
-          <button
-            onClick={() => playArtist(false)}
-            disabled={busy}
-            className="flex items-center gap-2 rounded-full px-6 py-2.5 text-sm font-semibold text-black transition-transform hover:scale-105 disabled:opacity-50"
-            style={{ background: 'var(--accent)' }}
-          >
-            {busy ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
+      <div className="flex items-center gap-4">
+        <button
+          type="button"
+          onClick={() => fileRef.current?.click()}
+          title="Change artist image"
+          className="group relative h-16 w-16 shrink-0 overflow-hidden rounded-full bg-elevated shadow-lg shadow-black/40 sm:h-20 sm:w-20"
+        >
+          <Cover
+            src={`${albumImageUrl(conn, artist.id, undefined, 160)}&v=${version}`}
+            alt={artist.name}
+            className="h-full w-full"
+          />
+          <div className="absolute inset-0 flex items-center justify-center bg-black/55 opacity-0 transition-opacity group-hover:opacity-100">
+            {imgBusy ? (
+              <Loader2 className="h-5 w-5 animate-spin text-white" />
             ) : (
-              <Play className="h-4 w-4 fill-black" />
+              <Camera className="h-4 w-4 text-white" />
             )}
-            Play
-          </button>
-          <button
-            onClick={() => setEditing(true)}
-            title="Edit artist name + cover"
-            className="flex items-center gap-2 rounded-full border border-line px-4 py-2.5 text-sm font-medium text-white/80 transition-colors hover:bg-white/5"
-          >
-            <Pencil className="h-4 w-4" />
-            Edit
-          </button>
+          </div>
+        </button>
+        <div className="min-w-0">
+          <div className="text-xs font-semibold uppercase tracking-[0.18em] text-white/82">
+            Artist
+          </div>
+          <h1 className="mt-1 break-words text-2xl font-bold tracking-tight sm:text-3xl">
+            {artist.name}
+          </h1>
+          <div className="mt-1 text-sm text-white/85">
+            {albums ? `${albums.length} album${albums.length === 1 ? '' : 's'}` : ''}
+          </div>
+          {imgError && (
+            <div className="mt-1 text-sm text-red-400/80">{imgError}</div>
+          )}
         </div>
+      </div>
+
+      <div className="mt-5 flex items-center gap-3">
+        <button
+          onClick={() => playArtist(false)}
+          disabled={busy}
+          className="flex items-center gap-2 rounded-full px-6 py-2.5 text-sm font-semibold text-black transition-transform hover:scale-105 disabled:opacity-50"
+          style={{ background: 'var(--accent)' }}
+        >
+          {busy ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <Play className="h-4 w-4 fill-black" />
+          )}
+          Play
+        </button>
+        <button
+          onClick={() => setEditing(true)}
+          title="Edit artist name + cover"
+          className="flex items-center gap-2 rounded-full border border-line px-4 py-2.5 text-sm font-medium text-white/80 transition-colors hover:bg-white/5"
+        >
+          <Pencil className="h-4 w-4" />
+          Edit
+        </button>
       </div>
 
       {editing && (
@@ -214,46 +232,6 @@ export function ArtistView({
       )}
 
       <div className="mt-9 flex flex-col gap-3">
-        <AccordionSection
-          title="Artwork"
-          icon={<ImageIcon className="h-6 w-6" />}
-          open={showArtwork}
-          onToggle={toggleShowArtwork}
-        >
-          <div className="flex justify-center py-3">
-            <button
-              type="button"
-              onClick={() => fileRef.current?.click()}
-              title="Change artist image"
-              className="group relative h-40 w-40 overflow-hidden rounded-full bg-elevated shadow-2xl shadow-black/60 sm:h-48 sm:w-48"
-            >
-              <Cover
-                src={`${albumImageUrl(conn, artist.id, undefined, 440)}&v=${version}`}
-                alt={artist.name}
-                className="h-full w-full"
-              />
-              <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-black/60 opacity-0 transition-opacity group-hover:opacity-100">
-                {imgBusy ? (
-                  <Loader2 className="h-7 w-7 animate-spin text-white" />
-                ) : (
-                  <>
-                    <Camera className="h-7 w-7 text-white" />
-                    <span className="text-[11px] font-medium text-white/90">
-                      Change photo
-                    </span>
-                  </>
-                )}
-              </div>
-              {/* Touch devices have no hover — a persistent badge keeps the
-                  change-photo affordance visible. */}
-              <div className="absolute bottom-2 right-2 flex items-center gap-1 rounded-full bg-black/70 px-2 py-1 text-[11px] font-semibold text-white ring-1 ring-white/25">
-                <Camera className="h-3 w-3" />
-                Edit
-              </div>
-            </button>
-          </div>
-        </AccordionSection>
-
         <AccordionSection
           title="Played · Songs"
           icon={<Music2 className="h-6 w-6" />}
