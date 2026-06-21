@@ -107,6 +107,10 @@ self.addEventListener('fetch', (event) => {
   // iOS's mandatory probe) are answered from the cached body as a synthesised
   // 206 — a cached 200 does NOT auto-satisfy a Range request.
   if (url.pathname.startsWith('/api/stream/')) {
+    // Downloads fetch with ?dl=1 — let the browser fetch directly, bypassing
+    // the SW. The download manager writes the cache itself, and piping a large
+    // download through the SW can hang on iOS.
+    if (url.searchParams.has('dl')) return
     event.respondWith(serveAudio(req))
     return
   }

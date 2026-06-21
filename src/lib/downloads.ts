@@ -189,7 +189,10 @@ export async function downloadTrack(conn: Connection, track: Track): Promise<voi
   inflight.set(track.id, { phase: 'pending', progress: 0 })
   bump()
   try {
-    const res = await fetch(audioStreamUrl(conn, track.id))
+    // ?dl=1 tells the service worker to stay out of the way (see public/sw.js):
+    // routing a big download through the SW can hang on iOS, and we cache the
+    // bytes ourselves below anyway.
+    const res = await fetch(`${audioStreamUrl(conn, track.id)}&dl=1`)
     if (!res.ok) throw new Error(`stream ${res.status}`)
     const { blob, size, type } = await readWithProgress(res, track.id)
 
