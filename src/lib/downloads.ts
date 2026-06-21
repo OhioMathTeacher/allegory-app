@@ -273,14 +273,26 @@ export async function downloadTrack(conn: Connection, track: Track): Promise<voi
   }
 }
 
+// Download several tracks at once (a small pool) rather than strictly
+// one-at-a-time: this overlaps each track's per-request latency, so an album or
+// playlist downloads much faster. Already-downloaded tracks are skipped
+// instantly inside downloadTrack, so re-running to resume stays cheap.
+const DOWNLOAD_CONCURRENCY = 4
 async function downloadMany(conn: Connection, tracks: Track[]): Promise<void> {
-  for (const t of tracks) {
-    try {
-      await downloadTrack(conn, t)
-    } catch {
-      // One bad track shouldn't abort the whole album/playlist/artist.
+  let next = 0
+  async function worker() {
+    while (next < tracks.length) {
+      const t = tracks[next++]
+      try {
+        await downloadTrack(conn, t)
+      } catch {
+        // One bad track shouldn't abort the whole album/playlist/artist.
+      }
     }
   }
+  await Promise.all(
+    Array.from({ length: Math.min(DOWNLOAD_CONCURRENCY, tracks.length) }, () => worker()),
+  )
 }
 
 export async function downloadAlbum(conn: Connection, albumId: string): Promise<void> {
