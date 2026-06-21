@@ -167,7 +167,7 @@ export function Playlists({ onSelectPlaylist, onOpenNotes }: PlaylistsProps) {
                 }}
                 rows={2}
                 placeholder="Describe the playlist you want… (e.g. “late-night, melancholy, mostly acoustic”)"
-                className="max-h-32 min-w-0 flex-1 resize-none rounded-lg border border-line bg-elevated px-3 py-2 text-sm text-white outline-none placeholder:text-white/66 focus:border-[var(--accent)]"
+                className="max-h-32 min-w-0 flex-1 resize-none rounded-lg border border-black/20 bg-white px-3 py-2 text-sm text-black caret-black outline-none transition-shadow placeholder:text-black/55 focus:ring-2 focus:ring-[color:var(--accent)]"
               />
               <button
                 type="button"

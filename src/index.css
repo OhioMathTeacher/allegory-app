@@ -124,48 +124,49 @@ button {
   will-change: filter;
 }
 
+/* Text inputs are white-with-black-text so they're unmistakable in bright
+   light — a solid white box on the dark UI reads instantly as "type here". */
 .input {
   width: 100%;
   border-radius: 0.5rem;
-  border: 1px solid var(--color-line);
-  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(0, 0, 0, 0.25);
+  background: #fff;
   padding: 0.6rem 0.75rem;
   /* 16px (1rem) min — anything smaller makes iOS Safari auto-zoom the whole
      viewport on focus, which blows up the layout. Do not lower this. */
   font-size: 1rem;
-  color: #e8e8ec;
+  color: #000;
+  caret-color: #000;
   outline: none;
-  transition: border-color 0.15s ease, background 0.15s ease;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 .input:focus {
   border-color: var(--accent);
-  background: rgba(255, 255, 255, 0.06);
+  box-shadow: 0 0 0 2px var(--accent);
 }
 .input::placeholder {
-  /* Readable in bright light — a too-dim placeholder hides the hint of what
-     to type (e.g. "Paste an image URL…"). */
-  color: rgba(255, 255, 255, 0.78);
+  color: rgba(0, 0, 0, 0.55);
 }
 
-/* The main Search field — deliberately lighter, bigger, and brighter than a
-   plain .input so it reads as the easy, inviting way in. */
+/* The main Search field — same white box, just larger/rounder. */
 .search-input {
   width: 100%;
   border-radius: 0.875rem;
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(0, 0, 0, 0.25);
+  background: #fff;
   padding: 0.9rem 1rem;
   font-size: 1.0625rem;
-  color: #fff;
+  color: #000;
+  caret-color: #000;
   outline: none;
-  transition: border-color 0.15s ease, background 0.15s ease;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 .search-input:focus {
   border-color: var(--accent);
-  background: rgba(255, 255, 255, 0.16);
+  box-shadow: 0 0 0 2px var(--accent);
 }
 .search-input::placeholder {
-  color: rgba(255, 255, 255, 0.8);
+  color: rgba(0, 0, 0, 0.55);
 }
 
 @keyframes eq {
