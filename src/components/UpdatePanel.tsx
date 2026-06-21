@@ -155,7 +155,7 @@ export function UpdatePanel() {
             disabled={isFetching}
             title="Check again"
             aria-label="Check again"
-            className={`flex items-center justify-center rounded-md p-2 text-white/78 transition-colors hover:bg-white/5 hover:text-white disabled:opacity-40 ${
+            className={`flex items-center justify-center rounded-md p-2 text-white/78 transition-colors hover:bg-white/14 hover:text-white disabled:opacity-40 ${
               available ? 'shrink-0' : 'ml-auto'
             }`}
           >

@@ -125,7 +125,7 @@ export function AlbumMenu({ album, onEdit, className }: AlbumMenuProps) {
                   type="button"
                   onClick={toggleDownload}
                   disabled={busy || !tracks || status.busy}
-                  className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-sm text-white/85 transition-colors hover:bg-white/5 disabled:opacity-50"
+                  className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-sm text-white/85 transition-colors hover:bg-white/14 disabled:opacity-50"
                 >
                   {status.busy ? (
                     <Loader2 className="h-4 w-4 shrink-0 animate-spin" style={{ color: 'var(--accent)' }} />
@@ -145,7 +145,7 @@ export function AlbumMenu({ album, onEdit, className }: AlbumMenuProps) {
                         close()
                         onEdit()
                       }}
-                      className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-sm text-white/85 transition-colors hover:bg-white/5"
+                      className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-sm text-white/85 transition-colors hover:bg-white/14"
                     >
                       <Pencil className="h-4 w-4 shrink-0 text-white/82" />
                       Edit album

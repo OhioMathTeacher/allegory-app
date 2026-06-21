@@ -162,7 +162,7 @@ export function PlaylistView({ playlist, onBack, onSelectArtist }: PlaylistViewP
         <button
           onClick={() => play(true)}
           disabled={!tracks?.length}
-          className="flex items-center gap-2 rounded-full border border-line px-5 py-2.5 text-sm font-medium text-white/80 transition-colors hover:bg-white/5 disabled:opacity-40"
+          className="flex items-center gap-2 rounded-full border border-line px-5 py-2.5 text-sm font-medium text-white/80 transition-colors hover:bg-white/14 disabled:opacity-40"
         >
           <Shuffle className="h-4 w-4" />
           Shuffle

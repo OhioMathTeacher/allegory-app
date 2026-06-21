@@ -58,7 +58,7 @@ export function ArtFromUrl({ onSubmit, onDone }: ArtFromUrlProps) {
           type="button"
           onClick={submit}
           disabled={busy || !url.trim()}
-          className="flex shrink-0 items-center gap-1.5 rounded-md border border-line px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-white/5 disabled:opacity-50"
+          className="flex shrink-0 items-center gap-1.5 rounded-md border border-line px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-white/14 disabled:opacity-50"
         >
           {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <LinkIcon className="h-3.5 w-3.5" />}
           Fetch

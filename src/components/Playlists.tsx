@@ -145,7 +145,7 @@ export function Playlists({ onSelectPlaylist, onOpenNotes }: PlaylistsProps) {
           <button
             type="button"
             onClick={toggleCreating}
-            className="flex shrink-0 items-center gap-1.5 rounded-full border border-line px-4 py-2 text-sm font-medium text-white/85 transition-colors hover:bg-white/5"
+            className="flex shrink-0 items-center gap-1.5 rounded-full border border-line px-4 py-2 text-sm font-medium text-white/85 transition-colors hover:bg-white/14"
           >
             <Plus className="h-4 w-4" />
             New
@@ -375,7 +375,7 @@ function SkeletonList() {
   return (
     <div className="flex flex-col gap-2">
       {Array.from({ length: 6 }).map((_, i) => (
-        <div key={i} className="h-[72px] animate-pulse rounded-lg bg-white/5" />
+        <div key={i} className="h-[72px] animate-pulse rounded-lg bg-white/14" />
       ))}
     </div>
   )

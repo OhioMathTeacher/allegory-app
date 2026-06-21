@@ -72,7 +72,7 @@ export function OutputPicker() {
                     player.setOutputDevice(device.deviceId)
                     setOpen(false)
                   }}
-                  className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-sm text-white/80 transition-colors hover:bg-white/5"
+                  className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-sm text-white/80 transition-colors hover:bg-white/14"
                 >
                   <Check
                     className={`h-3.5 w-3.5 shrink-0 ${

@@ -220,7 +220,7 @@ export function ArtistView({
         <button
           onClick={() => setEditing(true)}
           title="Edit artist name + cover"
-          className="flex items-center gap-2 rounded-full border border-line px-4 py-2.5 text-sm font-medium text-white/80 transition-colors hover:bg-white/5"
+          className="flex items-center gap-2 rounded-full border border-line px-4 py-2.5 text-sm font-medium text-white/80 transition-colors hover:bg-white/14"
         >
           <Pencil className="h-4 w-4" />
           Edit
@@ -472,8 +472,8 @@ function RelatedSkeleton() {
     <div className="grid grid-cols-3 gap-x-4 gap-y-6 py-2 sm:grid-cols-4 lg:grid-cols-6">
       {Array.from({ length: 6 }).map((_, i) => (
         <div key={i} className="flex flex-col items-center gap-2">
-          <div className="aspect-square w-full animate-pulse rounded-full bg-white/5" />
-          <div className="h-3 w-2/3 animate-pulse rounded bg-white/5" />
+          <div className="aspect-square w-full animate-pulse rounded-full bg-white/14" />
+          <div className="h-3 w-2/3 animate-pulse rounded bg-white/14" />
         </div>
       ))}
     </div>
@@ -572,8 +572,8 @@ function SkeletonGrid() {
     <div className="flex flex-col gap-2">
       {Array.from({ length: 6 }).map((_, i) => (
         <div key={i} className="flex items-center gap-4 px-4 py-3">
-          <div className="h-12 w-12 shrink-0 animate-pulse rounded-lg bg-white/5" />
-          <div className="h-3.5 w-1/3 animate-pulse rounded bg-white/5" />
+          <div className="h-12 w-12 shrink-0 animate-pulse rounded-lg bg-white/14" />
+          <div className="h-3.5 w-1/3 animate-pulse rounded bg-white/14" />
         </div>
       ))}
     </div>

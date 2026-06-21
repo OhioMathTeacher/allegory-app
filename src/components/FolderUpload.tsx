@@ -216,7 +216,7 @@ export function UploadToast({ upload }: UploadToastProps) {
           <div className="mt-1 truncate font-mono text-[11px] text-white/74" title={upload.current}>
             {upload.current}
           </div>
-          <div className="mt-2 h-1 overflow-hidden rounded-full bg-white/5">
+          <div className="mt-2 h-1 overflow-hidden rounded-full bg-white/14">
             <div
               className="h-full transition-all duration-150"
               style={{

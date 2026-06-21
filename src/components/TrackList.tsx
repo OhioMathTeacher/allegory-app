@@ -136,7 +136,7 @@ export function TrackSkeleton() {
   return (
     <div className="flex flex-col gap-2.5">
       {Array.from({ length: 8 }).map((_, i) => (
-        <div key={i} className="h-12 animate-pulse rounded-lg bg-white/5" />
+        <div key={i} className="h-12 animate-pulse rounded-lg bg-white/14" />
       ))}
     </div>
   )

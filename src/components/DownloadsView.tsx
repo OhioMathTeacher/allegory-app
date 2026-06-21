@@ -140,7 +140,7 @@ export function DownloadsView() {
                 void clearAllDownloads()
               }
             }}
-            className="flex items-center gap-1.5 rounded-full border border-line px-3 py-1.5 text-xs font-medium text-white/70 transition-colors hover:bg-white/5"
+            className="flex items-center gap-1.5 rounded-full border border-line px-3 py-1.5 text-xs font-medium text-white/70 transition-colors hover:bg-white/14"
           >
             <Trash2 className="h-3.5 w-3.5" />
             Remove all

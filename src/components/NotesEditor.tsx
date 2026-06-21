@@ -118,7 +118,7 @@ export function NotesEditor({ track, onClose }: NotesEditorProps) {
             onClick={onClose}
             disabled={saving}
             aria-label="Close"
-            className="rounded-md p-1.5 text-white/78 transition-colors hover:bg-white/5 hover:text-white disabled:opacity-40"
+            className="rounded-md p-1.5 text-white/78 transition-colors hover:bg-white/14 hover:text-white disabled:opacity-40"
           >
             <X className="h-4 w-4" />
           </button>
@@ -170,7 +170,7 @@ export function NotesEditor({ track, onClose }: NotesEditorProps) {
                     type="button"
                     onClick={onClose}
                     disabled={saving}
-                    className="rounded-md border border-line px-4 py-2 text-sm text-white/70 transition-colors hover:bg-white/5 disabled:opacity-40"
+                    className="rounded-md border border-line px-4 py-2 text-sm text-white/70 transition-colors hover:bg-white/14 disabled:opacity-40"
                   >
                     Cancel
                   </button>

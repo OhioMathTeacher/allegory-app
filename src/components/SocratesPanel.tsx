@@ -419,10 +419,11 @@ export function SocratesPanel({
             <button
               type="button"
               onClick={onPickProvider}
-              className="mt-1 truncate text-base underline-offset-2 transition-colors hover:underline"
-              style={{ color: 'var(--accent)' }}
+              className="mt-1.5 inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-bold text-black transition-transform hover:scale-105"
+              style={{ background: 'var(--accent)' }}
             >
-              Philosophy through music — pick an AI provider →
+              <Sparkles className="h-4 w-4" />
+              Set up AI to chat
             </button>
           ) : (
             <p className="mt-1 truncate text-base text-white/85">
@@ -437,7 +438,7 @@ export function SocratesPanel({
             title={playbarHidden ? 'Show player bar' : 'Hide player bar for more room'}
             aria-label={playbarHidden ? 'Show player bar' : 'Hide player bar'}
             aria-pressed={playbarHidden}
-            className="rounded-md p-1.5 text-white/82 transition-colors hover:bg-white/5 hover:text-white"
+            className="rounded-md p-1.5 text-white/82 transition-colors hover:bg-white/14 hover:text-white"
           >
             {playbarHidden ? (
               <Minimize2 className="h-5 w-5" />
@@ -450,7 +451,7 @@ export function SocratesPanel({
               type="button"
               onClick={clearConversation}
               title="Clear conversation"
-              className="rounded-md px-2 py-1 text-sm text-white/82 transition-colors hover:bg-white/5 hover:text-white"
+              className="rounded-md px-2 py-1 text-sm text-white/82 transition-colors hover:bg-white/14 hover:text-white"
             >
               clear
             </button>

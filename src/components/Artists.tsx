@@ -103,7 +103,7 @@ function ArtistRow({ artist, onSelect }: ArtistRowProps) {
   return (
     <div
       id={`artist-${artist.id}`}
-      className="group relative flex items-center gap-3 rounded-lg border-b border-line/50 px-2 py-1.5 hover:bg-white/5 scroll-mt-32"
+      className="group relative flex items-center gap-3 rounded-lg border-b border-line/50 px-2 py-1.5 hover:bg-white/14 scroll-mt-32"
       style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 52px' }}
     >
       <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-full bg-elevated">
@@ -159,8 +159,8 @@ function SkeletonList() {
     <div className="flex flex-col gap-2">
       {Array.from({ length: 12 }).map((_, i) => (
         <div key={i} className="flex items-center gap-3 px-2 py-1.5">
-          <div className="h-10 w-10 shrink-0 animate-pulse rounded-full bg-white/5" />
-          <div className="h-3.5 w-1/3 animate-pulse rounded bg-white/5" />
+          <div className="h-10 w-10 shrink-0 animate-pulse rounded-full bg-white/14" />
+          <div className="h-3.5 w-1/3 animate-pulse rounded bg-white/14" />
         </div>
       ))}
     </div>
