@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { MoreVertical, Plus, Check, Trash2, Download, Loader2 } from 'lucide-react'
 import { useConnected } from '../lib/connection'
@@ -146,13 +147,14 @@ export function TrackMenu({ track, excludePlaylistId }: TrackMenuProps) {
         <MoreVertical className="h-4 w-4" />
       </button>
 
-      {open && (
-        <>
-          <div className="fixed inset-0 z-40" onClick={close} />
-          <div
-            className="fixed z-50 max-h-[60vh] min-w-[240px] overflow-y-auto rounded-lg border border-line bg-surface p-1.5 shadow-xl shadow-black/50"
-            style={{ top: pos.top, right: pos.right }}
-          >
+      {open &&
+        createPortal(
+          <>
+            <div className="fixed inset-0 z-40" onClick={close} />
+            <div
+              className="fixed z-50 max-h-[60vh] min-w-[240px] overflow-y-auto rounded-lg border border-line bg-surface p-1.5 shadow-xl shadow-black/50"
+              style={{ top: pos.top, right: pos.right }}
+            >
             {done ? (
               <div className="flex items-center gap-2 px-2.5 py-2 text-sm text-white/75">
                 <Check className="h-4 w-4 shrink-0" style={{ color: 'var(--accent)' }} />
@@ -281,9 +283,10 @@ export function TrackMenu({ track, excludePlaylistId }: TrackMenuProps) {
                 )}
               </>
             )}
-          </div>
-        </>
-      )}
+            </div>
+          </>,
+          document.body,
+        )}
     </div>
   )
 }
