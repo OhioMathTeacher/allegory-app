@@ -103,17 +103,17 @@ export function UpdatePanel() {
   const available = data?.available
   return (
     <Shell>
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex flex-col gap-3">
         <div className="min-w-0">
           {available ? (
-            <div className="flex items-center gap-1.5 text-sm font-medium text-[var(--accent)]">
-              <ArrowUpCircle className="h-4 w-4" />
+            <div className="flex items-center gap-1.5 text-sm font-semibold text-[var(--accent)]">
+              <ArrowUpCircle className="h-4 w-4 shrink-0" />
               Update available — {data?.behind} commit
               {data?.behind === 1 ? '' : 's'} behind
             </div>
           ) : (
             <div className="flex items-center gap-1.5 text-sm text-emerald-300/90">
-              <Check className="h-4 w-4" />
+              <Check className="h-4 w-4 shrink-0" />
               You’re up to date.
             </div>
           )}
@@ -127,36 +127,40 @@ export function UpdatePanel() {
             </div>
           )}
           {data && !data.fetchOk && (
-            <div className="mt-1 flex items-center gap-1.5 text-xs text-amber-300/80">
-              <AlertCircle className="h-3.5 w-3.5" />
-              Couldn’t reach the update server{data.fetchError ? ` (${data.fetchError})` : ''}.
-              Showing last known state.
+            <div className="mt-1 flex items-start gap-1.5 text-xs text-amber-300/80">
+              <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+              <span>
+                Couldn’t reach the update server{data.fetchError ? ` (${data.fetchError})` : ''}.
+                Showing last known state.
+              </span>
             </div>
           )}
         </div>
 
-        <div className="flex shrink-0 items-center gap-1.5">
-          <button
-            type="button"
-            onClick={() => refetch()}
-            disabled={isFetching}
-            title="Check again"
-            aria-label="Check again"
-            className="rounded-md p-1.5 text-white/78 transition-colors hover:bg-white/5 hover:text-white disabled:opacity-40"
-          >
-            <RefreshCw className={`h-4 w-4 ${isFetching ? 'animate-spin' : ''}`} />
-          </button>
+        <div className="flex items-center gap-2">
           {available && (
             <button
               type="button"
               onClick={doUpdate}
-              className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold text-black transition-transform hover:scale-[1.02]"
+              className="flex flex-1 items-center justify-center gap-1.5 rounded-md px-3 py-2 text-sm font-semibold text-black transition-transform hover:scale-[1.02]"
               style={{ background: 'var(--accent)' }}
             >
               <Download className="h-3.5 w-3.5" />
               Update &amp; restart
             </button>
           )}
+          <button
+            type="button"
+            onClick={() => refetch()}
+            disabled={isFetching}
+            title="Check again"
+            aria-label="Check again"
+            className={`flex items-center justify-center rounded-md p-2 text-white/78 transition-colors hover:bg-white/5 hover:text-white disabled:opacity-40 ${
+              available ? 'shrink-0' : 'ml-auto'
+            }`}
+          >
+            <RefreshCw className={`h-4 w-4 ${isFetching ? 'animate-spin' : ''}`} />
+          </button>
         </div>
       </div>
     </Shell>
