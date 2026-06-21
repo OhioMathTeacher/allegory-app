@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Download, Trash2, Play, HardDrive, WifiOff } from 'lucide-react'
+import { Download, Trash2, Play, Shuffle, HardDrive, WifiOff } from 'lucide-react'
 import { usePlayer } from '../lib/player'
 import {
   useDownloads,
@@ -8,6 +8,7 @@ import {
   storageEstimate,
   type DownloadRecord,
 } from '../lib/downloads'
+import { shuffle } from '../lib/shuffle'
 import { formatTime, ticksToSeconds } from '../lib/format'
 import { Equalizer } from './Equalizer'
 import { Cover } from './Cover'
@@ -117,6 +118,29 @@ export function DownloadsView() {
   return (
     <div className="px-8 py-8">
       <Header online={online} />
+
+      {/* Play the whole downloaded library as one queue. */}
+      <div className="mt-5 flex items-center gap-3">
+        <button
+          type="button"
+          onClick={() => player.playQueue(queue, 0)}
+          disabled={queue.length === 0}
+          className="flex items-center gap-2 rounded-full px-6 py-2.5 text-sm font-semibold text-black transition-transform hover:scale-105 disabled:opacity-40"
+          style={{ background: 'var(--accent)' }}
+        >
+          <Play className="h-4 w-4 fill-black" />
+          Play all
+        </button>
+        <button
+          type="button"
+          onClick={() => player.playQueue(shuffle(queue), 0)}
+          disabled={queue.length === 0}
+          className="flex items-center gap-2 rounded-full border border-line px-5 py-2.5 text-sm font-medium text-white/80 transition-colors hover:bg-white/14 disabled:opacity-40"
+        >
+          <Shuffle className="h-4 w-4" />
+          Shuffle
+        </button>
+      </div>
 
       {/* Storage meter + manage. */}
       <div className="mt-5 rounded-xl border border-line bg-surface/60 p-4">
