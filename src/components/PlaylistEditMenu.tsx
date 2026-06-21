@@ -217,7 +217,7 @@ export function PlaylistEditMenu({
                   <button
                     type="button"
                     onClick={() => setMode('menu')}
-                    className="rounded-md border border-line px-3 py-1.5 text-sm text-white/70 transition-colors hover:bg-white/5"
+                    className="rounded-md border border-line px-3 py-1.5 text-sm text-white/70 transition-colors hover:bg-white/14"
                   >
                     Cancel
                   </button>
@@ -240,7 +240,7 @@ export function PlaylistEditMenu({
                   <button
                     type="button"
                     onClick={() => setMode('menu')}
-                    className="rounded-md border border-line px-3 py-1.5 text-sm text-white/70 transition-colors hover:bg-white/5"
+                    className="rounded-md border border-line px-3 py-1.5 text-sm text-white/70 transition-colors hover:bg-white/14"
                   >
                     Cancel
                   </button>
@@ -251,7 +251,7 @@ export function PlaylistEditMenu({
                 <button
                   type="button"
                   onClick={() => setMode('menu')}
-                  className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-sm text-white/85 transition-colors hover:bg-white/5"
+                  className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-sm text-white/85 transition-colors hover:bg-white/14"
                 >
                   <ChevronLeft className="h-4 w-4 shrink-0" />
                   Combine with…
@@ -263,7 +263,7 @@ export function PlaylistEditMenu({
                     type="button"
                     onClick={() => doCombine(other)}
                     disabled={busy}
-                    className="block w-full truncate rounded-md px-2.5 py-2 text-left text-sm text-white/80 transition-colors hover:bg-white/5 disabled:opacity-50"
+                    className="block w-full truncate rounded-md px-2.5 py-2 text-left text-sm text-white/80 transition-colors hover:bg-white/14 disabled:opacity-50"
                   >
                     {other.name}
                   </button>
@@ -280,7 +280,7 @@ export function PlaylistEditMenu({
                   type="button"
                   onClick={toggleDownload}
                   disabled={busy || !tracks || dl.busy}
-                  className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-sm text-white/85 transition-colors hover:bg-white/5 disabled:opacity-50"
+                  className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-sm text-white/85 transition-colors hover:bg-white/14 disabled:opacity-50"
                 >
                   {dl.busy ? (
                     <Loader2 className="h-4 w-4 shrink-0 animate-spin" style={{ color: 'var(--accent)' }} />
@@ -295,7 +295,7 @@ export function PlaylistEditMenu({
                 <button
                   type="button"
                   onClick={() => setMode('rename')}
-                  className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-sm text-white/85 transition-colors hover:bg-white/5"
+                  className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-sm text-white/85 transition-colors hover:bg-white/14"
                 >
                   <Pencil className="h-4 w-4 shrink-0" style={{ color: 'var(--accent)' }} />
                   Rename
@@ -303,7 +303,7 @@ export function PlaylistEditMenu({
                 <button
                   type="button"
                   onClick={() => setMode('combine')}
-                  className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-sm text-white/85 transition-colors hover:bg-white/5"
+                  className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-sm text-white/85 transition-colors hover:bg-white/14"
                 >
                   <Layers className="h-4 w-4 shrink-0" style={{ color: 'var(--accent)' }} />
                   Combine with…
@@ -315,7 +315,7 @@ export function PlaylistEditMenu({
                       setOpen(false)
                       onEditArtwork()
                     }}
-                    className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-sm text-white/85 transition-colors hover:bg-white/5"
+                    className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-sm text-white/85 transition-colors hover:bg-white/14"
                   >
                     <ImagePlus className="h-4 w-4 shrink-0" style={{ color: 'var(--accent)' }} />
                     Change artwork…

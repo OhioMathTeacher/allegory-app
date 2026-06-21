@@ -96,7 +96,7 @@ export function AlbumView({ album, onBack, onSelectArtist }: AlbumViewProps) {
         <button
           onClick={() => setEditing(true)}
           title="Edit album name / artist / year / cover"
-          className="flex items-center gap-2 rounded-full border border-line px-4 py-2.5 text-sm font-medium text-white/80 transition-colors hover:bg-white/5"
+          className="flex items-center gap-2 rounded-full border border-line px-4 py-2.5 text-sm font-medium text-white/80 transition-colors hover:bg-white/14"
         >
           <Pencil className="h-4 w-4" />
           Edit

@@ -48,7 +48,7 @@ export function AlbumEditor({ album, onClose, onSaved }: AlbumEditorProps) {
             type="button"
             onClick={onClose}
             aria-label="Close"
-            className="rounded-md p-1.5 text-white/78 transition-colors hover:bg-white/5 hover:text-white"
+            className="rounded-md p-1.5 text-white/78 transition-colors hover:bg-white/14 hover:text-white"
           >
             <X className="h-4 w-4" />
           </button>
@@ -169,7 +169,7 @@ function CoverTab({ album, onClose }: CoverTabProps) {
           type="button"
           onClick={() => inputRef.current?.click()}
           disabled={uploading}
-          className="flex items-center gap-1.5 rounded-md border border-line px-3 py-1.5 text-sm text-white/80 transition-colors hover:bg-white/5 disabled:opacity-40"
+          className="flex items-center gap-1.5 rounded-md border border-line px-3 py-1.5 text-sm text-white/80 transition-colors hover:bg-white/14 disabled:opacity-40"
         >
           <Upload className="h-3.5 w-3.5" />
           Choose file…
@@ -209,7 +209,7 @@ function CoverTab({ album, onClose }: CoverTabProps) {
         <button
           type="button"
           onClick={onClose}
-          className="rounded-md border border-line px-4 py-2 text-sm text-white/70 transition-colors hover:bg-white/5"
+          className="rounded-md border border-line px-4 py-2 text-sm text-white/70 transition-colors hover:bg-white/14"
         >
           Done
         </button>

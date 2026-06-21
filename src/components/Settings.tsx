@@ -185,7 +185,7 @@ export function Settings({ firstRun, initialSection, onClose }: SettingsProps) {
             <button
               onClick={onClose}
               aria-label="Close"
-              className="rounded-md p-1.5 text-white/78 transition-colors hover:bg-white/5 hover:text-white"
+              className="rounded-md p-1.5 text-white/78 transition-colors hover:bg-white/14 hover:text-white"
             >
               <X className="h-4 w-4" />
             </button>
@@ -234,8 +234,8 @@ export function Settings({ firstRun, initialSection, onClose }: SettingsProps) {
               onClick={() => setPicking((p) => !p)}
               className={`flex items-center gap-1.5 rounded-md border px-3 py-2 text-sm transition-colors ${
                 picking
-                  ? 'border-line bg-white/5 text-white'
-                  : 'border-line text-white/70 hover:bg-white/5 hover:text-white'
+                  ? 'border-line bg-white/14 text-white'
+                  : 'border-line text-white/70 hover:bg-white/14 hover:text-white'
               }`}
             >
               <FolderSearch className="h-4 w-4" />
@@ -306,7 +306,7 @@ export function Settings({ firstRun, initialSection, onClose }: SettingsProps) {
                   type="button"
                   onClick={rescan}
                   disabled={scanning}
-                  className="flex items-center gap-2 rounded-md border border-line px-3 py-2 text-sm text-white/80 transition-colors hover:bg-white/5 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                  className="flex items-center gap-2 rounded-md border border-line px-3 py-2 text-sm text-white/80 transition-colors hover:bg-white/14 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <RefreshCw className={`h-3.5 w-3.5 ${scanning ? 'animate-spin' : ''}`} />
                   {scanning ? 'Scanning…' : 'Rescan'}
@@ -354,7 +354,7 @@ export function Settings({ firstRun, initialSection, onClose }: SettingsProps) {
                   type="button"
                   onClick={saveLastfmKey}
                   disabled={savingKey || !keyDirty}
-                  className="flex items-center gap-2 rounded-md border border-line px-3 py-2 text-sm text-white/80 transition-colors hover:bg-white/5 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                  className="flex items-center gap-2 rounded-md border border-line px-3 py-2 text-sm text-white/80 transition-colors hover:bg-white/14 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {savingKey ? (
                     <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -375,7 +375,7 @@ export function Settings({ firstRun, initialSection, onClose }: SettingsProps) {
             <button
               type="button"
               onClick={onClose}
-              className="rounded-md border border-line px-4 py-2 text-sm text-white/70 transition-colors hover:bg-white/5"
+              className="rounded-md border border-line px-4 py-2 text-sm text-white/70 transition-colors hover:bg-white/14"
             >
               Cancel
             </button>

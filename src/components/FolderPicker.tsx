@@ -69,7 +69,7 @@ export function FolderPicker({ initialPath, onPick, onCancel }: FolderPickerProp
             key={s.path}
             type="button"
             onClick={() => nav(s.path)}
-            className="flex items-center gap-1 rounded px-2 py-1 text-xs text-white/70 transition-colors hover:bg-white/5 hover:text-white"
+            className="flex items-center gap-1 rounded px-2 py-1 text-xs text-white/70 transition-colors hover:bg-white/14 hover:text-white"
           >
             {s.name === 'Home' ? (
               <Home className="h-3 w-3" />
@@ -127,7 +127,7 @@ export function FolderPicker({ initialPath, onPick, onCancel }: FolderPickerProp
               <button
                 type="button"
                 onClick={() => nav(listing.parent!)}
-                className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-white/88 transition-colors hover:bg-white/5 hover:text-white"
+                className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-white/88 transition-colors hover:bg-white/14 hover:text-white"
               >
                 <ChevronLeft className="h-4 w-4" />
                 <span className="text-white/74">..</span>
@@ -143,7 +143,7 @@ export function FolderPicker({ initialPath, onPick, onCancel }: FolderPickerProp
                   key={e.path}
                   type="button"
                   onClick={() => nav(e.path)}
-                  className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-white/85 transition-colors hover:bg-white/5"
+                  className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-white/85 transition-colors hover:bg-white/14"
                 >
                   <Folder className="h-4 w-4 shrink-0 text-white/82" />
                   <span className="truncate">{e.name}</span>
@@ -163,7 +163,7 @@ export function FolderPicker({ initialPath, onPick, onCancel }: FolderPickerProp
           <button
             type="button"
             onClick={onCancel}
-            className="rounded-md border border-line px-3 py-1 text-xs text-white/70 transition-colors hover:bg-white/5"
+            className="rounded-md border border-line px-3 py-1 text-xs text-white/70 transition-colors hover:bg-white/14"
           >
             Cancel
           </button>

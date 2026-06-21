@@ -73,7 +73,7 @@ export function PlayerBar({ onOpenAlbum, onOpenArtist }: PlayerBarProps) {
             />
           </button>
         ) : (
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-white/5 text-white/62">
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-white/14 text-white/62">
             <Music2 className="h-5 w-5" />
           </div>
         )}
@@ -108,7 +108,7 @@ export function PlayerBar({ onOpenAlbum, onOpenArtist }: PlayerBarProps) {
           aria-label={hasNotes ? 'Edit notes for this song' : 'Add notes for this song'}
           aria-pressed={hasNotes}
           title={hasNotes ? 'Edit notes' : 'Add notes'}
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition-colors hover:bg-white/5 disabled:opacity-30"
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition-colors hover:bg-white/14 disabled:opacity-30"
           style={{ color: hasNotes ? 'var(--accent)' : 'rgba(255,255,255,0.55)' }}
         >
           <Pencil className={`h-5 w-5 ${hasNotes ? 'fill-current' : ''}`} />
@@ -144,7 +144,7 @@ export function PlayerBar({ onOpenAlbum, onOpenArtist }: PlayerBarProps) {
           onClick={player.prev}
           disabled={!track}
           aria-label="Previous"
-          className="flex h-12 w-12 items-center justify-center rounded-full text-white/85 transition-colors hover:bg-white/5 hover:text-white disabled:opacity-30"
+          className="flex h-12 w-12 items-center justify-center rounded-full text-white/85 transition-colors hover:bg-white/14 hover:text-white disabled:opacity-30"
         >
           <SkipBack className="h-6 w-6 fill-current" />
         </button>
@@ -153,7 +153,7 @@ export function PlayerBar({ onOpenAlbum, onOpenArtist }: PlayerBarProps) {
           disabled={!track}
           aria-label={isFav ? 'Remove favorite' : 'Favorite'}
           aria-pressed={isFav}
-          className="flex h-11 w-11 items-center justify-center rounded-full transition-colors hover:bg-white/5 disabled:opacity-30"
+          className="flex h-11 w-11 items-center justify-center rounded-full transition-colors hover:bg-white/14 disabled:opacity-30"
           style={{ color: isFav ? 'var(--accent)' : 'rgba(255,255,255,0.85)' }}
         >
           <Heart className={`h-5 w-5 ${isFav ? 'fill-current' : ''}`} />
@@ -180,7 +180,7 @@ export function PlayerBar({ onOpenAlbum, onOpenArtist }: PlayerBarProps) {
                 : 'Repeat'
           }
           aria-pressed={player.repeatMode !== 'off'}
-          className="flex h-11 w-11 items-center justify-center rounded-full transition-colors hover:bg-white/5"
+          className="flex h-11 w-11 items-center justify-center rounded-full transition-colors hover:bg-white/14"
           style={{
             color: player.repeatMode === 'off' ? 'rgba(255,255,255,0.85)' : 'var(--accent)',
           }}
@@ -195,7 +195,7 @@ export function PlayerBar({ onOpenAlbum, onOpenArtist }: PlayerBarProps) {
           onClick={player.next}
           disabled={!track}
           aria-label="Next"
-          className="flex h-12 w-12 items-center justify-center rounded-full text-white/85 transition-colors hover:bg-white/5 hover:text-white disabled:opacity-30"
+          className="flex h-12 w-12 items-center justify-center rounded-full text-white/85 transition-colors hover:bg-white/14 hover:text-white disabled:opacity-30"
         >
           <SkipForward className="h-6 w-6 fill-current" />
         </button>

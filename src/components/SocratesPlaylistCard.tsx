@@ -162,7 +162,7 @@ export function SocratesPlaylistCard({
           type="button"
           onClick={() => void act('save')}
           disabled={!canAct}
-          className="flex items-center gap-1.5 rounded-md border border-line px-3 py-1.5 text-xs text-white/75 transition-colors hover:bg-white/5 hover:text-white disabled:opacity-40"
+          className="flex items-center gap-1.5 rounded-md border border-line px-3 py-1.5 text-xs text-white/75 transition-colors hover:bg-white/14 hover:text-white disabled:opacity-40"
         >
           {busy === 'save' ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />}
           Save only

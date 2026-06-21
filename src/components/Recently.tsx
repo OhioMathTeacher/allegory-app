@@ -190,7 +190,7 @@ function AlbumRow({ album, index, onSelect }: AlbumRowProps) {
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.28, delay: Math.min(index * 0.02, 0.3), ease: EASE }}
       onClick={() => onSelect(album)}
-      className="flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left transition-colors hover:bg-white/5"
+      className="flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left transition-colors hover:bg-white/14"
     >
       <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-elevated">
         {album.imageTag ? (
@@ -247,7 +247,7 @@ function SongRow({ track, index }: SongRowProps) {
       initial={{ opacity: 0, x: -6 }}
       animate={{ opacity: 1, x: 0 }}
       transition={{ duration: 0.26, delay: Math.min(index * 0.02, 0.25), ease: EASE }}
-      className="group flex w-full items-center gap-3 rounded-lg px-2 py-1.5 transition-colors hover:bg-white/5"
+      className="group flex w-full items-center gap-3 rounded-lg px-2 py-1.5 transition-colors hover:bg-white/14"
     >
       <button
         type="button"
@@ -287,10 +287,10 @@ function AlbumSkeleton() {
     <div className="flex flex-col gap-1 p-2">
       {Array.from({ length: 5 }).map((_, i) => (
         <div key={i} className="flex items-center gap-3 px-2 py-2">
-          <div className="h-12 w-12 shrink-0 animate-pulse rounded-lg bg-white/5" />
+          <div className="h-12 w-12 shrink-0 animate-pulse rounded-lg bg-white/14" />
           <div className="flex flex-1 flex-col gap-1.5">
-            <div className="h-3.5 w-1/2 animate-pulse rounded bg-white/5" />
-            <div className="h-3 w-1/3 animate-pulse rounded bg-white/5" />
+            <div className="h-3.5 w-1/2 animate-pulse rounded bg-white/14" />
+            <div className="h-3 w-1/3 animate-pulse rounded bg-white/14" />
           </div>
         </div>
       ))}
@@ -303,8 +303,8 @@ function SongSkeleton() {
     <div className="flex flex-col gap-1 p-2">
       {Array.from({ length: 6 }).map((_, i) => (
         <div key={i} className="flex items-center gap-3 px-2 py-1.5">
-          <div className="h-3.5 w-3.5 shrink-0 animate-pulse rounded bg-white/5" />
-          <div className="h-3.5 w-2/5 animate-pulse rounded bg-white/5" />
+          <div className="h-3.5 w-3.5 shrink-0 animate-pulse rounded bg-white/14" />
+          <div className="h-3.5 w-2/5 animate-pulse rounded bg-white/14" />
         </div>
       ))}
     </div>

@@ -215,7 +215,7 @@ export function AppShell() {
             onClick={() => setSplashOpen(true)}
             aria-label="About Allegory"
             title="About Allegory"
-            className="flex h-[52px] shrink-0 items-center justify-center gap-2 rounded-xl px-2 transition-colors hover:bg-white/5 active:scale-95"
+            className="flex h-[52px] shrink-0 items-center justify-center gap-2 rounded-xl px-2 transition-colors hover:bg-white/14 active:scale-95"
           >
             <Logo className="breathe h-8 w-8" style={{ color: 'var(--accent)' }} />
             {/* Wordmark — desktop only (hidden on phone). Uses the Outfit-900 face. */}
@@ -280,7 +280,7 @@ export function AppShell() {
                   className={`rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${
                     view.type === key
                       ? 'bg-[color:var(--accent-soft)] text-[color:var(--accent)]'
-                      : 'text-white/88 hover:bg-white/5 hover:text-white/90'
+                      : 'text-white/88 hover:bg-white/14 hover:text-white/90'
                   }`}
                 >
                   {label}
@@ -434,7 +434,7 @@ function TopButton({ onClick, label, active, prominent, children }: TopButtonPro
       } ${
         active
           ? 'border-[color:var(--accent)]/40 bg-[color:var(--accent-soft)]'
-          : 'border-white/10 bg-white/[0.07] hover:bg-white/[0.14]'
+          : 'border-white/30 bg-white/[0.16] hover:bg-white/[0.14]'
       }`}
       style={{ color: active ? 'var(--accent)' : 'rgba(255,255,255,0.92)' }}
     >
@@ -503,7 +503,7 @@ function Splash({ onClose }: { onClose: () => void }) {
             target="_blank"
             rel="noreferrer"
             onClick={(e) => e.stopPropagation()}
-            className="mt-5 inline-flex items-center gap-2 rounded-full border border-line px-5 py-2 text-sm font-medium text-white/80 transition-colors hover:bg-white/5"
+            className="mt-5 inline-flex items-center gap-2 rounded-full border border-line px-5 py-2 text-sm font-medium text-white/80 transition-colors hover:bg-white/14"
           >
             View on GitHub
           </a>

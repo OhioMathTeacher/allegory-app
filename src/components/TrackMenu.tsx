@@ -185,7 +185,7 @@ export function TrackMenu({ track, excludePlaylistId }: TrackMenuProps) {
                   <button
                     type="button"
                     onClick={() => setCreating(false)}
-                    className="rounded-md border border-line px-3 py-1.5 text-sm text-white/70 transition-colors hover:bg-white/5"
+                    className="rounded-md border border-line px-3 py-1.5 text-sm text-white/70 transition-colors hover:bg-white/14"
                   >
                     Cancel
                   </button>
@@ -197,7 +197,7 @@ export function TrackMenu({ track, excludePlaylistId }: TrackMenuProps) {
                   type="button"
                   onClick={toggleDownload}
                   disabled={busy || download.pending}
-                  className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-sm text-white/85 transition-colors hover:bg-white/5 disabled:opacity-50"
+                  className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-sm text-white/85 transition-colors hover:bg-white/14 disabled:opacity-50"
                 >
                   {download.pending ? (
                     <Loader2 className="h-4 w-4 shrink-0 animate-spin" style={{ color: 'var(--accent)' }} />
@@ -233,7 +233,7 @@ export function TrackMenu({ track, excludePlaylistId }: TrackMenuProps) {
                 <button
                   type="button"
                   onClick={() => setCreating(true)}
-                  className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-sm text-white/85 transition-colors hover:bg-white/5"
+                  className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-sm text-white/85 transition-colors hover:bg-white/14"
                 >
                   <Plus className="h-4 w-4 shrink-0" style={{ color: 'var(--accent)' }} />
                   New playlist
@@ -255,7 +255,7 @@ export function TrackMenu({ track, excludePlaylistId }: TrackMenuProps) {
                     type="button"
                     onClick={() => addTo(playlist)}
                     disabled={busy}
-                    className="block w-full truncate rounded-md px-2.5 py-2 text-left text-sm text-white/80 transition-colors hover:bg-white/5 disabled:opacity-50"
+                    className="block w-full truncate rounded-md px-2.5 py-2 text-left text-sm text-white/80 transition-colors hover:bg-white/14 disabled:opacity-50"
                   >
                     {playlist.name}
                   </button>
@@ -264,7 +264,7 @@ export function TrackMenu({ track, excludePlaylistId }: TrackMenuProps) {
                   <button
                     type="button"
                     onClick={() => setShowAll(true)}
-                    className="block w-full rounded-md px-2.5 py-2 text-left text-sm font-medium text-white/82 transition-colors hover:bg-white/5 hover:text-white/80"
+                    className="block w-full rounded-md px-2.5 py-2 text-left text-sm font-medium text-white/82 transition-colors hover:bg-white/14 hover:text-white/80"
                   >
                     More… ({hiddenCount} more)
                   </button>

@@ -75,7 +75,7 @@ export function DiagnosticsPanel() {
             onClick={() => setEntries(getCrashLog())}
             title="Refresh"
             aria-label="Refresh"
-            className="rounded-md p-1.5 text-white/78 transition-colors hover:bg-white/5 hover:text-white"
+            className="rounded-md p-1.5 text-white/78 transition-colors hover:bg-white/14 hover:text-white"
           >
             <RefreshCw className="h-4 w-4" />
           </button>
@@ -85,7 +85,7 @@ export function DiagnosticsPanel() {
             disabled={entries.length === 0}
             title="Copy log"
             aria-label="Copy log"
-            className="rounded-md p-1.5 text-white/78 transition-colors hover:bg-white/5 hover:text-white disabled:opacity-30"
+            className="rounded-md p-1.5 text-white/78 transition-colors hover:bg-white/14 hover:text-white disabled:opacity-30"
           >
             {copied ? <Check className="h-4 w-4 text-emerald-300" /> : <Copy className="h-4 w-4" />}
           </button>
@@ -95,7 +95,7 @@ export function DiagnosticsPanel() {
             disabled={entries.length === 0}
             title="Download log"
             aria-label="Download log"
-            className="rounded-md p-1.5 text-white/78 transition-colors hover:bg-white/5 hover:text-white disabled:opacity-30"
+            className="rounded-md p-1.5 text-white/78 transition-colors hover:bg-white/14 hover:text-white disabled:opacity-30"
           >
             <Download className="h-4 w-4" />
           </button>
@@ -108,7 +108,7 @@ export function DiagnosticsPanel() {
             disabled={entries.length === 0}
             title="Clear log"
             aria-label="Clear log"
-            className="rounded-md p-1.5 text-white/78 transition-colors hover:bg-white/5 hover:text-white disabled:opacity-30"
+            className="rounded-md p-1.5 text-white/78 transition-colors hover:bg-white/14 hover:text-white disabled:opacity-30"
           >
             <Trash2 className="h-4 w-4" />
           </button>
