@@ -576,7 +576,7 @@ export function SocratesPanel({
 
       {/* Input */}
       <div className="shrink-0 border-t border-line/60 p-3 sm:px-6">
-        <div className="flex items-end gap-2 rounded-lg border border-line bg-white/[0.03] px-3 py-2 focus-within:border-white/30">
+        <div className="flex items-end gap-2 rounded-lg border border-black/20 bg-white px-3 py-2 transition-shadow focus-within:ring-2 focus-within:ring-[color:var(--accent)]">
           <textarea
             ref={inputRef}
             value={input}
@@ -585,7 +585,7 @@ export function SocratesPanel({
             placeholder={noProvider ? 'Configure AI to chat…' : 'Ask Socrates…'}
             rows={1}
             disabled={noProvider || thinking}
-            className="max-h-32 flex-1 resize-none bg-transparent text-base text-white/95 outline-none placeholder:text-white/74 disabled:opacity-50"
+            className="max-h-32 flex-1 resize-none bg-transparent text-base text-black caret-black outline-none placeholder:text-black/55 disabled:opacity-70"
           />
           {thinking ? (
             <button
@@ -593,7 +593,7 @@ export function SocratesPanel({
               onClick={stop}
               title="Stop"
               aria-label="Stop generating"
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-white/15 text-white transition-transform hover:scale-105 hover:bg-white/25"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-black/10 text-black transition-transform hover:scale-105 hover:bg-black/20"
             >
               <Square className="h-3.5 w-3.5 fill-current" />
             </button>

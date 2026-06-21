@@ -143,7 +143,7 @@ export function NotesEditor({ track, onClose }: NotesEditorProps) {
                 placeholder={
                   'The angle you want Socrates to take on this song — the theme, the line that matters, a thinker or a paired passage. Your words; he just makes them conversational.'
                 }
-                className="min-h-[160px] w-full flex-1 resize-none rounded-lg border border-line bg-white/[0.03] px-3 py-2 text-base leading-relaxed text-white/95 outline-none focus:border-white/30"
+                className="min-h-[160px] w-full flex-1 resize-none rounded-lg border border-black/20 bg-white px-3 py-2 text-base leading-relaxed text-black caret-black outline-none transition-shadow placeholder:text-black/55 focus:ring-2 focus:ring-[color:var(--accent)]"
               />
             </div>
 
