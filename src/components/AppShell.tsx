@@ -23,6 +23,7 @@ import { Playlists } from './Playlists'
 import { PlaylistView } from './PlaylistView'
 import { NotesView } from './NotesView'
 import { DownloadsView } from './DownloadsView'
+import { DownloadProgressBar } from './DownloadProgressBar'
 import { UpdatePanel } from './UpdatePanel'
 import { PlayerBar } from './PlayerBar'
 import { usePlayer } from '../lib/player'
@@ -367,6 +368,8 @@ export function AppShell() {
         {/* Player bar — hidden only on the Socrates page when the user has
             collapsed it for more chat room (the preference persists). The
             breathing room above it keeps content off it on short phones. */}
+        <DownloadProgressBar />
+
         {!(view.type === 'socrates' && playbarHidden) && (
           <>
             <div aria-hidden className="shrink-0 h-4 sm:h-2" />

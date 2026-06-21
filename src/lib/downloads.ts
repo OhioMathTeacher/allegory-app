@@ -100,10 +100,24 @@ async function dbClear(): Promise<void> {
 
 type Phase = 'pending' | 'error'
 const recordCache = new Map<string, DownloadRecord>()
-const inflight = new Map<string, { phase: Phase; progress: number }>()
+const inflight = new Map<string, { phase: Phase; progress: number; name: string }>()
+// Batch counters for the global progress bar: tracks queued across active
+// downloads, and how many have finished. Both reset to 0 when the batch drains.
+let queued = 0
+let completed = 0
 let version = 0
 let hydrated = false
 const listeners = new Set<() => void>()
+
+/** Mark one queued track as finished; clear the batch + error markers when it drains. */
+function settleOne(): void {
+  completed++
+  if (completed >= queued) {
+    queued = 0
+    completed = 0
+    for (const [id, v] of inflight) if (v.phase === 'error') inflight.delete(id)
+  }
+}
 
 function bump(): void {
   version++
@@ -148,13 +162,14 @@ function setProgress(id: string, progress: number): void {
   if (!cur || cur.phase !== 'pending') return
   // Throttle re-renders: only publish on a meaningful jump (or completion).
   if (progress < 1 && progress - cur.progress < 0.02) return
-  inflight.set(id, { phase: 'pending', progress })
+  inflight.set(id, { phase: 'pending', progress, name: cur.name })
   bump()
 }
 
 async function readWithProgress(
   res: Response,
   id: string,
+  onChunk?: () => void,
 ): Promise<{ blob: Blob; size: number; type: string }> {
   const type = res.headers.get('Content-Type') || 'audio/mpeg'
   const total = Number(res.headers.get('Content-Length')) || 0
@@ -170,6 +185,7 @@ async function readWithProgress(
     const { done, value } = await reader.read()
     if (done) break
     if (value) {
+      onChunk?.()
       chunks.push(value)
       received += value.byteLength
       setProgress(id, received / total)
@@ -186,15 +202,30 @@ async function readWithProgress(
  */
 export async function downloadTrack(conn: Connection, track: Track): Promise<void> {
   if (recordCache.has(track.id)) return
-  inflight.set(track.id, { phase: 'pending', progress: 0 })
+  const name = `${track.artist} — ${track.name}`
+  queued++
+  inflight.set(track.id, { phase: 'pending', progress: 0, name })
   bump()
+
+  // Abort a track that makes no progress for STALL_MS (the iOS hang symptom),
+  // so a single stuck stream can't freeze the whole album/playlist batch — the
+  // loop catches the error and moves to the next track. Re-armed on each chunk.
+  const STALL_MS = 25_000
+  const ctrl = new AbortController()
+  let stall: ReturnType<typeof setTimeout> | null = null
+  const arm = () => {
+    if (stall) clearTimeout(stall)
+    stall = setTimeout(() => ctrl.abort(), STALL_MS)
+  }
+
   try {
-    // ?dl=1 tells the service worker to stay out of the way (see public/sw.js):
-    // routing a big download through the SW can hang on iOS, and we cache the
-    // bytes ourselves below anyway.
-    const res = await fetch(`${audioStreamUrl(conn, track.id)}&dl=1`)
+    arm()
+    // ?dl=1 tells the (updated) service worker to stay out of the way (see
+    // public/sw.js): routing a big download through the SW can hang on iOS.
+    const res = await fetch(`${audioStreamUrl(conn, track.id)}&dl=1`, { signal: ctrl.signal })
     if (!res.ok) throw new Error(`stream ${res.status}`)
-    const { blob, size, type } = await readWithProgress(res, track.id)
+    const { blob, size, type } = await readWithProgress(res, track.id, arm)
+    if (stall) clearTimeout(stall)
 
     // Store under a path-only key so the player's ?can=<caps> (which can differ
     // across devices/sessions) still hits via the SW's ignoreSearch match.
@@ -211,10 +242,11 @@ export async function downloadTrack(conn: Connection, track: Track): Promise<voi
       }),
     )
 
-    // Cover art is best-effort — the row falls back to a placeholder offline.
+    // Cover art is best-effort — bounded by its own short timeout so it can't
+    // hang the track either.
     const artUrl = albumImageUrl(conn, track.albumId ?? track.id, track.albumImageTag, 400)
     try {
-      const artRes = await fetch(artUrl)
+      const artRes = await fetch(artUrl, { signal: AbortSignal.timeout(10_000) })
       if (artRes.ok) await (await caches.open(ART_CACHE)).put(artUrl, artRes)
     } catch {
       // ignore — art is optional
@@ -231,11 +263,13 @@ export async function downloadTrack(conn: Connection, track: Track): Promise<voi
     await dbPut(rec)
     recordCache.set(track.id, rec)
     inflight.delete(track.id)
-    bump()
   } catch (err) {
-    inflight.set(track.id, { phase: 'error', progress: 0 })
-    bump()
+    inflight.set(track.id, { phase: 'error', progress: 0, name })
     throw err
+  } finally {
+    if (stall) clearTimeout(stall)
+    settleOne()
+    bump()
   }
 }
 
@@ -391,6 +425,35 @@ export function useCollectionStatus(ids: string[]): CollectionStatus {
       busy: pending > 0,
     }
   }, [ids, ver])
+}
+
+/** Reactive whole-app download progress, for the persistent progress bar. */
+export interface DownloadProgress {
+  active: boolean
+  /** Tracks queued in the current batch. */
+  total: number
+  /** Tracks finished in the current batch. */
+  done: number
+  /** The track downloading right now (artist — title), if any. */
+  currentName: string | null
+  /** That track's progress, 0–1. */
+  currentPct: number
+}
+export function useDownloadProgress(): DownloadProgress {
+  const ver = useSyncExternalStore(subscribe, getVersion, getVersion)
+  return useMemo(() => {
+    void ver
+    let currentName: string | null = null
+    let currentPct = 0
+    for (const v of inflight.values()) {
+      if (v.phase === 'pending') {
+        currentName = v.name
+        currentPct = v.progress
+        break
+      }
+    }
+    return { active: queued > 0, total: queued, done: completed, currentName, currentPct }
+  }, [ver])
 }
 
 /** Reactive list of all downloaded tracks, album-grouped order. */

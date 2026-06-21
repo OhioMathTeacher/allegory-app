@@ -32,9 +32,23 @@ if (
   'serviceWorker' in navigator &&
   window.isSecureContext
 ) {
+  // Auto-apply a new service worker. The SW calls skipWaiting()+claim(), so an
+  // update changes the controller; reload once to run under it (iOS otherwise
+  // clings to the old SW until every tab is fully quit). Skip the reload on the
+  // very first install (no prior controller) so a fresh load doesn't bounce.
+  const hadController = !!navigator.serviceWorker.controller
+  let reloaded = false
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadController || reloaded) return
+    reloaded = true
+    window.location.reload()
+  })
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js').catch(() => {
-      // Best-effort — the app still works online without the SW.
-    })
+    navigator.serviceWorker
+      .register('/sw.js')
+      .then((reg) => reg.update().catch(() => {}))
+      .catch(() => {
+        // Best-effort — the app still works online without the SW.
+      })
   })
 }
