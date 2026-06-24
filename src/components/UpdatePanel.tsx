@@ -25,11 +25,19 @@ export function UpdatePanel() {
 
   async function doUpdate() {
     if (!data) return
-    // The commit we're updating *away* from. The updater always lands on the
-    // latest origin/main, which may be newer than the `latest` shown when this
-    // panel loaded (e.g. another push since) — so reload as soon as HEAD moves
-    // off `before`, rather than waiting for one specific target sha.
+    // What we're updating *away* from. The updater does `git reset --hard` to
+    // origin/main within the first couple of seconds — but then runs npm
+    // install + a production build + a server restart, which can take a few
+    // minutes. So a moved HEAD alone does NOT mean the new code is live.
+    //
+    // `bootId` is unique to each server process, so it changes only once the
+    // server has actually restarted on the freshly-built bundle. Wait for that
+    // (with the commit also moved off `before`) before reloading — otherwise we
+    // bounce the page onto a server that's still mid-build/mid-restart, which
+    // looks like a stall. Fall back to a commit change if the old build didn't
+    // report a bootId.
     const before = data.current
+    const bootBefore = data.bootId
     setPhase('updating')
     try {
       await applyUpdate(conn)
@@ -37,12 +45,16 @@ export function UpdatePanel() {
       // The server may die before the response lands — that's expected; keep
       // polling regardless.
     }
-    // Poll until the server is back on a different commit, then reload.
-    for (let i = 0; i < 90; i++) {
+    // Poll until the server has restarted on the new code, then reload. The
+    // window is generous: a dependency bump triggers npm install, which can run
+    // for a few minutes on a slow connection. (150 × 2s = 5 minutes.)
+    for (let i = 0; i < 150; i++) {
       await sleep(2000)
       try {
         const s = await getUpdateStatus(conn)
-        if (s.current && s.current !== before) {
+        const restarted = bootBefore ? s.bootId !== bootBefore : false
+        const movedCommit = !!s.current && s.current !== before
+        if (movedCommit && (restarted || !bootBefore)) {
           window.location.reload()
           return
         }
@@ -58,8 +70,9 @@ export function UpdatePanel() {
       <Shell>
         <div className="flex items-center gap-2 text-sm text-white/75">
           <Loader2 className="h-4 w-4 animate-spin" />
-          Updating and restarting… this page will reload automatically when it’s
-          back (usually under a minute).
+          Updating and restarting… this page reloads automatically once the
+          server is back on the new version. Usually under a minute, but a
+          dependency update can take a few minutes — leave this open.
         </div>
       </Shell>
     )

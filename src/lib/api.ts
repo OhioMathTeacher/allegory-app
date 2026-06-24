@@ -144,6 +144,8 @@ export async function saveAlbumTags(
 
 /** State of the local checkout relative to the published latest. */
 export interface UpdateStatus {
+  /** Unique to this server process — changes only on an actual restart. */
+  bootId?: string
   current: string
   currentMessage: string
   latest: string
