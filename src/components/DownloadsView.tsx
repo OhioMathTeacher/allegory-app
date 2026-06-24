@@ -174,7 +174,6 @@ function ArtistList({
   online: boolean
   onSelect: (group: ArtistGroup) => void
 }) {
-  const player = usePlayer()
   const [usage, setUsage] = useState<{ usage: number; quota: number } | null>(null)
 
   useEffect(() => {
@@ -187,8 +186,6 @@ function ArtistList({
     }
   }, [downloads])
 
-  // A flat queue across everything, for the library-wide Play all / Shuffle.
-  const allTracks = useMemo(() => downloads.map((r) => r.track), [downloads])
   const totalBytes = useMemo(
     () => downloads.reduce((sum, r) => sum + r.size, 0),
     [downloads],
@@ -198,54 +195,19 @@ function ArtistList({
     <div className="px-8 py-8">
       <Header online={online} />
 
-      {/* Library-wide play, alongside the per-artist controls below. */}
-      <div className="mt-5 flex items-center gap-3">
-        <button
-          type="button"
-          onClick={() => player.playQueue(allTracks, 0)}
-          className="flex items-center gap-2 rounded-full px-6 py-2.5 text-sm font-semibold text-black transition-transform hover:scale-105"
-          style={{ background: 'var(--accent)' }}
-        >
-          <Play className="h-4 w-4 fill-black" />
-          Play all
-        </button>
-        <button
-          type="button"
-          onClick={() => player.playQueue(shuffle(allTracks), 0)}
-          className="flex items-center gap-2 rounded-full border border-line px-5 py-2.5 text-sm font-medium text-white/80 transition-colors hover:bg-white/14"
-        >
-          <Shuffle className="h-4 w-4" />
-          Shuffle
-        </button>
-      </div>
-
-      {/* Storage meter + manage. */}
+      {/* Storage meter. */}
       <div className="mt-5 rounded-xl border border-line bg-surface/60 p-4">
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2 text-sm text-white/70">
-            <HardDrive className="h-4 w-4 text-white/70" />
-            <span>
-              {downloads.length} song{downloads.length === 1 ? '' : 's'} ·{' '}
-              {formatBytes(totalBytes)}
-              {usage && usage.quota > 0 && (
-                <span className="text-white/70">
-                  {'  '}of {formatBytes(usage.quota)} available
-                </span>
-              )}
-            </span>
-          </div>
-          <button
-            type="button"
-            onClick={() => {
-              if (window.confirm('Remove all downloads? This frees the space they use.')) {
-                void clearAllDownloads()
-              }
-            }}
-            className="flex items-center gap-1.5 rounded-full border border-line px-3 py-1.5 text-xs font-medium text-white/70 transition-colors hover:bg-white/14"
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-            Remove all
-          </button>
+        <div className="flex items-center gap-2 text-sm text-white/70">
+          <HardDrive className="h-4 w-4 text-white/70" />
+          <span>
+            {downloads.length} song{downloads.length === 1 ? '' : 's'} ·{' '}
+            {formatBytes(totalBytes)}
+            {usage && usage.quota > 0 && (
+              <span className="text-white/70">
+                {'  '}of {formatBytes(usage.quota)} available
+              </span>
+            )}
+          </span>
         </div>
         {usage && usage.quota > 0 && (
           <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/10">
@@ -264,6 +226,22 @@ function ArtistList({
         {artists.map((group) => (
           <ArtistRow key={group.key} group={group} onSelect={onSelect} />
         ))}
+      </div>
+
+      {/* Destructive action kept out of the way at the very bottom. */}
+      <div className="mt-8 flex justify-center border-t border-line/40 pt-6">
+        <button
+          type="button"
+          onClick={() => {
+            if (window.confirm('Remove all downloads? This frees the space they use.')) {
+              void clearAllDownloads()
+            }
+          }}
+          className="flex items-center gap-1.5 rounded-full border border-line px-4 py-2 text-xs font-medium text-red-300/80 transition-colors hover:bg-red-500/10 hover:text-red-200"
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+          Remove all downloads
+        </button>
       </div>
     </div>
   )
