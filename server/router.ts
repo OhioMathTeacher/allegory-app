@@ -18,6 +18,12 @@ import { saveUpload } from './upload.ts'
 import { recordPlay, getPlayHistory } from './play-history.ts'
 import { transcodedPath } from './transcode.ts'
 
+// A fresh id per server process. The in-app updater watches this: it only
+// reloads the page once this changes, which proves the server has actually
+// restarted on the freshly-built code — not merely that `git reset` moved HEAD
+// (which happens seconds in, long before npm install + build + restart finish).
+const BOOT_ID = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
+
 const AUDIO_TYPES: Record<string, string> = {
   '.mp3': 'audio/mpeg',
   '.flac': 'audio/flac',
@@ -628,6 +634,7 @@ export function createRouter(deps: RouterDeps): Router {
           behind = b || 0
         }
         sendJson(res, {
+          bootId: BOOT_ID,
           current: head.stdout.trim(),
           currentMessage: headMsg.stdout.trim(),
           latest: latest.stdout.trim(),
