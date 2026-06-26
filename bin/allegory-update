@@ -43,11 +43,18 @@ git reset --hard "origin/$BRANCH" >>"$LOG_FILE" 2>&1
 log "synced to $(git rev-parse --short HEAD): $(git log -1 --format=%s)"
 
 lock_after="$(sha1sum package-lock.json 2>/dev/null | cut -d' ' -f1 || true)"
-if [ "$lock_before" != "$lock_after" ] || [ ! -d node_modules ]; then
-  log "dependencies changed — running npm install"
+# Reinstall when the lockfile changed, OR when the build toolchain is missing.
+# That second guard matters: this machine has intermittently lost
+# node_modules/.bin/tsc, and without it `npm run build` dies with
+# "tsc: command not found". Since a no-dependency update would otherwise skip
+# install, the updater could never heal itself — so the in-app update would
+# hang forever. Checking for tsc/vite lets it self-repair.
+if [ "$lock_before" != "$lock_after" ] || [ ! -d node_modules ] \
+   || [ ! -x node_modules/.bin/tsc ] || [ ! -x node_modules/.bin/vite ]; then
+  log "installing dependencies (lockfile changed or build tools missing)"
   npm install >>"$LOG_FILE" 2>&1
 else
-  log "dependencies unchanged — skipping npm install"
+  log "dependencies present — skipping npm install"
 fi
 
 # Rebuild the production bundle so a preview/prod server (the only mode where
