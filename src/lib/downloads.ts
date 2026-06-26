@@ -150,6 +150,28 @@ export function isDownloaded(id: string): boolean {
   return recordCache.has(id)
 }
 
+/**
+ * A `blob:` object URL for a downloaded track's audio, or null if it isn't
+ * downloaded (or the cached body is somehow gone). Playing from this instead of
+ * the stream URL keeps playback fully local: no network and, crucially, no
+ * service-worker range-serving — which is what stutters/stalls on iOS. The
+ * caller owns the returned URL and must URL.revokeObjectURL() it when done.
+ */
+export async function getDownloadedAudioUrl(id: string): Promise<string | null> {
+  const rec = recordCache.get(id)
+  if (!rec) return null
+  try {
+    const cache = await caches.open(AUDIO_CACHE)
+    // ignoreSearch so a body stored under the path-only key still matches.
+    const res = await cache.match(rec.streamKey, { ignoreSearch: true })
+    if (!res) return null
+    const blob = await res.blob()
+    return URL.createObjectURL(blob)
+  } catch {
+    return null
+  }
+}
+
 /** Whether the initial IndexedDB hydrate has finished. */
 export function downloadsReady(): boolean {
   return hydrated

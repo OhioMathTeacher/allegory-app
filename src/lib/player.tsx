@@ -17,6 +17,7 @@ import { PlayerContext } from './player-context'
 import type { PlayerContextValue, RepeatMode } from './player-context'
 import { logCrash } from './crash-log'
 import { useIsFavorite, toggleFavorite } from './favorites'
+import { isDownloaded, getDownloadedAudioUrl } from './downloads'
 
 /**
  * Choosing an audio output device needs HTMLMediaElement.setSinkId, which
@@ -318,14 +319,35 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     }
 
     logCrash('info', 'track', `▶ ${currentTrack.artist} — ${currentTrack.name}`)
-    audio.src = audioStreamUrl(conn, currentTrack.id)
-    // No auto-play on first load — the restored track is cued but stays paused
-    // until the user presses play.
-    if (userStartedRef.current) {
-      audio.play().catch((err: unknown) => {
-        logCrash('warn', 'playback', 'play() rejected', err)
-      })
-    }
+
+    // Pick the source, preferring a fully-local copy. A downloaded track plays
+    // from a blob: URL — straight off disk, no network and no service-worker
+    // range-serving, which is what stutters/stalls on iOS. Falls back to the
+    // network stream when the track isn't downloaded. Resolving the blob is
+    // async (reads the Cache), so guard against the track changing mid-resolve
+    // and revoke the URL on cleanup to avoid leaking it.
+    let cancelled = false
+    let objectUrl: string | null = null
+    const trackId = currentTrack.id
+    void (async () => {
+      let src: string | null = null
+      if (isDownloaded(trackId)) {
+        src = await getDownloadedAudioUrl(trackId)
+        if (src) objectUrl = src
+      }
+      if (cancelled) {
+        if (objectUrl) URL.revokeObjectURL(objectUrl)
+        return
+      }
+      audio.src = src ?? audioStreamUrl(conn, trackId)
+      // No auto-play on first load — the restored track is cued but stays paused
+      // until the user presses play.
+      if (userStartedRef.current) {
+        audio.play().catch((err: unknown) => {
+          logCrash('warn', 'playback', 'play() rejected', err)
+        })
+      }
+    })()
 
     extractPalette(trackImageUrl(conn, currentTrack, 128)).then((palette) => {
       document.documentElement.style.setProperty('--accent', palette.accent)
@@ -345,6 +367,13 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
           },
         ],
       })
+    }
+
+    return () => {
+      // Stop a still-pending source resolve from applying to the next track,
+      // and release this track's blob: URL once we move on.
+      cancelled = true
+      if (objectUrl) URL.revokeObjectURL(objectUrl)
     }
   }, [currentTrack, conn])
 
