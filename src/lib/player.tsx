@@ -339,6 +339,14 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         if (objectUrl) URL.revokeObjectURL(objectUrl)
         return
       }
+      // Record how this track is being played so a diagnostic log can tell
+      // local-download playback apart from streaming at a glance. If a track is
+      // flagged downloaded but we still fell back to the stream, its cached body
+      // is missing (e.g. cleared) and it needs re-downloading.
+      logCrash('info', 'track', `source: ${src ? 'download (local)' : 'stream'}`, {
+        downloaded: isDownloaded(trackId),
+        fellBackToStream: isDownloaded(trackId) && !src,
+      })
       audio.src = src ?? audioStreamUrl(conn, trackId)
       // No auto-play on first load — the restored track is cued but stays paused
       // until the user presses play.
