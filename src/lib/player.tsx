@@ -141,6 +141,19 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   // put it back exactly as it was. Distinct from a normal user pause.
   const pausedForSearchRef = useRef(false)
 
+  // Offline-blob playback plumbing (see the load effect):
+  //  - currentObjectUrlRef holds the blob: URL currently loaded, so the next
+  //    load can revoke the previous one *after* its replacement is in place
+  //    (revoking too early is what killed a still-playing blob).
+  //  - recoverRef lets the once-bound error handler rebuild a downloaded
+  //    track's blob when iOS purges it after a long background (media error
+  //    code 4), resuming instead of leaving a dead track.
+  //  - loadTokenRef cancels a stale async source-resolve if the track changes
+  //    before it finishes.
+  const currentObjectUrlRef = useRef<string | null>(null)
+  const recoverRef = useRef<(() => boolean) | null>(null)
+  const loadTokenRef = useRef(0)
+
   // Persist the queue + cursor on every change so a reload restores them.
   useEffect(() => {
     try {
@@ -246,6 +259,10 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         at: round(audio.currentTime),
         src: audio.currentSrc,
       })
+      // A downloaded track whose blob: URL iOS purged after a long background
+      // errors here (typically code 4). Rebuild it from the persistent cache
+      // and resume where it left off rather than leaving a dead track.
+      recoverRef.current?.()
     }
     const onStalled = () =>
       logCrash('warn', 'audio', 'stalled', { at: round(audio.currentTime) })
@@ -313,41 +330,56 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       intentionalPauseRef.current = true
       audio.pause()
       audio.removeAttribute('src')
+      if (currentObjectUrlRef.current) {
+        URL.revokeObjectURL(currentObjectUrlRef.current)
+        currentObjectUrlRef.current = null
+      }
+      recoverRef.current = null
       setCurrentTime(0)
       setDuration(0)
       return
     }
 
-    logCrash('info', 'track', `▶ ${currentTrack.artist} — ${currentTrack.name}`)
+    const track = currentTrack
+    logCrash('info', 'track', `▶ ${track.artist} — ${track.name}`)
 
-    // Pick the source, preferring a fully-local copy. A downloaded track plays
-    // from a blob: URL — straight off disk, no network and no service-worker
-    // range-serving, which is what stutters/stalls on iOS. Falls back to the
-    // network stream when the track isn't downloaded. Resolving the blob is
-    // async (reads the Cache), so guard against the track changing mid-resolve
-    // and revoke the URL on cleanup to avoid leaking it.
-    let cancelled = false
-    let objectUrl: string | null = null
-    const trackId = currentTrack.id
-    void (async () => {
+    // Resolve + apply the source, preferring a fully-local copy. A downloaded
+    // track plays from a blob: URL — straight off disk, no network and no
+    // service-worker range-serving, which is what stutters/stalls on iOS.
+    // Non-downloaded tracks stream. Resolving the blob reads the Cache (async),
+    // so a loadToken cancels this if the track changes first. `resumeAt` lets a
+    // recovery re-load the same track and pick up where it left off.
+    const load = async (resumeAt: number) => {
+      const token = ++loadTokenRef.current
       let src: string | null = null
-      if (isDownloaded(trackId)) {
-        src = await getDownloadedAudioUrl(trackId)
-        if (src) objectUrl = src
-      }
-      if (cancelled) {
-        if (objectUrl) URL.revokeObjectURL(objectUrl)
+      if (isDownloaded(track.id)) src = await getDownloadedAudioUrl(track.id)
+      if (token !== loadTokenRef.current) {
+        // A newer load started while we were reading the cache — discard this
+        // blob so it doesn't leak.
+        if (src) URL.revokeObjectURL(src)
         return
       }
-      // Record how this track is being played so a diagnostic log can tell
-      // local-download playback apart from streaming at a glance. If a track is
-      // flagged downloaded but we still fell back to the stream, its cached body
-      // is missing (e.g. cleared) and it needs re-downloading.
       logCrash('info', 'track', `source: ${src ? 'download (local)' : 'stream'}`, {
-        downloaded: isDownloaded(trackId),
-        fellBackToStream: isDownloaded(trackId) && !src,
+        downloaded: isDownloaded(track.id),
+        fellBackToStream: isDownloaded(track.id) && !src,
       })
-      audio.src = src ?? audioStreamUrl(conn, trackId)
+      // Swap in the new source, then release the *previous* blob — never before
+      // its replacement is in place, or a still-playing blob dies mid-track.
+      const prev = currentObjectUrlRef.current
+      currentObjectUrlRef.current = src && src.startsWith('blob:') ? src : null
+      audio.src = src ?? audioStreamUrl(conn, track.id)
+      if (resumeAt > 0) {
+        const seekOnce = () => {
+          try {
+            audio.currentTime = resumeAt
+          } catch {
+            // Not seekable yet / out of range — leave it at 0.
+          }
+          audio.removeEventListener('loadedmetadata', seekOnce)
+        }
+        audio.addEventListener('loadedmetadata', seekOnce)
+      }
+      if (prev) URL.revokeObjectURL(prev)
       // No auto-play on first load — the restored track is cued but stays paused
       // until the user presses play.
       if (userStartedRef.current) {
@@ -355,21 +387,38 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
           logCrash('warn', 'playback', 'play() rejected', err)
         })
       }
-    })()
+    }
 
-    extractPalette(trackImageUrl(conn, currentTrack, 128)).then((palette) => {
+    void load(0)
+
+    // Let the error handler rebuild this track's blob if iOS purges it after a
+    // long background (media error code 4), resuming from where it stopped.
+    // Bounded per track so a genuinely-bad source can't loop forever.
+    let recoverAttempts = 0
+    recoverRef.current = () => {
+      if (!isDownloaded(track.id) || recoverAttempts >= 2) return false
+      recoverAttempts++
+      const at = Number.isFinite(audio.currentTime) ? audio.currentTime : 0
+      logCrash('warn', 'playback', `rebuilding downloaded blob (attempt ${recoverAttempts})`, {
+        at: round(at),
+      })
+      void load(at)
+      return true
+    }
+
+    extractPalette(trackImageUrl(conn, track, 128)).then((palette) => {
       document.documentElement.style.setProperty('--accent', palette.accent)
       document.documentElement.style.setProperty('--accent-soft', palette.soft)
     })
 
     if ('mediaSession' in navigator) {
       navigator.mediaSession.metadata = new MediaMetadata({
-        title: currentTrack.name,
-        artist: currentTrack.artist,
-        album: currentTrack.album,
+        title: track.name,
+        artist: track.artist,
+        album: track.album,
         artwork: [
           {
-            src: trackImageUrl(conn, currentTrack, 512),
+            src: trackImageUrl(conn, track, 512),
             sizes: '512x512',
             type: 'image/jpeg',
           },
@@ -378,10 +427,11 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     }
 
     return () => {
-      // Stop a still-pending source resolve from applying to the next track,
-      // and release this track's blob: URL once we move on.
-      cancelled = true
-      if (objectUrl) URL.revokeObjectURL(objectUrl)
+      // Invalidate any in-flight load for this track. Don't revoke the blob
+      // here — the next track's load() releases the previous URL once its
+      // replacement is loaded, so a still-playing blob is never pulled early.
+      loadTokenRef.current++
+      recoverRef.current = null
     }
   }, [currentTrack, conn])
 
