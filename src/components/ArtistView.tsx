@@ -20,6 +20,7 @@ import {
   getArtistTracks,
   getAlbumTracks,
   getArtistRelated,
+  getArtistTopTracks,
   artistPortraitUrl,
   bandcampArtistUrl,
   youtubeSearchUrl,
@@ -38,7 +39,7 @@ import { ArtistEditor } from './ArtistEditor'
 import { SongRows, AlbumRows } from './Recently'
 import { AccordionSection } from './Accordion'
 import { ArtistTags } from './ArtistTags'
-import type { Album, Artist } from '../lib/types'
+import type { Album, Artist, Track } from '../lib/types'
 
 interface ArtistViewProps {
   artist: Artist
@@ -239,16 +240,16 @@ export function ArtistView({
 
       <div className="mt-9 flex flex-col gap-3">
         <AccordionSection
-          title="Played · Songs"
+          title="Songs"
           icon={<Music2 className="h-6 w-6" />}
           open={openMap['played-songs']}
           onToggle={() => toggleSection('played-songs')}
         >
-          <SongRows
-            tracks={recent.data?.tracks?.slice(0, PLAYED_SONG_LIMIT)}
-            isLoading={recent.isLoading}
-            isError={recent.isError}
-            emptyText="You haven’t played anything by this artist yet."
+          <SongsPanel
+            artistId={artist.id}
+            played={recent.data?.tracks?.slice(0, PLAYED_SONG_LIMIT)}
+            playedLoading={recent.isLoading}
+            playedError={recent.isError}
           />
         </AccordionSection>
 
@@ -637,6 +638,142 @@ function SkeletonGrid() {
           <div className="h-3.5 w-1/3 animate-pulse rounded bg-white/14" />
         </div>
       ))}
+    </div>
+  )
+}
+
+interface SongsPanelProps {
+  artistId: string
+  played: Track[] | undefined
+  playedLoading: boolean
+  playedError: boolean
+}
+
+/**
+ * The artist's songs, from two angles.
+ *
+ * "Popular" leads because it answers the question a personal history can't:
+ * where do you start with an artist you own but have never played? On a young
+ * listening log that is nearly every artist. "Played" keeps your own history a
+ * tap away rather than deleting it — as the log fills, it becomes the better of
+ * the two.
+ */
+function SongsPanel({ artistId, played, playedLoading, playedError }: SongsPanelProps) {
+  const conn = useConnected()
+  const player = usePlayer()
+  const [tab, setTab] = useState<'popular' | 'played'>('popular')
+
+  const popular = useQuery({
+    queryKey: ['artist-top-tracks', artistId, conn.serverUrl],
+    queryFn: () => getArtistTopTracks(conn, artistId),
+    enabled: tab === 'popular',
+    staleTime: 1000 * 60 * 60,
+  })
+
+  const owned = (popular.data?.tracks ?? []).filter((t) => t.trackId)
+
+  async function playFrom(trackId: string) {
+    // Queue every owned popular song, starting from the one tapped, so the
+    // section behaves like a playlist rather than a one-shot.
+    const tracks = await getArtistTracks(conn, artistId)
+    const ordered = owned
+      .map((t) => tracks.find((x) => x.id === t.trackId))
+      .filter((t): t is Track => !!t)
+    const start = ordered.findIndex((t) => t.id === trackId)
+    if (ordered.length > 0) player.playQueue(ordered, Math.max(0, start))
+  }
+
+  return (
+    <div>
+      <div className="mb-2 flex gap-1 px-2 pt-1">
+        {(['popular', 'played'] as const).map((id) => (
+          <button
+            key={id}
+            type="button"
+            onClick={() => setTab(id)}
+            aria-pressed={tab === id}
+            className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+              tab === id
+                ? 'bg-[color:var(--accent-soft)] text-[color:var(--accent)]'
+                : 'text-white/60 hover:bg-white/10 hover:text-white'
+            }`}
+          >
+            {id === 'popular' ? 'Popular' : 'Played'}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'played' ? (
+        <SongRows
+          tracks={played}
+          isLoading={playedLoading}
+          isError={playedError}
+          emptyText="You haven’t played anything by this artist yet."
+        />
+      ) : popular.isLoading ? (
+        <div className="flex flex-col gap-1 p-2">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="h-8 animate-pulse rounded bg-white/5" />
+          ))}
+        </div>
+      ) : popular.data && !popular.data.configured ? (
+        <p className="px-4 py-6 text-center text-sm text-white/60">
+          Add a Last.fm API key in Settings → Library to see an artist’s
+          best-known songs.
+        </p>
+      ) : !popular.data || popular.data.tracks.length === 0 ? (
+        <p className="px-4 py-6 text-center text-sm text-white/60">
+          No popular songs listed for this artist.
+        </p>
+      ) : (
+        <div className="flex flex-col">
+          {popular.data.tracks.map((t, i) => {
+            const own = !!t.trackId
+            return (
+              <div
+                key={`${t.name}-${i}`}
+                className={`flex items-center gap-3 border-b border-line/50 px-2 py-1.5 last:border-b-0 ${
+                  own ? 'cursor-pointer hover:bg-white/5' : ''
+                }`}
+                onClick={own ? () => void playFrom(t.trackId!) : undefined}
+                role={own ? 'button' : undefined}
+                tabIndex={own ? 0 : undefined}
+                onKeyDown={
+                  own
+                    ? (e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault()
+                          void playFrom(t.trackId!)
+                        }
+                      }
+                    : undefined
+                }
+              >
+                <span className="w-5 shrink-0 text-right text-xs tabular-nums text-white/30">
+                  {i + 1}
+                </span>
+                <span
+                  className={`min-w-0 flex-1 truncate text-base ${
+                    own ? 'font-medium text-white' : 'text-white/40'
+                  }`}
+                >
+                  {t.libraryTitle ?? t.name}
+                </span>
+                {!own && (
+                  <span className="shrink-0 text-[11px] uppercase tracking-wide text-white/25">
+                    not owned
+                  </span>
+                )}
+                {t.listeners != null && (
+                  <span className="hidden w-20 shrink-0 text-right text-xs tabular-nums text-white/30 sm:block">
+                    {t.listeners.toLocaleString()}
+                  </span>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 }

@@ -257,10 +257,13 @@ export function AppShell() {
 
         {/* Direct section tabs — on the three top-level pages, one tap jumps
             straight to any other (no cycling through the corner buttons). */}
-        {/* Derived from WINDOWS rather than a hand-written list of view types:
-            a window missing from that list hides the tab row on its own page
-            and strands you there, which is exactly what Discover did. */}
-        {(WINDOWS as readonly string[]).includes(view.type) && (
+        {/* Keyed off `section`, not `view.type`, so the row also shows on the
+            drill-downs beneath a window — an artist, album, playlist or notes
+            page keeps one-tap access to every other section instead of making
+            you go back first. Search / Socrates / Now Playing are modes rather
+            than places, aren't in WINDOWS, and stay clear of it.
+            Derived from WINDOWS so a new window can't be half-added. */}
+        {(WINDOWS as readonly string[]).includes(section) && (
           <div className="flex shrink-0 items-center justify-center gap-1 border-b border-line bg-bg/95 px-2 py-2 backdrop-blur">
             {(
               [

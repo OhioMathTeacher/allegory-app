@@ -13,7 +13,11 @@ import type { Library } from './scanner.ts'
 import type { Playlists } from './playlists.ts'
 import type { SettingsStore } from './settings.ts'
 import { editAlbum, renameArtist, applyAlbumTags, readFullTags } from './metadata.ts'
-import { getArtistRelated, setArtistTags } from './artist-related.ts'
+import {
+  getArtistRelated,
+  getArtistTopTracks,
+  setArtistTags,
+} from './artist-related.ts'
 import type { PortraitStore } from './artist-portrait.ts'
 import {
   getMixes,
@@ -931,6 +935,29 @@ export function createRouter(deps: RouterDeps): Router {
           return true
         }
         sendJson(res, { ok: true, genres: saved })
+        return true
+      }
+
+      // An artist's best-known songs, matched to what's on disk. Answers
+      // "where do I start?" for an artist you own but have never played.
+      if (
+        segs.length === 4 &&
+        segs[1] === 'artists' &&
+        segs[3] === 'top-tracks' &&
+        method === 'GET'
+      ) {
+        const { lastfmApiKey } = await settings.load()
+        const dto = await getArtistTopTracks(
+          library,
+          seg(2),
+          lastfmApiKey,
+          Date.now(),
+        )
+        if (!dto) {
+          sendJson(res, { error: 'Unknown artist.' }, 404)
+          return true
+        }
+        sendJson(res, dto)
         return true
       }
 

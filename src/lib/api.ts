@@ -243,6 +243,29 @@ export async function getArtistRecentlyPlayed(
   return getJson<RecentResult>(conn, `/artists/${artistId}/recently-played`)
 }
 
+/** One of an artist's best-known songs, matched against the library. */
+export interface PopularTrack {
+  name: string
+  /** Last.fm listener count — a rough proxy for how well known it is. */
+  listeners?: number
+  /** Set when the song is in the library; the row plays it. */
+  trackId?: string
+  /** The library's own title, which can differ in punctuation or casing. */
+  libraryTitle?: string
+}
+
+/**
+ * An artist's best-known songs. Answers "where do I start?" for an artist you
+ * own but have never played — which a personal play history can't. Served from
+ * the per-artist sidecar, so it's one fetch per artist and offline afterwards.
+ */
+export async function getArtistTopTracks(
+  conn: Connection,
+  artistId: string,
+): Promise<{ tracks: PopularTrack[]; configured: boolean }> {
+  return getJson(conn, `/artists/${artistId}/top-tracks`)
+}
+
 /**
  * Replace an artist's tag list with exactly `tags`. The server splits it back
  * into "added by hand" and "Last.fm genres the user dropped", so edits survive

@@ -43,6 +43,46 @@ interface Sidecar {
   /** Last.fm genres the user removed. Remembered rather than deleted, so a
    *  refetch doesn't quietly bring back a tag they'd already dismissed. */
   hiddenTags?: string[]
+  /** This artist's best-known songs, and when we last asked. Cached on its own
+   *  clock because popularity moves far slower than anything else here. */
+  topTracks?: { name: string; listeners?: number }[]
+  topTracksAt?: number
+}
+
+/** How long a cached top-tracks list is considered current. */
+const TOP_TRACKS_TTL_MS = 1000 * 60 * 60 * 24 * 90 // 90 days
+
+export interface PopularTrack {
+  name: string
+  listeners?: number
+  /** Set when this song is in the library — the row plays it directly. */
+  trackId?: string
+  /** The library's own title, which can differ in punctuation or casing. */
+  libraryTitle?: string
+}
+
+export interface ArtistTopTracksDTO {
+  tracks: PopularTrack[]
+  /** False when no Last.fm key is configured, so the UI can prompt for one. */
+  configured: boolean
+}
+
+/**
+ * Fold a song title for matching. Same spirit as the album normaliser in
+ * discover.ts: drop the edition/remaster noise and punctuation that differs
+ * between a scrobble and a filename, so "Steady, As She Goes" meets
+ * "Steady As She Goes (Album Version)".
+ */
+function normTitle(name: string): string {
+  return name
+    .normalize('NFKD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/[([{][^)\]}]*[)\]}]/g, ' ')
+    .replace(/\b(remaster(ed)?|album version|single version|live|mono|stereo)\b/gi, ' ')
+    .replace(/&/g, ' and ')
+    .replace(/[^\p{L}\p{N}]+/gu, ' ')
+    .trim()
+    .toLowerCase()
 }
 
 export interface RelatedArtist {
@@ -289,4 +329,109 @@ export async function setArtistTags(
     return effectiveGenres(existing)
   }
   return effectiveGenres(next)
+}
+
+interface LfmTopTracks {
+  toptracks?: { track?: { name?: string; listeners?: string }[] }
+}
+
+/**
+ * An artist's best-known songs, matched against what's on disk.
+ *
+ * Answers "where do I start with this artist?" — the question a personal play
+ * history can't answer for an artist you've never played, which on a young
+ * listening log is nearly all of them. Owned songs come back with a trackId so
+ * the row plays; the rest are shown as gaps you don't have.
+ *
+ * Cached in the same per-artist sidecar as the other enrichment, so it costs
+ * one fetch per artist ever and works offline afterwards.
+ */
+export async function getArtistTopTracks(
+  library: Library,
+  artistId: string,
+  apiKey: string | undefined,
+  now: number,
+): Promise<ArtistTopTracksDTO | null> {
+  const artist = library.artist(artistId)
+  if (!artist) return null
+  if (!apiKey) return { tracks: [], configured: false }
+
+  const sidecarPath = join(artist.dir, SIDECAR)
+  const existing = await readSidecar(sidecarPath)
+  let top = existing?.topTracks
+  const fresh =
+    top && existing?.topTracksAt && now - existing.topTracksAt < TOP_TRACKS_TTL_MS
+
+  if (!fresh) {
+    const body = await callLastfm<LfmTopTracks>(
+      'artist.getTopTracks',
+      artist.name,
+      apiKey,
+      { limit: '20' },
+    )
+    const fetched = (body?.toptracks?.track ?? [])
+      .map((t) => ({
+        name: (t.name ?? '').trim(),
+        listeners: Number(t.listeners) || undefined,
+      }))
+      .filter((t) => t.name.length > 0)
+    if (fetched.length > 0) {
+      top = fetched
+      try {
+        // Keep the sidecar's required shape even when this is the first thing
+        // ever written to it: readSidecar rejects a file without a `related`
+        // array, so omitting it would make the cache unreadable on the next
+        // visit and refetch forever. fetchedAt stays 0 so the enrichment path
+        // still treats it as stale and fills in the rest.
+        await writeFile(
+          sidecarPath,
+          JSON.stringify(
+            {
+              version: existing?.version ?? SIDECAR_VERSION,
+              fetchedAt: existing?.fetchedAt ?? 0,
+              source: existing?.source ?? 'lastfm',
+              genres: existing?.genres ?? [],
+              related: existing?.related ?? [],
+              ...(existing ?? {}),
+              topTracks: fetched,
+              topTracksAt: now,
+            },
+            null,
+            2,
+          ) + '\n',
+          'utf8',
+        )
+      } catch {
+        // Read-only media — serve what we fetched without caching it.
+      }
+    }
+  }
+
+  // Resolve against this artist's own tracks only, so a common title can't
+  // bind to some other band's song.
+  const mine = await library.artistTracks(artistId)
+  const byTitle = new Map<string, { id: string; name: string }>()
+  for (const t of mine) {
+    const key = normTitle(t.name)
+    if (key && !byTitle.has(key)) byTitle.set(key, { id: t.id, name: t.name })
+  }
+
+  const seen = new Set<string>()
+  const tracks: PopularTrack[] = []
+  for (const t of top ?? []) {
+    const key = normTitle(t.name)
+    // Last.fm lists live and remastered variants separately; they collapse to
+    // the same song once normalised.
+    if (!key || seen.has(key)) continue
+    seen.add(key)
+    const hit = byTitle.get(key)
+    tracks.push({
+      name: t.name,
+      listeners: t.listeners,
+      trackId: hit?.id,
+      libraryTitle: hit?.name,
+    })
+  }
+
+  return { tracks, configured: true }
 }
