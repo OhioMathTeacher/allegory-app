@@ -257,10 +257,10 @@ export function AppShell() {
 
         {/* Direct section tabs — on the three top-level pages, one tap jumps
             straight to any other (no cycling through the corner buttons). */}
-        {(view.type === 'artists' ||
-          view.type === 'recent' ||
-          view.type === 'playlists' ||
-          view.type === 'downloads') && (
+        {/* Derived from WINDOWS rather than a hand-written list of view types:
+            a window missing from that list hides the tab row on its own page
+            and strands you there, which is exactly what Discover did. */}
+        {(WINDOWS as readonly string[]).includes(view.type) && (
           <div className="flex shrink-0 items-center justify-center gap-1 border-b border-line bg-bg/95 px-2 py-2 backdrop-blur">
             {(
               [
