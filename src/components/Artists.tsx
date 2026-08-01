@@ -16,16 +16,14 @@ interface ArtistsProps {
   onSelectArtist: (artist: Artist) => void
 }
 
-// Every possible section, in display order — the alphabet plus one bucket for
-// names starting with a digit or symbol. This is the full set the persistence
-// hook tracks; which of them actually RENDER is decided from the data, so a
-// letter you own nothing under never appears as an empty header.
-const SECTIONS = [...LETTERS, '#']
+// Every letter bucket, in display order. "#" (digit- and symbol-led names)
+// comes FIRST, matching both how those names sort and the "#–B" key label —
+// listing it after B inside that key read as a mistake.
+const SECTIONS = ['#', ...LETTERS]
 
 /**
  * Bucket artists by first letter, dropping empty buckets. Returns entries in
- * alphabetical order with "#" last, since a symbol-led name reads as an
- * afterthought rather than something to lead with.
+ * display order — "#" first, then A-Z.
  */
 function groupByLetter(artists: Artist[]): [string, Artist[]][] {
   const groups = new Map<string, Artist[]>()

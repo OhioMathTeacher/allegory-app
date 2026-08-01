@@ -9,6 +9,10 @@ import {
   Sparkles,
   Disc3,
   User,
+  Repeat2,
+  Clock,
+  Gem,
+  Radio,
 } from 'lucide-react'
 import { useConnected } from '../lib/connection'
 import { usePlayer } from '../lib/player'
@@ -305,9 +309,70 @@ interface MixCardProps {
   onLaunch: () => void
 }
 
+/**
+ * A face per kind of mix. Four cards that all wore the same sparkle were
+ * indistinguishable at a glance — you had to read them to tell a twofer from a
+ * decade set. The icon and tint are keyed off the mix id the server assigns, so
+ * a mix always looks like itself.
+ */
+function mixFace(id: string): { icon: React.ReactNode; accent: string } {
+  const cls = 'h-4 w-4 shrink-0'
+  if (id === 'twofer') return { icon: <Repeat2 className={cls} />, accent: '#f0abfc' }
+  if (id === 'dormant') return { icon: <Clock className={cls} />, accent: '#fbbf24' }
+  if (id === 'deep-cuts') return { icon: <Gem className={cls} />, accent: '#67e8f9' }
+  if (id.startsWith('decade-')) return { icon: <Radio className={cls} />, accent: '#86efac' }
+  return { icon: <Sparkles className={cls} />, accent: 'var(--accent)' }
+}
+
+/**
+ * A 2x2 grid of the mix's own album art — the cover a generated mix would have
+ * if it were a record. Distinct covers are what let you tell four cards apart
+ * without reading them, and the art is already cached locally so it costs
+ * nothing. Falls back to fewer tiles when the mix draws on fewer albums.
+ */
+function MixCover({ mix }: { mix: Mix }) {
+  const conn = useConnected()
+  // One tile per album, not per track, or a twofer's two songs from the same
+  // record would show the same cover twice.
+  const albums: string[] = []
+  for (const t of mix.tracks) {
+    const id = t.albumId ?? t.id
+    if (!albums.includes(id)) albums.push(id)
+    if (albums.length === 4) break
+  }
+  if (albums.length === 0) return null
+  return (
+    <div className="grid h-20 w-20 shrink-0 grid-cols-2 grid-rows-2 gap-px overflow-hidden rounded-lg bg-elevated shadow-lg shadow-black/40">
+      {albums.map((id, i) => (
+        <div
+          key={id}
+          className={`overflow-hidden ${albums.length === 1 ? 'col-span-2 row-span-2' : ''} ${
+            albums.length === 3 && i === 0 ? 'row-span-2' : ''
+          }`}
+        >
+          <Cover
+            src={albumImageUrl(conn, id, undefined, 120)}
+            alt=""
+            className="h-full w-full"
+          />
+        </div>
+      ))}
+    </div>
+  )
+}
+
 function MixCard({ mix, index, launchedMix, onLaunch }: MixCardProps) {
   const player = usePlayer()
   const [busy, setBusy] = useState(false)
+  const { icon, accent } = mixFace(mix.id)
+  // Name the artists rather than listing tracks: it's the flavour of the mix in
+  // one line, where three "Artist — Title" rows were a wall.
+  const artists = [...new Set(mix.tracks.map((t) => t.artist))]
+  const artistLine =
+    artists.length === 0
+      ? ''
+      : artists.slice(0, 2).join(', ') +
+        (artists.length > 2 ? ` +${artists.length - 2} more` : '')
 
   // Membership in the mix is the real signal — it means playback still came
   // from here, so starting anything else in the app puts this card back to
@@ -338,25 +403,26 @@ function MixCard({ mix, index, launchedMix, onLaunch }: MixCardProps) {
       transition={{ duration: 0.28, delay: Math.min(index * 0.04, 0.2), ease: EASE }}
       className="flex flex-col rounded-xl border border-line bg-surface/40 p-4"
     >
-      <div className="flex items-start gap-2">
-        <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-[color:var(--accent)]" />
+      <div className="flex items-start gap-3">
+        <MixCover mix={mix} />
         <div className="min-w-0 flex-1">
-          <div className="text-lg font-semibold tracking-tight text-white">
-            {mix.title}
+          <div className="flex items-center gap-1.5">
+            <span style={{ color: accent }}>{icon}</span>
+            <div className="truncate text-lg font-semibold tracking-tight text-white">
+              {mix.title}
+            </div>
           </div>
-          <div className="mt-0.5 text-sm text-white/50">{mix.subtitle}</div>
+          <div className="mt-0.5 line-clamp-2 text-sm text-white/50">
+            {mix.subtitle}
+          </div>
+          {/* One line instead of a wall: the shape of the mix, not its
+              contents. The cover already says what's in it. */}
+          <div className="mt-2 truncate text-xs text-white/40">
+            {mix.tracks.length} track{mix.tracks.length === 1 ? '' : 's'}
+            {artistLine && <span className="text-white/25"> · </span>}
+            {artistLine}
+          </div>
         </div>
-      </div>
-
-      <div className="mt-3 flex flex-col gap-0.5 text-xs text-white/40">
-        {mix.tracks.slice(0, 3).map((t) => (
-          <div key={t.id} className="truncate">
-            {t.artist} — {t.name}
-          </div>
-        ))}
-        {mix.tracks.length > 3 && (
-          <div className="text-white/25">+{mix.tracks.length - 3} more</div>
-        )}
       </div>
 
       <div className="mt-4 flex items-center gap-2">
