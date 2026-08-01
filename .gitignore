@@ -14,9 +14,23 @@ dist-ssr
 
 # Per-machine env — committed template is .env.example
 /.env
+.env.*
+!.env.example
 
-# TSM resized cover-art cache
+# Everything per-machine and private: the resized cover-art cache, but also
+# settings.json (holds the Last.fm key), auth.json (the password hash and the
+# session signing secret), the listening log and play history, and any mkcert
+# TLS material.
 .allegory-cache
+
+# Secrets, named explicitly as well. They all live under .allegory-cache/
+# today, so these lines are redundant — deliberately. If a later refactor
+# moves any of them to the repo root, this is what stops the move from
+# quietly publishing a password hash or an API key.
+auth.json
+settings.json
+*.pem
+*.key
 
 # Editor directories and files
 .vscode/*

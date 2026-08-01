@@ -19,6 +19,7 @@ import type { IncomingMessage, Server as HttpServer } from 'node:http'
 import type { Http2SecureServer } from 'node:http2'
 import type { Duplex } from 'node:stream'
 import { WebSocketServer, WebSocket } from 'ws'
+import type { Auth } from './auth.ts'
 
 type ViteHttpServer = HttpServer | Http2SecureServer
 
@@ -68,7 +69,7 @@ interface ClientMeta {
   role: 'host' | 'remote' | null
 }
 
-export function attachRemote(httpServer: ViteHttpServer): void {
+export function attachRemote(httpServer: ViteHttpServer, auth: Auth): void {
   const wss = new WebSocketServer({ noServer: true })
 
   // Ordered list of clients that have ever registered as a host, most-
@@ -195,8 +196,24 @@ export function attachRemote(httpServer: ViteHttpServer): void {
   httpServer.on('upgrade', (req: IncomingMessage, socket: Duplex, head: Buffer) => {
     // Only handle our path; let Vite's HMR upgrade other paths.
     if (!req.url || !req.url.startsWith('/remote')) return
-    wss.handleUpgrade(req, socket, head, (ws) => {
-      wss.emit('connection', ws, req)
-    })
+    // A WebSocket upgrade never passes through Connect middleware, so the
+    // password check on the HTTP router does not cover this path — it has to
+    // happen here. Without it, the transport commands (play, pause, seek,
+    // playQueue) stay open to anyone who can reach the port even after a
+    // password is set. Same three token sources as the API: same-origin sends
+    // the cookie on the handshake, cross-island appends `?k=`.
+    void auth
+      .authorize(req)
+      .then((ok) => {
+        if (!ok) {
+          socket.write('HTTP/1.1 401 Unauthorized\r\nConnection: close\r\n\r\n')
+          socket.destroy()
+          return
+        }
+        wss.handleUpgrade(req, socket, head, (ws) => {
+          wss.emit('connection', ws, req)
+        })
+      })
+      .catch(() => socket.destroy())
   })
 }

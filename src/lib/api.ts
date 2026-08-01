@@ -13,9 +13,13 @@ import type {
   SearchResults,
   Track,
 } from './types'
+import { authHeaders, withKey } from './auth'
 
 async function getJson<T>(conn: Connection, path: string): Promise<T> {
-  const res = await fetch(`${conn.serverUrl}${path}`)
+  const res = await fetch(`${conn.serverUrl}${path}`, {
+    credentials: 'include',
+    headers: authHeaders(conn.serverUrl),
+  })
   if (!res.ok) throw new Error(`Request failed (${res.status})`)
   return res.json() as Promise<T>
 }
@@ -29,7 +33,11 @@ async function send<T>(
 ): Promise<T> {
   const res = await fetch(`${conn.serverUrl}${path}`, {
     method,
-    headers: body ? { 'Content-Type': 'application/json' } : undefined,
+    credentials: 'include',
+    headers: {
+      ...(body ? { 'Content-Type': 'application/json' } : {}),
+      ...authHeaders(conn.serverUrl),
+    },
     body: body ? JSON.stringify(body) : undefined,
   })
   if (!res.ok) {
@@ -316,7 +324,10 @@ export async function getSongContext(
   conn: Connection,
   trackId: string,
 ): Promise<SongContext | null> {
-  const res = await fetch(`${conn.serverUrl}/song-context/${encodeURIComponent(trackId)}`)
+  const res = await fetch(`${conn.serverUrl}/song-context/${encodeURIComponent(trackId)}`, {
+    credentials: 'include',
+    headers: authHeaders(conn.serverUrl),
+  })
   if (res.status === 404) return null
   if (!res.ok) throw new Error(`Request failed (${res.status})`)
   return res.json() as Promise<SongContext>
@@ -413,7 +424,11 @@ async function uploadImage(
 ): Promise<void> {
   const res = await fetch(`${conn.serverUrl}${path}`, {
     method: 'POST',
-    headers: { 'Content-Type': file.type || 'application/octet-stream' },
+    credentials: 'include',
+    headers: {
+      'Content-Type': file.type || 'application/octet-stream',
+      ...authHeaders(conn.serverUrl),
+    },
     body: file,
   })
   if (!res.ok) {
@@ -672,7 +687,10 @@ export function albumImageUrl(
 ): string {
   // Include the tag so the URL changes when the art changes (e.g. a re-uploaded
   // playlist cover) — otherwise the long-cached old image sticks across reloads.
-  return `${conn.serverUrl}/art/${itemId}?size=${size}${tag ? `&t=${encodeURIComponent(tag)}` : ''}`
+  return withKey(
+    `${conn.serverUrl}/art/${itemId}?size=${size}${tag ? `&t=${encodeURIComponent(tag)}` : ''}`,
+    conn.serverUrl,
+  )
 }
 
 /**
@@ -750,15 +768,24 @@ function playbackCaps(): string {
 }
 
 export function audioStreamUrl(conn: Connection, trackId: string): string {
-  return `${conn.serverUrl}/stream/${trackId}?can=${encodeURIComponent(playbackCaps())}`
+  // `withKey` is a no-op same-origin (the cookie covers `<audio src>`); it only
+  // adds `?k=` when this device is streaming from another island.
+  return withKey(
+    `${conn.serverUrl}/stream/${trackId}?can=${encodeURIComponent(playbackCaps())}`,
+    conn.serverUrl,
+  )
 }
 
 // --- settings ---------------------------------------------------------------
 
 export interface AppSettings {
   musicDir: string
-  /** Last.fm API key for artist enrichment. Present once configured. */
-  lastfmApiKey?: string
+  /**
+   * Whether a Last.fm key is saved. The key itself never comes back over the
+   * wire — the server keeps it and uses it for enrichment. Writing a new one
+   * still works; you just can't read the old one out again.
+   */
+  hasLastfmKey?: boolean
 }
 
 export interface PathValidation {
@@ -811,11 +838,13 @@ export async function uploadMusicFile(
 ): Promise<UploadResult> {
   const res = await fetch(`${conn.serverUrl}/upload`, {
     method: 'POST',
+    credentials: 'include',
     headers: {
       'Content-Type': file.type || 'application/octet-stream',
       // HTTP headers are ASCII; encode so non-ASCII (curly quotes,
       // accents, etc.) survive the trip.
       'X-Tsm-Path': encodeURIComponent(relPath),
+      ...authHeaders(conn.serverUrl),
     },
     body: file,
   })

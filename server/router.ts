@@ -7,11 +7,12 @@ import { createReadStream, existsSync } from 'node:fs'
 import { mkdir, readdir, readFile, stat, unlink, writeFile } from 'node:fs/promises'
 import { spawn } from 'node:child_process'
 import type { IncomingMessage, ServerResponse } from 'node:http'
-import { basename, dirname, extname, join } from 'node:path'
+import { basename, dirname, extname, isAbsolute, join, relative } from 'node:path'
 import sharp from 'sharp'
 import type { Library } from './scanner.ts'
 import type { Playlists } from './playlists.ts'
 import type { SettingsStore } from './settings.ts'
+import { isLoopback, type Auth } from './auth.ts'
 import { editAlbum, renameArtist, applyAlbumTags, readFullTags } from './metadata.ts'
 import {
   getArtistRelated,
@@ -75,6 +76,36 @@ const RISKY_FORMAT: Record<string, string> = {
   '.wma': 'wma',
 }
 
+/**
+ * Where the in-app folder picker is allowed to look. Music lives under a home
+ * directory or a mounted volume; nothing else needs to be enumerable over the
+ * network, and `/etc` emphatically does not. `/run/media` is where udisks
+ * mounts removable drives on Fedora, `/Volumes` is the macOS equivalent.
+ */
+const BROWSABLE_ROOTS: string[] = [
+  process.env.HOME || '/home',
+  '/media',
+  '/run/media',
+  '/mnt',
+  '/Volumes',
+]
+
+const SHORTCUT_LABELS: Record<string, string> = {
+  [process.env.HOME || '/home']: 'Home',
+  '/media': 'Media',
+  '/run/media': 'Removable',
+  '/mnt': 'Mount',
+  '/Volumes': 'Volumes',
+}
+
+/** True if `path` is one of the browsable roots, or lives inside one. */
+function withinBrowsableRoot(path: string): boolean {
+  return BROWSABLE_ROOTS.some((root) => {
+    const rel = relative(root, path)
+    return rel === '' || (!rel.startsWith('..') && !isAbsolute(rel))
+  })
+}
+
 interface RouterDeps {
   library: Library
   playlists: Playlists
@@ -90,6 +121,8 @@ interface RouterDeps {
   onMusicDirChange: (newDir: string) => Promise<void>
   /** Portraits for artists that aren't in the library (Deezer-backed). */
   portraits: PortraitStore
+  /** Shared-password gate. Open until a password is set. */
+  auth: Auth
 }
 
 export interface Router {
@@ -390,7 +423,7 @@ export function createRouter(deps: RouterDeps): Router {
   let library = deps.library
   let playlists = deps.playlists
   let ready = deps.ready
-  const { artCacheDir, transcodeCacheDir, settings, onMusicDirChange, portraits } =
+  const { artCacheDir, transcodeCacheDir, settings, onMusicDirChange, portraits, auth } =
     deps
 
   /** Map track ids to their absolute file paths. */
@@ -485,18 +518,124 @@ export function createRouter(deps: RouterDeps): Router {
     const method = req.method ?? 'GET'
     const seg = (i: number) => decodeURIComponent(segs[i] ?? '')
 
-    // Permissive CORS so a phone served by one island can browse, fetch art
-    // from, stream from, and probe another island it's chosen to control.
-    // Safe for a LAN tool — the API is read-mostly and the box isn't public.
-    res.setHeader('Access-Control-Allow-Origin', '*')
+    // CORS: echo the calling origin instead of answering `*`. One island
+    // driving another is a real cross-origin case (see remote-target.ts), so
+    // this can't just be dropped — but `*` let any web page the household
+    // happened to visit read this library, and browsers refuse to send
+    // credentials to a wildcard origin at all, so a cookie session couldn't
+    // work under it either.
+    //
+    // Echoing any origin is only safe *because* the session cookie is
+    // SameSite=Lax: a hostile page can still make the request, but the browser
+    // won't attach the cookie, so it lands on the 401 below like any other
+    // anonymous caller.
+    const origin = req.headers.origin
+    if (origin) {
+      res.setHeader('Access-Control-Allow-Origin', origin)
+      res.setHeader('Vary', 'Origin')
+      res.setHeader('Access-Control-Allow-Credentials', 'true')
+    }
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PATCH, DELETE, PUT, OPTIONS')
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Allegory-Path')
+    res.setHeader(
+      'Access-Control-Allow-Headers',
+      'Content-Type, Authorization, X-Allegory-Path',
+    )
     if (method === 'OPTIONS') {
       res.writeHead(204).end()
       return true
     }
 
     try {
+      // --- auth ------------------------------------------------------------
+      // These run *before* the gate below, for the obvious reason. Everything
+      // else on this router requires a session once a password exists.
+      if (segs.length === 3 && segs[1] === 'auth' && segs[2] === 'status' && method === 'GET') {
+        sendJson(res, {
+          enabled: await auth.isEnabled(),
+          authenticated: await auth.authorize(req),
+          loopback: isLoopback(req),
+          lastChanged: await auth.lastChanged(),
+        })
+        return true
+      }
+
+      if (segs.length === 3 && segs[1] === 'auth' && segs[2] === 'login' && method === 'POST') {
+        const wait = auth.currentThrottle(req)
+        if (wait > 0) {
+          sendJson(res, { error: 'Too many attempts. Wait a moment and try again.' }, 429)
+          return true
+        }
+        const body = (await readBody(req)) as { password?: string }
+        if (!(await auth.verifyPassword(body.password ?? ''))) {
+          auth.noteFailure(req)
+          sendJson(res, { error: 'Wrong password.' }, 401)
+          return true
+        }
+        auth.clearFailures(req)
+        const token = await auth.issueToken()
+        res.setHeader('Set-Cookie', auth.cookieHeader(token))
+        // The token is returned as well as set: a device controlling *another*
+        // island can't rely on the cookie (SameSite blocks it cross-site), so
+        // it keeps the token and sends it as a header or `?k=` instead.
+        sendJson(res, { ok: true, token })
+        return true
+      }
+
+      if (segs.length === 3 && segs[1] === 'auth' && segs[2] === 'logout' && method === 'POST') {
+        res.setHeader('Set-Cookie', auth.clearCookieHeader())
+        sendJson(res, { ok: true })
+        return true
+      }
+
+      // Set or change the password. Once one exists, changing it takes either
+      // the current password or an already-authenticated session. Before one
+      // exists this is open — a first run has nothing to authenticate against,
+      // and the alternative (localhost only) would mean you couldn't set a
+      // password from the very phone or laptop you're trying to protect it
+      // from. Set one promptly; until you do, whoever gets there first wins.
+      if (segs.length === 3 && segs[1] === 'auth' && segs[2] === 'password' && method === 'POST') {
+        const body = (await readBody(req)) as { password?: string; current?: string }
+        const next = (body.password ?? '').trim()
+        if (await auth.isEnabled()) {
+          const ok =
+            (await auth.authorize(req)) ||
+            (await auth.verifyPassword(body.current ?? ''))
+          if (!ok) {
+            auth.noteFailure(req)
+            sendJson(res, { error: 'Current password required.' }, 401)
+            return true
+          }
+        }
+        if (!next) {
+          // Empty password means "turn it off" — allowed, but only by someone
+          // who just proved they're already in.
+          await auth.clearPassword()
+          res.setHeader('Set-Cookie', auth.clearCookieHeader())
+          sendJson(res, { ok: true, enabled: false })
+          return true
+        }
+        if (next.length < 8) {
+          sendJson(res, { error: 'Use at least 8 characters.' }, 400)
+          return true
+        }
+        await auth.setPassword(next)
+        // Changing the password rotated the signing secret, so this session's
+        // own cookie is now invalid too. Hand back a fresh one rather than
+        // bouncing the person who just set it.
+        const token = await auth.issueToken()
+        res.setHeader('Set-Cookie', auth.cookieHeader(token))
+        sendJson(res, { ok: true, enabled: true, token })
+        return true
+      }
+
+      // --- the gate --------------------------------------------------------
+      // Past this line, everything requires a session: browsing, streaming,
+      // art, the folder picker, tag writes, uploads and the updater.
+      if (!(await auth.authorize(req))) {
+        sendJson(res, { error: 'Password required.' }, 401)
+        return true
+      }
+
       // --- status (used by the rescan progress poll) ----------------------
       if (segs.length === 2 && segs[1] === 'status' && method === 'GET') {
         sendJson(res, library.status())
@@ -549,6 +688,16 @@ export function createRouter(deps: RouterDeps): Router {
           const { readdir, stat: statFs } = await import('node:fs/promises')
           const { dirname: dn, resolve: resolvePath } = await import('node:path')
           const path = resolvePath(requested)
+          // Defence in depth: even behind the password, this endpoint has no
+          // business walking the whole disk. It exists to find a music folder,
+          // and music lives in one of four places. Without this, a leaked
+          // password is the difference between "plays my records" and "reads
+          // my filesystem" — and `/etc` was enumerable from the LAN before the
+          // gate above existed at all.
+          if (!withinBrowsableRoot(path)) {
+            sendJson(res, { error: 'That folder is outside the browsable area.' }, 403)
+            return true
+          }
           const st = await statFs(path)
           if (!st.isDirectory()) {
             sendJson(res, { error: 'Not a directory.' }, 400)
@@ -559,13 +708,16 @@ export function createRouter(deps: RouterDeps): Router {
             .filter((e) => e.isDirectory() && (showHidden || !e.name.startsWith('.')))
             .map((e) => ({ name: e.name, path: `${path === '/' ? '' : path}/${e.name}` }))
             .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }))
-          const parent = path === '/' ? null : dn(path)
-          const shortcuts = [
-            { name: 'Home', path: process.env.HOME || '/' },
-            { name: 'Media', path: '/media' },
-            { name: 'Mount', path: '/mnt' },
-            { name: 'Root', path: '/' },
-          ]
+          // "Up" stops at a root rather than walking out of the allowed area,
+          // so the picker never offers a step it would then refuse to take.
+          const up = path === '/' ? null : dn(path)
+          const parent = up && withinBrowsableRoot(up) ? up : null
+          const shortcuts = BROWSABLE_ROOTS.filter((root) => existsSync(root)).map(
+            (root) => ({
+              name: SHORTCUT_LABELS[root] ?? basename(root) ?? root,
+              path: root,
+            }),
+          )
           sendJson(res, { path, parent, entries: dirs, shortcuts })
           return true
         } catch (err) {
@@ -579,7 +731,12 @@ export function createRouter(deps: RouterDeps): Router {
       // These deliberately run before `await ready` so a first-run UI can
       // configure the music dir even while no library exists yet.
       if (segs.length === 2 && segs[1] === 'settings' && method === 'GET') {
-        sendJson(res, await settings.load())
+        // The Last.fm key is deliberately NOT returned. Only the Settings
+        // field ever wanted it, and only to prefill itself — while any caller
+        // who reached this endpoint got a working credential handed to them.
+        // `hasLastfmKey` is enough for the UI to say "a key is saved".
+        const { musicDir, lastfmApiKey } = await settings.load()
+        sendJson(res, { musicDir, hasLastfmKey: !!lastfmApiKey })
         return true
       }
       if (segs.length === 2 && segs[1] === 'settings' && method === 'POST') {

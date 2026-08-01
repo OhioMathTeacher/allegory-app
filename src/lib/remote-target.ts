@@ -9,6 +9,7 @@
  * WebSocket (control) and the `/api` base (browse/art/stream), so you browse
  * and command the same island. Persisted in localStorage, per device.
  */
+import { authHeaders } from './auth'
 
 export interface RememberedServer {
   /** Normalized origin, e.g. `http://192.168.1.50:5173`. No trailing slash. */
@@ -93,8 +94,13 @@ export async function probeServer(origin: string, timeoutMs = 2500): Promise<boo
   try {
     const res = await fetch(`${origin}/api/status`, {
       signal: AbortSignal.timeout(timeoutMs),
+      credentials: 'include',
+      headers: authHeaders(`${origin}/api`),
     })
-    return res.ok
+    // A password-protected island answers 401 until this device signs in. It
+    // is still *there*, which is all this dot claims — showing it as offline
+    // would send you hunting a network problem you don't have.
+    return res.ok || res.status === 401
   } catch {
     return false
   }

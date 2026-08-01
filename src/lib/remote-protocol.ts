@@ -8,6 +8,7 @@
  */
 import type { Track } from './types'
 import type { RepeatMode } from './player-context'
+import { withKeyForSocket } from './auth'
 
 /** Snapshot of host playback state sent to remotes. */
 export interface RemoteState {
@@ -97,7 +98,10 @@ export function remoteUrl(targetOrigin?: string | null): string {
     try {
       const u = new URL(targetOrigin)
       const proto = u.protocol === 'https:' ? 'wss' : 'ws'
-      return `${proto}://${u.host}/remote`
+      // Cross-island: the handshake is a cross-site request, so the session
+      // cookie isn't sent and a WebSocket can't carry an Authorization header
+      // either. The token goes in the query string or the upgrade is refused.
+      return withKeyForSocket(`${proto}://${u.host}/remote`, u.origin)
     } catch {
       // fall through to self
     }

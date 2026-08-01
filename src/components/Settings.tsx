@@ -14,6 +14,7 @@ import {
 import { AISettingsPanel } from './AISettingsPanel'
 import { DiagnosticsPanel } from './DiagnosticsPanel'
 import { FolderPicker } from './FolderPicker'
+import { PasswordSettings } from './PasswordSettings'
 
 type Section = 'library' | 'ai' | 'diagnostics'
 
@@ -100,8 +101,11 @@ export function Settings({ firstRun, initialSection, onClose }: SettingsProps) {
   const [keyDraft, setKeyDraft] = useState<string | null>(null)
   const [savingKey, setSavingKey] = useState(false)
   const [keySaved, setKeySaved] = useState(false)
-  const lastfmKey = keyDraft ?? current?.lastfmApiKey ?? ''
-  const keyDirty = lastfmKey.trim() !== (current?.lastfmApiKey ?? '')
+  // The server no longer hands the saved key back (it was readable by anyone
+  // who could reach /api/settings), so the field can't prefill. It starts
+  // empty and reports whether a key is stored; typing replaces it.
+  const lastfmKey = keyDraft ?? ''
+  const keyDirty = keyDraft !== null && lastfmKey.trim() !== ''
 
   async function saveLastfmKey() {
     setSavingKey(true)
@@ -318,6 +322,8 @@ export function Settings({ firstRun, initialSection, onClose }: SettingsProps) {
             </div>
           )}
 
+          {!firstRun && <PasswordSettings />}
+
           {!firstRun && (
             <div className="mt-6 border-t border-line/60 pt-5">
               <label className="text-[11px] font-medium uppercase tracking-wide text-white/74">
@@ -344,7 +350,11 @@ export function Settings({ firstRun, initialSection, onClose }: SettingsProps) {
                     setKeyDraft(e.target.value)
                     setKeySaved(false)
                   }}
-                  placeholder="Paste your Last.fm API key"
+                  placeholder={
+                    current?.hasLastfmKey
+                      ? 'A key is saved — paste a new one to replace it'
+                      : 'Paste your Last.fm API key'
+                  }
                   autoCapitalize="off"
                   autoCorrect="off"
                   spellCheck={false}

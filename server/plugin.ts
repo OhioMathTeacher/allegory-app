@@ -28,6 +28,7 @@ import { createRouter } from './router.ts'
 import { createSettings } from './settings.ts'
 import { createPortraits } from './artist-portrait.ts'
 import { attachRemote } from './remote.ts'
+import { createAuth } from './auth.ts'
 
 export interface TsmOptions {
   /** Fallback music dir if no settings file exists yet (from ALLEGORY_MUSIC_DIR). */
@@ -40,6 +41,7 @@ export function allegoryLibrary(options: TsmOptions): Plugin {
   const transcodeCacheDir = join(cacheDir, 'transcode')
   const urlFile = join(cacheDir, 'url')
   const settings = createSettings(cacheDir, options.defaultMusicDir)
+  const auth = createAuth(cacheDir)
 
   // Publishes the live server URL to `.allegory-cache/url` so the launcher
   // script (and any other tool) can find it without scraping Vite's stdout.
@@ -101,6 +103,7 @@ export function allegoryLibrary(options: TsmOptions): Plugin {
     settings,
     onMusicDirChange,
     portraits: createPortraits(cacheDir),
+    auth,
   })
 
   // Bring the library online using the persisted music dir (or the env
@@ -139,12 +142,12 @@ export function allegoryLibrary(options: TsmOptions): Plugin {
     configureServer(server) {
       mount(server.middlewares)
       publishUrl(server.httpServer, !!server.config.server.https)
-      if (server.httpServer) attachRemote(server.httpServer)
+      if (server.httpServer) attachRemote(server.httpServer, auth)
     },
     configurePreviewServer(server) {
       mount(server.middlewares)
       publishUrl(server.httpServer, !!server.config.preview.https)
-      if (server.httpServer) attachRemote(server.httpServer)
+      if (server.httpServer) attachRemote(server.httpServer, auth)
     },
   }
 }
