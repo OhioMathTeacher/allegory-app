@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { motion } from 'motion/react'
 import { Disc3, Music2, Clock } from 'lucide-react'
@@ -5,13 +6,37 @@ import { AccordionSection } from './Accordion'
 import { useAccordion } from '../lib/use-accordion'
 import { useConnected } from '../lib/connection'
 import { usePlayer } from '../lib/player'
-import { getRecentlyAdded, getRecentlyPlayed, albumImageUrl } from '../lib/api'
+import {
+  getRecentlyAdded,
+  getRecentlyPlayed,
+  getListenStats,
+  albumImageUrl,
+  type ListenWindow,
+} from '../lib/api'
 import { Cover } from './Cover'
 import { TrackMenu } from './TrackMenu'
-import type { Album, Track } from '../lib/types'
+import type { Album, Artist, Track } from '../lib/types'
 
 interface RecentlyProps {
   onSelectAlbum: (album: Album) => void
+  onSelectArtist: (artist: Artist) => void
+}
+
+// Time windows for "What you've been playing". Lives here rather than on
+// Discover because it answers "what have I been doing", which is this page's
+// job; Discover is for what to do next.
+const WINDOWS: { id: ListenWindow; label: string }[] = [
+  { id: 'today', label: 'Today' },
+  { id: '7d', label: 'This week' },
+  { id: '30d', label: '30 days' },
+  { id: 'all', label: 'All time' },
+]
+
+const WINDOW_KEY = 'allegory.recently.window'
+
+function readWindow(): ListenWindow {
+  const raw = localStorage.getItem(WINDOW_KEY)
+  return WINDOWS.some((w) => w.id === raw) ? (raw as ListenWindow) : '30d'
 }
 
 // The accordion sections, in display order. "Added · Songs" is intentionally
@@ -30,8 +55,18 @@ const SONG_LIMIT = 20
 // Shared easing with the rest of the app, for the expand/collapse motion.
 const EASE = [0.22, 1, 0.36, 1] as const
 
-export function Recently({ onSelectAlbum }: RecentlyProps) {
+export function Recently({ onSelectAlbum, onSelectArtist }: RecentlyProps) {
   const conn = useConnected()
+  const [range, setRange] = useState<ListenWindow>(readWindow)
+
+  function pickWindow(w: ListenWindow) {
+    setRange(w)
+    try {
+      localStorage.setItem(WINDOW_KEY, w)
+    } catch {
+      // Non-fatal; the choice just won't survive a reload.
+    }
+  }
   // Each section opens and closes on its own, persisted per device, so the
   // page reopens exactly as it was left. Only the first section is open the
   // very first time.
@@ -49,6 +84,10 @@ export function Recently({ onSelectAlbum }: RecentlyProps) {
     queryKey: ['recent', 'played', conn.serverUrl, conn.userId],
     queryFn: () => getRecentlyPlayed(conn),
   })
+  const stats = useQuery({
+    queryKey: ['listen-stats', range, conn.serverUrl],
+    queryFn: () => getListenStats(conn, range),
+  })
 
   return (
     <div>
@@ -58,6 +97,92 @@ export function Recently({ onSelectAlbum }: RecentlyProps) {
       </header>
 
       <div className="flex flex-col gap-2 px-4 pb-8 sm:px-8">
+        {/* Always open, and first: this is the summary the page exists to
+            give. The accordions below are the detail behind it. */}
+        <section className="mb-3">
+          <div className="mb-3 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-2">
+            <h2 className="text-xl font-semibold tracking-tight">
+              What you've been playing
+            </h2>
+            {stats.data && (
+              <span className="text-xs text-white/45">
+                {stats.data.totalPlays} play
+                {stats.data.totalPlays === 1 ? '' : 's'}
+              </span>
+            )}
+          </div>
+
+          <div className="mb-3 flex flex-wrap gap-1.5">
+            {WINDOWS.map((w) => (
+              <button
+                key={w.id}
+                type="button"
+                onClick={() => pickWindow(w.id)}
+                aria-pressed={range === w.id}
+                className={`rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors ${
+                  range === w.id
+                    ? 'bg-[color:var(--accent-soft)] text-[color:var(--accent)]'
+                    : 'text-white/70 hover:bg-white/10 hover:text-white'
+                }`}
+              >
+                {w.label}
+              </button>
+            ))}
+          </div>
+
+          {stats.isLoading ? (
+            <div className="flex flex-col gap-2">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <div key={i} className="h-9 animate-pulse rounded-lg bg-white/5" />
+              ))}
+            </div>
+          ) : !stats.data || stats.data.totalPlays === 0 ? (
+            <div className="rounded-xl border border-line bg-surface/40 px-6 py-6 text-center text-sm text-white/50">
+              Nothing logged in this window yet. Play something and it'll show up
+              here.
+            </div>
+          ) : (
+            <div className="flex flex-col gap-1">
+              {stats.data.topArtists.slice(0, 8).map((a) => {
+                const max = stats.data.topArtists[0]?.plays ?? 1
+                const row = (
+                  <>
+                    <div className="min-w-0 flex-1 truncate text-base text-white/85">
+                      {a.item.name}
+                    </div>
+                    <PlayBar value={a.plays} max={max} />
+                    <div className="w-10 shrink-0 text-right text-sm tabular-nums text-white/45">
+                      {a.plays}
+                    </div>
+                  </>
+                )
+                // The log stores the artist id as it was at the time, so an
+                // entry can outlive the artist. Only ones that still resolve
+                // become links.
+                return a.item.artistId ? (
+                  <button
+                    key={a.item.name}
+                    type="button"
+                    onClick={() =>
+                      onSelectArtist({ id: a.item.artistId!, name: a.item.name })
+                    }
+                    className="flex items-center gap-3 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-white/5"
+                  >
+                    {row}
+                  </button>
+                ) : (
+                  <div
+                    key={a.item.name}
+                    className="flex items-center gap-3 rounded-lg px-2 py-1.5"
+                  >
+                    {row}
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </section>
+
         <AccordionSection
           title="Played · Songs"
           icon={<Music2 className="h-6 w-6" />}
@@ -261,6 +386,19 @@ function SongSkeleton() {
           <div className="h-3.5 w-2/5 animate-pulse rounded bg-white/14" />
         </div>
       ))}
+    </div>
+  )
+}
+
+/** A thin proportional bar — enough to see the shape of a week at a glance. */
+function PlayBar({ value, max }: { value: number; max: number }) {
+  const pct = max > 0 ? Math.max(4, Math.round((value / max) * 100)) : 0
+  return (
+    <div className="hidden h-1.5 w-32 overflow-hidden rounded-full bg-white/5 sm:block">
+      <div
+        className="h-full rounded-full"
+        style={{ width: `${pct}%`, background: 'var(--accent)' }}
+      />
     </div>
   )
 }

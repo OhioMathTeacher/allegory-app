@@ -16,7 +16,6 @@ import {
   getMixes,
   getRecommendations,
   getMissingAlbums,
-  getListenStats,
   albumImageUrl,
   spotifySearchUrl,
   youtubeSearchUrl,
@@ -88,10 +87,6 @@ export function Discover({ onSelectArtist }: DiscoverProps) {
     }
   }
 
-  const stats = useQuery({
-    queryKey: ['listen-stats', range, conn.serverUrl],
-    queryFn: () => getListenStats(conn, range),
-  })
   const recs = useQuery({
     queryKey: ['discover-recs', range, conn.serverUrl],
     queryFn: () => getRecommendations(conn, range),
@@ -134,64 +129,6 @@ export function Discover({ onSelectArtist }: DiscoverProps) {
       </header>
 
       <div className="flex flex-col gap-10 px-4 pb-10 sm:px-8">
-        {/* --- what you've been playing --- */}
-        <Section
-          title="What you've been playing"
-          note={
-            stats.data
-              ? `${stats.data.totalPlays} play${stats.data.totalPlays === 1 ? '' : 's'}`
-              : undefined
-          }
-        >
-          {stats.isLoading ? (
-            <RowSkeleton />
-          ) : !stats.data || stats.data.totalPlays === 0 ? (
-            <Empty text="Nothing logged in this window yet. Play something and it'll show up here." />
-          ) : (
-            <div className="flex flex-col gap-1">
-              {stats.data.topArtists.slice(0, 8).map((a) => {
-                const max = stats.data.topArtists[0]?.plays ?? 1
-                const row = (
-                  <>
-                    <div className="min-w-0 flex-1 truncate text-base text-white/85">
-                      {a.item.name}
-                    </div>
-                    <PlayBar value={a.plays} max={max} />
-                    <div className="w-10 shrink-0 text-right text-sm tabular-nums text-white/45">
-                      {a.plays}
-                    </div>
-                  </>
-                )
-                // The log stores the artist id as it was at the time, so an
-                // entry can outlive the artist (a rescan, a moved folder).
-                // Only the ones that still resolve become links.
-                return a.item.artistId ? (
-                  <button
-                    key={a.item.name}
-                    type="button"
-                    onClick={() =>
-                      onSelectArtist({
-                        id: a.item.artistId!,
-                        name: a.item.name,
-                      })
-                    }
-                    className="flex items-center gap-3 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-white/5"
-                  >
-                    {row}
-                  </button>
-                ) : (
-                  <div
-                    key={a.item.name}
-                    className="flex items-center gap-3 rounded-lg px-2 py-1.5"
-                  >
-                    {row}
-                  </div>
-                )
-              })}
-            </div>
-          )}
-        </Section>
-
         {/* --- mixes --- */}
         <Section title="Mixes" note="Made fresh each day">
           {mixes.isLoading ? (
@@ -357,19 +294,6 @@ function Section({ title, note, children }: SectionProps) {
       </div>
       {children}
     </section>
-  )
-}
-
-/** A thin proportional bar — enough to see the shape of a week at a glance. */
-function PlayBar({ value, max }: { value: number; max: number }) {
-  const pct = max > 0 ? Math.max(4, Math.round((value / max) * 100)) : 0
-  return (
-    <div className="hidden h-1.5 w-32 overflow-hidden rounded-full bg-white/5 sm:block">
-      <div
-        className="h-full rounded-full"
-        style={{ width: `${pct}%`, background: 'var(--accent)' }}
-      />
-    </div>
   )
 }
 

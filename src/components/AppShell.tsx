@@ -338,6 +338,7 @@ export function AppShell() {
               {view.type === 'recent' && (
                 <Recently
                   onSelectAlbum={(album) => setView({ type: 'album', album })}
+                  onSelectArtist={(artist) => setView({ type: 'artist', artist })}
                 />
               )}
               {view.type === 'discover' && (
