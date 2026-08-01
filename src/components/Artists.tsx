@@ -9,8 +9,6 @@ import { shuffle } from '../lib/shuffle'
 import { useLongPress } from '../lib/use-long-press'
 import { Cover } from './Cover'
 import { ArtistEditor } from './ArtistEditor'
-import { AccordionSection } from './Accordion'
-import { useAccordion } from '../lib/use-accordion'
 import { LETTERS, firstLetter } from '../lib/library-index'
 import type { Artist } from '../lib/types'
 
@@ -40,12 +38,43 @@ function groupByLetter(artists: Artist[]): [string, Artist[]][] {
   return SECTIONS.filter((s) => groups.has(s)).map((s) => [s, groups.get(s)!])
 }
 
+const SELECTED_KEY = 'allegory.artists.letter'
+
+/**
+ * Per-letter styling so the keypad reads as a set of found objects rather than
+ * 27 identical slabs — a ransom-note look. Deterministic from the character, so
+ * a given letter always wears the same face and the row doesn't reshuffle on
+ * every render. The tilt straightens out when a key is chosen, which is what
+ * makes the selection feel like it settled into place.
+ */
+function keyFace(letter: string): { rotate: number; cls: string } {
+  const n = letter.charCodeAt(0)
+  const rotate = [-6, 3, -2, 5, -4, 1, 6, -3][n % 8]
+  const weight = ['font-bold', 'font-black', 'font-semibold', 'font-black'][n % 4]
+  const size = ['text-lg', 'text-xl', 'text-2xl', 'text-lg', 'text-xl'][n % 5]
+  const serif = n % 3 === 0 ? 'font-serif' : ''
+  const caseHint = n % 7 === 0 ? 'lowercase' : ''
+  return { rotate, cls: `${weight} ${size} ${serif} ${caseHint}` }
+}
+
 export function Artists({ onSelectArtist }: ArtistsProps) {
   const conn = useConnected()
-  // Collapsed by default: 500 artists is a lot of scrolling, and a screen of
-  // letter headers is the fastest way to reach any of them. Each letter
-  // remembers its own state, so the ones you live in stay open.
-  const { isOpen, toggle } = useAccordion('allegory.artists.open', SECTIONS, [])
+  // One letter at a time. A keypad is a filter, not an accordion: the whole
+  // alphabet stays on screen (one line on a desktop, a few rows on a phone)
+  // and only the chosen letter's artists are listed, so there is never a long
+  // scroll to get anywhere.
+  const [selected, setSelected] = useState<string>(
+    () => localStorage.getItem(SELECTED_KEY) ?? 'A',
+  )
+
+  function pick(letter: string) {
+    setSelected(letter)
+    try {
+      localStorage.setItem(SELECTED_KEY, letter)
+    } catch {
+      // Non-fatal; the choice just won't survive a reload.
+    }
+  }
 
   const {
     data: artists,
@@ -58,7 +87,7 @@ export function Artists({ onSelectArtist }: ArtistsProps) {
 
   return (
     <div>
-      <header className="sticky top-0 z-10 bg-bg/95 px-8 pt-8 pb-4 backdrop-blur">
+      <header className="sticky top-0 z-10 bg-bg/95 px-4 pt-6 pb-4 backdrop-blur sm:px-8 sm:pt-8">
         <h1 className="text-3xl font-semibold tracking-tight">Artists</h1>
         <p className="mt-1 text-sm text-white/85">
           {artists
@@ -67,7 +96,7 @@ export function Artists({ onSelectArtist }: ArtistsProps) {
         </p>
       </header>
 
-      <div className="px-8 pb-8">
+      <div className="px-4 pb-8 sm:px-8">
         {isLoading && <SkeletonList />}
 
         {isError && (
@@ -83,30 +112,62 @@ export function Artists({ onSelectArtist }: ArtistsProps) {
           </div>
         )}
 
-        {artists && artists.length > 0 && (
-          <div className="flex flex-col gap-2">
-            {groupByLetter(artists).map(([letter, group]) => (
-              <AccordionSection
-                key={letter}
-                title={letter}
-                note={`${group.length}`}
-                open={isOpen(letter)}
-                onToggle={() => toggle(letter)}
-              >
-                <div className="flex flex-col">
-                  {group.map((artist, i) => (
-                    <ArtistRow
-                      key={artist.id}
-                      artist={artist}
-                      index={i}
-                      onSelect={onSelectArtist}
-                    />
-                  ))}
-                </div>
-              </AccordionSection>
-            ))}
-          </div>
-        )}
+        {artists && artists.length > 0 && (() => {
+          const groups = groupByLetter(artists)
+          // Fall back to the first letter that exists, so a stored choice for a
+          // letter you no longer own anything under can't leave the page blank.
+          const active = groups.find(([l]) => l === selected) ?? groups[0]
+          return (
+            <>
+              <div className="mb-5 flex flex-wrap gap-1 sm:gap-1.5">
+                {groups.map(([letter, group]) => {
+                  const on = letter === active[0]
+                  const face = keyFace(letter)
+                  return (
+                    <button
+                      key={letter}
+                      type="button"
+                      onClick={() => pick(letter)}
+                      aria-pressed={on}
+                      title={`${group.length} artist${group.length === 1 ? '' : 's'}`}
+                      style={{
+                        transform: `rotate(${on ? 0 : face.rotate}deg)`,
+                        ...(on ? { background: 'var(--accent)' } : {}),
+                      }}
+                      className={`flex h-9 w-9 items-center justify-center rounded-lg leading-none transition-all duration-200 sm:h-11 sm:w-11 ${face.cls} ${
+                        on
+                          ? 'text-black shadow-lg'
+                          : 'border border-line bg-elevated text-white/80 hover:-translate-y-0.5 hover:bg-white/10 hover:text-white'
+                      }`}
+                    >
+                      {letter}
+                    </button>
+                  )
+                })}
+              </div>
+
+              <div className="mb-2 flex items-baseline gap-2">
+                <span className="text-2xl font-bold tracking-tight text-white">
+                  {active[0]}
+                </span>
+                <span className="text-sm text-white/50">
+                  {active[1].length} artist{active[1].length === 1 ? '' : 's'}
+                </span>
+              </div>
+
+              <div className="flex flex-col">
+                {active[1].map((artist, i) => (
+                  <ArtistRow
+                    key={artist.id}
+                    artist={artist}
+                    index={i}
+                    onSelect={onSelectArtist}
+                  />
+                ))}
+              </div>
+            </>
+          )
+        })()}
       </div>
     </div>
   )
