@@ -19,6 +19,7 @@ import { Search } from './Search'
 import { Artists } from './Artists'
 import { ArtistView } from './ArtistView'
 import { Recently } from './Recently'
+import { Discover } from './Discover'
 import { Playlists } from './Playlists'
 import { PlaylistView } from './PlaylistView'
 import { NotesView } from './NotesView'
@@ -26,6 +27,7 @@ import { DownloadsView } from './DownloadsView'
 import { DownloadProgressBar } from './DownloadProgressBar'
 import { UpdatePanel } from './UpdatePanel'
 import { PlayerBar } from './PlayerBar'
+import { NowPlaying } from './NowPlaying'
 import { usePlayer } from '../lib/player'
 import { Settings } from './Settings'
 import { useFolderDrop, DragOverlay, UploadToast } from './FolderUpload'
@@ -39,6 +41,7 @@ type View =
   | { type: 'artists' }
   | { type: 'artist'; artist: Artist }
   | { type: 'recent' }
+  | { type: 'discover' }
   | { type: 'playlists' }
   | { type: 'playlist'; playlist: Playlist }
   | { type: 'notes' }
@@ -50,7 +53,7 @@ type View =
 // data-less views are addressable; anything else falls back to the default.
 function initialView(): View {
   const v = new URLSearchParams(window.location.search).get('view') ?? ''
-  return ['artists', 'playlists', 'recent', 'search', 'downloads', 'socrates'].includes(v)
+  return ['artists', 'playlists', 'recent', 'discover', 'search', 'downloads', 'socrates'].includes(v)
     ? ({ type: v } as View)
     : { type: 'artists' }
 }
@@ -67,6 +70,10 @@ export function AppShell() {
   const { mode: playerMode } = useRemoteMode()
   const { pauseForSearch, resumeFromSearch } = usePlayer()
   const [remoteSheetOpen, setRemoteSheetOpen] = useState(false)
+  // Now Playing is an expansion of the player bar, not a nav destination — it's
+  // about what's happening rather than a part of the library to browse, and the
+  // bar is on screen everywhere including Socrates.
+  const [nowPlayingOpen, setNowPlayingOpen] = useState(false)
   const drop = useFolderDrop()
 
   // Player bar can be hidden for more chat room — only honored on the Socrates
@@ -115,34 +122,24 @@ export function AppShell() {
     : view.type === 'playlist' ? view.playlist.id
     : view.type
 
-  // --- Three-window navigation -------------------------------------------
-  // The corner buttons cycle through three "windows":
-  //   0  Artists          (and the artist / album drill-down beneath it)
-  //   1  Recently         (recently added & played)
-  //   2  Playlists
-  //   3  Downloads        (the offline library)
+  // --- Window navigation ---------------------------------------------------
+  // The corner buttons cycle through the top-level "windows" in this order.
+  // Kept as one list so adding a window can't get out of step with the tab
+  // row, the swipe handler and the wrap-around arithmetic.
+  const WINDOWS = ['artists', 'recent', 'discover', 'playlists', 'downloads'] as const
+
   function currentWindow(): number {
-    if (section === 'downloads') return 3
-    if (section === 'playlists') return 2
-    if (section === 'recent') return 1
-    return 0
+    const idx = (WINDOWS as readonly string[]).indexOf(section)
+    return idx === -1 ? 0 : idx
   }
 
   function goToWindow(idx: number) {
-    if (idx === 3) {
-      setView({ type: 'downloads' })
-    } else if (idx === 2) {
-      setView({ type: 'playlists' })
-    } else if (idx === 1) {
-      setView({ type: 'recent' })
-    } else {
-      setView({ type: 'artists' })
-    }
+    const key = WINDOWS[((idx % WINDOWS.length) + WINDOWS.length) % WINDOWS.length]
+    setView({ type: key } as View)
   }
 
   function cycleWindow(dir: -1 | 1) {
-    const next = (currentWindow() + dir + 4) % 4
-    goToWindow(next)
+    goToWindow(currentWindow() + dir)
   }
 
   // --- Horizontal swipe navigation (phone) --------------------------------
@@ -269,8 +266,9 @@ export function AppShell() {
               [
                 ['artists', 'Artists', 0],
                 ['recent', 'Recently', 1],
-                ['playlists', 'Playlists', 2],
-                ['downloads', 'Downloads', 3],
+                ['discover', 'Discover', 2],
+                ['playlists', 'Playlists', 3],
+                ['downloads', 'Downloads', 4],
               ] as const
             ).map(([key, label, idx]) => (
                 <button
@@ -291,6 +289,10 @@ export function AppShell() {
           </div>
         )}
 
+        {/* Content area. Now Playing overlays THIS, not the whole column, so
+            the transport in the player bar stays usable while you work through
+            the queue. */}
+        <div className="relative flex min-h-0 flex-1 flex-col">
         {view.type === 'socrates' ? (
           <SocratesPanel
             onPickProvider={() => openSettings('ai')}
@@ -338,6 +340,11 @@ export function AppShell() {
                   onSelectAlbum={(album) => setView({ type: 'album', album })}
                 />
               )}
+              {view.type === 'discover' && (
+                <Discover
+                  onSelectArtist={(artist) => setView({ type: 'artist', artist })}
+                />
+              )}
               {view.type === 'playlists' && (
                 <Playlists
                   onSelectPlaylist={(playlist) =>
@@ -365,6 +372,14 @@ export function AppShell() {
         </main>
         )}
 
+        <NowPlaying
+          open={nowPlayingOpen}
+          onClose={() => setNowPlayingOpen(false)}
+          onOpenAlbum={(album) => setView({ type: 'album', album })}
+          onOpenArtist={(artist) => setView({ type: 'artist', artist })}
+        />
+        </div>
+
         {/* Player bar — hidden only on the Socrates page when the user has
             collapsed it for more chat room (the preference persists). The
             breathing room above it keeps content off it on short phones. */}
@@ -376,6 +391,7 @@ export function AppShell() {
             <PlayerBar
               onOpenAlbum={(album) => setView({ type: 'album', album })}
               onOpenArtist={(artist) => setView({ type: 'artist', artist })}
+              onExpand={() => setNowPlayingOpen(true)}
             />
           </>
         )}

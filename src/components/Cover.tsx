@@ -5,10 +5,13 @@ interface CoverProps {
   src: string
   alt: string
   className?: string
+  /** Shown instead of the default note icon when the image can't be loaded —
+   *  artist portraits use a person, for instance. */
+  fallback?: React.ReactNode
 }
 
 /** Album art with a graceful icon fallback when the image is missing. */
-export function Cover({ src, alt, className }: CoverProps) {
+export function Cover({ src, alt, className, fallback }: CoverProps) {
   const [failedSrc, setFailedSrc] = useState<string | null>(null)
 
   if (failedSrc === src) {
@@ -16,7 +19,7 @@ export function Cover({ src, alt, className }: CoverProps) {
       <div
         className={`flex items-center justify-center bg-elevated ${className ?? ''}`}
       >
-        <Music2 className="h-1/3 w-1/3 text-white/15" />
+        {fallback ?? <Music2 className="h-1/3 w-1/3 text-white/15" />}
       </div>
     )
   }

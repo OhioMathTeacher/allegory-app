@@ -16,6 +16,7 @@
 import { readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { Library } from './scanner.ts'
+import { createArtistIndex } from './artist-match.ts'
 
 const SIDECAR = '.allegory-artist.json'
 const SIDECAR_VERSION = 1
@@ -33,8 +34,15 @@ interface Sidecar {
   version: number
   fetchedAt: number
   source: string
+  /** Genres as Last.fm reported them — replaced wholesale on every refetch. */
   genres: string[]
   related: RawRelated[]
+  /** Tags the user added by hand. Kept apart from `genres` precisely so a
+   *  refetch can overwrite Last.fm's list without touching their edits. */
+  userTags?: string[]
+  /** Last.fm genres the user removed. Remembered rather than deleted, so a
+   *  refetch doesn't quietly bring back a tag they'd already dismissed. */
+  hiddenTags?: string[]
 }
 
 export interface RelatedArtist {
@@ -42,11 +50,17 @@ export interface RelatedArtist {
   mbid?: string
   /** Set when this artist exists in the local library — the UI links to it. */
   artistId?: string
+  /** The library's own spelling of the match. The name match is fuzzy, so this
+   *  can differ from `name` ("Beatles" vs "The Beatles"); the UI shows this one
+   *  for matches so a tapped card and its destination page agree. */
+  libraryName?: string
   /** Truthy when the matched library artist has a cover image to show. */
   imageTag?: string
 }
 
 export interface ArtistRelatedDTO {
+  /** What to display: Last.fm's genres minus the user's removals, plus their
+   *  own additions. The UI edits this list directly. */
   genres: string[]
   related: RelatedArtist[]
   /** False when no Last.fm key is configured, so the UI can prompt for one. */
@@ -68,18 +82,6 @@ interface LfmSimilar {
 }
 interface LfmTopTags {
   toptags?: { tag?: LfmTag[] }
-}
-
-/** Fold a display name to a comparison key: drop diacritics, a leading "the",
- *  and punctuation, so "The Beatles" and "Beatles" (and folder variants) meet. */
-function norm(name: string): string {
-  return name
-    .normalize('NFKD')
-    .replace(/[̀-ͯ]/g, '')
-    .replace(/^the\s+/i, '')
-    .replace(/[^\p{L}\p{N}]+/gu, ' ')
-    .trim()
-    .toLowerCase()
 }
 
 async function callLastfm<T>(
@@ -130,6 +132,30 @@ async function fetchEnrichment(
   return { genres, related }
 }
 
+/**
+ * The tag list to display: Last.fm's genres with the user's removals taken out,
+ * then their own additions appended. Case-insensitive throughout so "Doom" and
+ * "doom" can't both appear, but the original casing is what gets shown.
+ */
+function effectiveGenres(data: Sidecar | null): string[] {
+  const hidden = new Set((data?.hiddenTags ?? []).map((t) => t.toLowerCase()))
+  const out: string[] = []
+  const seen = new Set<string>()
+  for (const g of data?.genres ?? []) {
+    const k = g.toLowerCase()
+    if (hidden.has(k) || seen.has(k)) continue
+    seen.add(k)
+    out.push(g)
+  }
+  for (const t of data?.userTags ?? []) {
+    const k = t.toLowerCase()
+    if (seen.has(k)) continue
+    seen.add(k)
+    out.push(t)
+  }
+  return out
+}
+
 async function readSidecar(path: string): Promise<Sidecar | null> {
   try {
     const parsed = JSON.parse(await readFile(path, 'utf8')) as Sidecar
@@ -170,6 +196,10 @@ export async function getArtistRelated(
         source: 'lastfm',
         genres: fresh.genres,
         related: fresh.related,
+        // Hand edits outlive the refetch — that's the whole point of keeping
+        // them in their own fields.
+        userTags: data?.userTags,
+        hiddenTags: data?.hiddenTags,
       }
       try {
         await writeFile(sidecarPath, JSON.stringify(data, null, 2) + '\n', 'utf8')
@@ -180,25 +210,83 @@ export async function getArtistRelated(
   }
 
   // Resolve names against the current library so matches become tappable links.
-  const byName = new Map<string, { id: string; imageTag?: string }>()
-  for (const a of library.artists()) {
-    byName.set(norm(a.name), { id: a.id, imageTag: a.imageTag })
-  }
+  // Uses the shared three-tier matcher, so a "Dio, Ronnie James" folder is
+  // still found when Last.fm calls it "Dio".
+  const index = createArtistIndex(library.artists())
 
   const related: RelatedArtist[] = (data?.related ?? []).map((r) => {
-    const hit = byName.get(norm(r.name))
+    const hit = index.find(r.name)
     return {
       name: r.name,
       mbid: r.mbid,
       artistId: hit?.id,
+      libraryName: hit?.name,
       imageTag: hit?.imageTag,
     }
   })
 
   return {
-    genres: data?.genres ?? [],
+    genres: effectiveGenres(data),
     related,
     configured: !!apiKey,
     fetchedAt: data?.fetchedAt ?? null,
   }
+}
+
+/**
+ * Replace an artist's displayed tags with exactly `tags`.
+ *
+ * The caller sends the whole list it wants rather than add/remove deltas, which
+ * keeps the operation idempotent and lets us derive both halves of the stored
+ * state: anything Last.fm gave us that isn't in the list becomes a removal,
+ * anything in the list that Last.fm didn't give us becomes an addition. Works
+ * with no sidecar and no API key — a purely hand-tagged artist is fine.
+ *
+ * Returns the tags as stored, or null for an unknown artist id.
+ */
+export async function setArtistTags(
+  library: Library,
+  artistId: string,
+  tags: string[],
+): Promise<string[] | null> {
+  const artist = library.artist(artistId)
+  if (!artist) return null
+
+  // Trim, drop blanks, and collapse case-duplicates while keeping first-seen
+  // casing and the caller's ordering.
+  const wanted: string[] = []
+  const wantedKeys = new Set<string>()
+  for (const raw of tags) {
+    const t = raw.trim()
+    const k = t.toLowerCase()
+    if (!t || wantedKeys.has(k)) continue
+    wantedKeys.add(k)
+    wanted.push(t)
+  }
+
+  const sidecarPath = join(artist.dir, SIDECAR)
+  const existing = await readSidecar(sidecarPath)
+  const fromLastfm = existing?.genres ?? []
+  const lastfmKeys = new Set(fromLastfm.map((g) => g.toLowerCase()))
+
+  const next: Sidecar = {
+    version: SIDECAR_VERSION,
+    // No sidecar yet means nothing has ever been fetched; leaving fetchedAt at
+    // 0 keeps it "stale" so enrichment still runs once a key is configured.
+    fetchedAt: existing?.fetchedAt ?? 0,
+    source: existing?.source ?? 'user',
+    genres: fromLastfm,
+    related: existing?.related ?? [],
+    userTags: wanted.filter((t) => !lastfmKeys.has(t.toLowerCase())),
+    hiddenTags: fromLastfm.filter((g) => !wantedKeys.has(g.toLowerCase())),
+  }
+
+  try {
+    await writeFile(sidecarPath, JSON.stringify(next, null, 2) + '\n', 'utf8')
+  } catch {
+    // Read-only media — report what we would have stored so the UI doesn't
+    // claim a success it can't back up on the next read.
+    return effectiveGenres(existing)
+  }
+  return effectiveGenres(next)
 }
