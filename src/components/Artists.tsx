@@ -9,14 +9,43 @@ import { shuffle } from '../lib/shuffle'
 import { useLongPress } from '../lib/use-long-press'
 import { Cover } from './Cover'
 import { ArtistEditor } from './ArtistEditor'
+import { AccordionSection } from './Accordion'
+import { useAccordion } from '../lib/use-accordion'
+import { LETTERS, firstLetter } from '../lib/library-index'
 import type { Artist } from '../lib/types'
 
 interface ArtistsProps {
   onSelectArtist: (artist: Artist) => void
 }
 
+// Every possible section, in display order — the alphabet plus one bucket for
+// names starting with a digit or symbol. This is the full set the persistence
+// hook tracks; which of them actually RENDER is decided from the data, so a
+// letter you own nothing under never appears as an empty header.
+const SECTIONS = [...LETTERS, '#']
+
+/**
+ * Bucket artists by first letter, dropping empty buckets. Returns entries in
+ * alphabetical order with "#" last, since a symbol-led name reads as an
+ * afterthought rather than something to lead with.
+ */
+function groupByLetter(artists: Artist[]): [string, Artist[]][] {
+  const groups = new Map<string, Artist[]>()
+  for (const a of artists) {
+    const key = firstLetter(a.name)
+    const list = groups.get(key)
+    if (list) list.push(a)
+    else groups.set(key, [a])
+  }
+  return SECTIONS.filter((s) => groups.has(s)).map((s) => [s, groups.get(s)!])
+}
+
 export function Artists({ onSelectArtist }: ArtistsProps) {
   const conn = useConnected()
+  // Collapsed by default: 500 artists is a lot of scrolling, and a screen of
+  // letter headers is the fastest way to reach any of them. Each letter
+  // remembers its own state, so the ones you live in stay open.
+  const { isOpen, toggle } = useAccordion('allegory.artists.open', SECTIONS, [])
 
   const {
     data: artists,
@@ -55,14 +84,26 @@ export function Artists({ onSelectArtist }: ArtistsProps) {
         )}
 
         {artists && artists.length > 0 && (
-          <div className="flex flex-col">
-            {artists.map((artist, i) => (
-              <ArtistRow
-                key={artist.id}
-                artist={artist}
-                index={i}
-                onSelect={onSelectArtist}
-              />
+          <div className="flex flex-col gap-2">
+            {groupByLetter(artists).map(([letter, group]) => (
+              <AccordionSection
+                key={letter}
+                title={letter}
+                note={`${group.length}`}
+                open={isOpen(letter)}
+                onToggle={() => toggle(letter)}
+              >
+                <div className="flex flex-col">
+                  {group.map((artist, i) => (
+                    <ArtistRow
+                      key={artist.id}
+                      artist={artist}
+                      index={i}
+                      onSelect={onSelectArtist}
+                    />
+                  ))}
+                </div>
+              </AccordionSection>
             ))}
           </div>
         )}
