@@ -54,6 +54,20 @@ open_browser() {
   fi
 }
 
+# The everyday setup is the systemd user service (allegory.service), which
+# serves the built app on 4173 from this repo and starts at login. If it's up,
+# that IS the app — just open it. Checked first because it outlives any dev
+# server this script might have left behind, and because starting a second
+# server when one is already running is how you end up looking at the wrong one.
+if systemctl --user is-active --quiet allegory.service 2>/dev/null; then
+  for url in "http://localhost:4173/" "https://localhost:4173/"; do
+    if curl -ks --max-time 2 "$url" >/dev/null; then
+      open_browser "$url"
+      exit 0
+    fi
+  done
+fi
+
 # If a previous launch left a URL file behind, reuse it when the server
 # is still responsive — otherwise treat it as stale and start fresh.
 if [ -f "$URL_FILE" ]; then
@@ -65,15 +79,43 @@ if [ -f "$URL_FILE" ]; then
   rm -f "$URL_FILE"
 fi
 
+# Is the server already on the pinned port OURS? More than one Allegory
+# checkout can exist on a machine, and vite.config.ts pins 5173 with
+# strictPort, so whoever starts first owns it. Attaching blindly would silently
+# open a different checkout's app — which is exactly what happened when this
+# repo became the canonical one. Compare the listener's working directory to
+# this repo before reusing it.
+port_is_ours() {
+  local pids
+  pids="$(ss -ltnpH "sport = :5173" 2>/dev/null |
+    grep -o 'pid=[0-9]*' | cut -d= -f2 | sort -u)"
+  [ -n "$pids" ] || return 1
+  local pid
+  for pid in $pids; do
+    if [ "$(readlink -f "/proc/$pid/cwd" 2>/dev/null)" = "$REPO" ]; then
+      return 0
+    fi
+  done
+  return 1
+}
+
 # No URL file (or stale), but the systemd allegory.service may already be
-# serving on the pinned port. vite.config.ts uses strictPort:true at 5173,
-# so probe there directly before assuming we need to start a new server.
-for url in "http://localhost:5173/" "https://localhost:5173/"; do
-  if curl -ks --max-time 2 "$url" >/dev/null; then
-    open_browser "$url"
-    exit 0
-  fi
-done
+# serving on the pinned port. Probe there before starting a new server — but
+# only reuse it when it's this checkout doing the serving.
+if port_is_ours; then
+  for url in "http://localhost:5173/" "https://localhost:5173/"; do
+    if curl -ks --max-time 2 "$url" >/dev/null; then
+      open_browser "$url"
+      exit 0
+    fi
+  done
+fi
+
+# Port taken by a different checkout: say so plainly rather than starting a
+# server that will fail on strictPort, or opening the wrong app.
+if ! port_is_ours && ss -ltnH "sport = :5173" 2>/dev/null | grep -q .; then
+  die "Port 5173 is being used by a different Allegory checkout.\n\nQuit that one first (its bin/allegory-quit), then launch again.\n\nThis app: $REPO"
+fi
 
 # First-run install. Offer to run `npm install` interactively.
 if [ ! -d node_modules ]; then
