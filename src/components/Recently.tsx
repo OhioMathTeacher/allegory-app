@@ -1,7 +1,8 @@
-import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { motion, AnimatePresence } from 'motion/react'
-import { ChevronDown, Disc3, Music2, Clock } from 'lucide-react'
+import { motion } from 'motion/react'
+import { Disc3, Music2, Clock } from 'lucide-react'
+import { AccordionSection } from './Accordion'
+import { useAccordion } from '../lib/use-accordion'
 import { useConnected } from '../lib/connection'
 import { usePlayer } from '../lib/player'
 import { getRecentlyAdded, getRecentlyPlayed, albumImageUrl } from '../lib/api'
@@ -17,6 +18,12 @@ interface RecentlyProps {
 // omitted — individual songs are never added, only whole albums.
 type SectionId = 'played-songs' | 'played-albums' | 'added-albums'
 
+const SECTION_IDS: readonly SectionId[] = [
+  'played-songs',
+  'played-albums',
+  'added-albums',
+]
+
 const ALBUM_LIMIT = 20
 const SONG_LIMIT = 20
 
@@ -25,11 +32,14 @@ const EASE = [0.22, 1, 0.36, 1] as const
 
 export function Recently({ onSelectAlbum }: RecentlyProps) {
   const conn = useConnected()
-  // Single-open accordion, but every header is a true toggle: tapping the open
-  // section collapses it (open → null), so the whole bar both shows and hides
-  // what's underneath. Defaults to the first ("Played · Songs").
-  const [open, setOpen] = useState<SectionId | null>('played-songs')
-  const toggle = (id: SectionId) => setOpen((cur) => (cur === id ? null : id))
+  // Each section opens and closes on its own, persisted per device, so the
+  // page reopens exactly as it was left. Only the first section is open the
+  // very first time.
+  const { isOpen, toggle } = useAccordion(
+    'allegory.recently.open',
+    SECTION_IDS,
+    ['played-songs'],
+  )
 
   const added = useQuery({
     queryKey: ['recent', 'added', conn.serverUrl, conn.userId],
@@ -49,10 +59,9 @@ export function Recently({ onSelectAlbum }: RecentlyProps) {
 
       <div className="flex flex-col gap-2 px-4 pb-8 sm:px-8">
         <AccordionSection
-          id="played-songs"
           title="Played · Songs"
           icon={<Music2 className="h-6 w-6" />}
-          open={open === 'played-songs'}
+          open={isOpen('played-songs')}
           onToggle={() => toggle('played-songs')}
         >
           <SongRows
@@ -64,10 +73,9 @@ export function Recently({ onSelectAlbum }: RecentlyProps) {
         </AccordionSection>
 
         <AccordionSection
-          id="played-albums"
           title="Played · Albums"
           icon={<Disc3 className="h-6 w-6" />}
-          open={open === 'played-albums'}
+          open={isOpen('played-albums')}
           onToggle={() => toggle('played-albums')}
         >
           <AlbumRows
@@ -80,10 +88,9 @@ export function Recently({ onSelectAlbum }: RecentlyProps) {
         </AccordionSection>
 
         <AccordionSection
-          id="added-albums"
           title="Added · Albums"
           icon={<Disc3 className="h-6 w-6" />}
-          open={open === 'added-albums'}
+          open={isOpen('added-albums')}
           onToggle={() => toggle('added-albums')}
         >
           <AlbumRows
@@ -95,59 +102,6 @@ export function Recently({ onSelectAlbum }: RecentlyProps) {
           />
         </AccordionSection>
       </div>
-    </div>
-  )
-}
-
-interface AccordionSectionProps {
-  /** Optional id for the caller's own bookkeeping; unused by the section. */
-  id?: string
-  title: string
-  icon: React.ReactNode
-  open: boolean
-  onToggle: () => void
-  children: React.ReactNode
-}
-
-// One accordion section: a tappable header chip and an animated body that
-// expands to its natural height when open. Shared with the artist page so its
-// "Played · Songs/Albums" sections look and behave identically to this tab.
-export function AccordionSection({ title, icon, open, onToggle, children }: AccordionSectionProps) {
-  return (
-    <div className="overflow-hidden rounded-xl border border-line bg-surface/40">
-      <button
-        type="button"
-        onClick={onToggle}
-        aria-expanded={open}
-        className="flex w-full items-center gap-3 px-4 py-3.5 text-left transition-colors hover:bg-white/[0.03]"
-      >
-        <span className="text-white">{icon}</span>
-        <span className="flex-1 text-xl font-semibold tracking-tight text-white">
-          {title}
-        </span>
-        <motion.span
-          animate={{ rotate: open ? 180 : 0 }}
-          transition={{ duration: 0.26, ease: EASE }}
-          className="text-white"
-        >
-          <ChevronDown className="h-6 w-6" />
-        </motion.span>
-      </button>
-
-      <AnimatePresence initial={false}>
-        {open && (
-          <motion.div
-            key="body"
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.3, ease: EASE }}
-            className="overflow-hidden"
-          >
-            <div className="border-t border-line/60 px-2 pb-2 pt-1">{children}</div>
-          </motion.div>
-        )}
-      </AnimatePresence>
     </div>
   )
 }

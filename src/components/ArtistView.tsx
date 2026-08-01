@@ -8,6 +8,7 @@ import {
   Camera,
   Pencil,
   Users,
+  User,
   RefreshCw,
   Music2,
   Disc3,
@@ -19,6 +20,9 @@ import {
   getArtistTracks,
   getAlbumTracks,
   getArtistRelated,
+  artistPortraitUrl,
+  bandcampArtistUrl,
+  youtubeSearchUrl,
   getArtistRecentlyPlayed,
   albumImageUrl,
   uploadArtistImage,
@@ -31,7 +35,9 @@ import { Cover } from './Cover'
 import { AlbumEditor } from './AlbumEditor'
 import { AlbumMenu } from './AlbumMenu'
 import { ArtistEditor } from './ArtistEditor'
-import { AccordionSection, SongRows, AlbumRows } from './Recently'
+import { SongRows, AlbumRows } from './Recently'
+import { AccordionSection } from './Accordion'
+import { ArtistTags } from './ArtistTags'
 import type { Album, Artist } from '../lib/types'
 
 interface ArtistViewProps {
@@ -355,18 +361,22 @@ function RelatedArtistsBody({
 
       {!isLoading && !isError && data?.configured && (
         <>
-          {data.genres.length > 0 && (
-            <div className="mb-4 flex flex-wrap gap-2">
-              {data.genres.map((g) => (
-                <span
-                  key={g}
-                  className="rounded-full border border-line bg-elevated px-3 py-1 text-xs font-medium text-white/70"
-                >
-                  {g}
-                </span>
-              ))}
-            </div>
-          )}
+          {/* Tags are editable: Last.fm's genres are a starting point, not the
+              last word. Additions and removals are stored apart from the
+              fetched list, so a refresh can't undo them. */}
+          <div className="mb-4">
+            <ArtistTags
+              artistId={artistId}
+              tags={data.genres}
+              onSaved={(genres) =>
+                queryClient.setQueryData(
+                  queryKey,
+                  (prev: typeof data | undefined) =>
+                    prev ? { ...prev, genres } : prev,
+                )
+              }
+            />
+          </div>
 
           {data.related.length === 0 ? (
             <p className="py-6 text-center text-sm text-white/74">
@@ -391,14 +401,12 @@ function RelatedArtistsBody({
                   <div className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-white/66">
                     Not in your library
                   </div>
-                  <div className="flex flex-wrap gap-2">
+                  {/* Portraits come from Deezer, because Last.fm serves the
+                      same grey placeholder for every artist. Each links out to
+                      somewhere you can actually hear them. */}
+                  <div className="grid grid-cols-3 gap-x-4 gap-y-6 sm:grid-cols-4 lg:grid-cols-6">
                     {discovery.map((r) => (
-                      <span
-                        key={r.name}
-                        className="rounded-full border border-line bg-elevated/60 px-3 py-1 text-sm text-white/82"
-                      >
-                        {r.name}
-                      </span>
+                      <DiscoveryCard key={r.name} related={r} />
                     ))}
                   </div>
                 </div>
@@ -441,7 +449,9 @@ function RelatedCard({
       onClick={() =>
         onSelectArtist({
           id: related.artistId!,
-          name: related.name,
+          // The library's own spelling, so the card and the page it opens
+          // agree — the name match is fuzzy ("Dio" vs "Dio, Ronnie James").
+          name: related.libraryName ?? related.name,
           imageTag: related.imageTag,
         })
       }
@@ -461,9 +471,60 @@ function RelatedCard({
         )}
       </div>
       <div className="mt-2 w-full truncate text-base font-semibold text-white">
-        {related.name}
+        {related.libraryName ?? related.name}
       </div>
     </button>
+  )
+}
+
+/**
+ * An artist we don't own. Bandcamp leads — related artists skew independent,
+ * and it's the one place where hearing them and paying them are the same
+ * click — with YouTube behind it for anyone Bandcamp doesn't carry.
+ */
+function DiscoveryCard({ related }: { related: RelatedArtist }) {
+  const conn = useConnected()
+  return (
+    <div className="flex flex-col items-center text-center">
+      <a
+        href={bandcampArtistUrl(related.name)}
+        target="_blank"
+        rel="noreferrer noopener"
+        title={`${related.name} — not in your library · find on Bandcamp`}
+        className="group w-full"
+      >
+        <div className="aspect-square w-full overflow-hidden rounded-full bg-elevated shadow-lg shadow-black/40 transition-transform duration-300 group-hover:-translate-y-1">
+          <Cover
+            src={artistPortraitUrl(conn, related.name, 280)}
+            alt={related.name}
+            className="h-full w-full"
+            fallback={<User className="h-1/3 w-1/3 text-white/20" />}
+          />
+        </div>
+        <div className="mt-2 w-full truncate text-base font-medium text-white/82">
+          {related.name}
+        </div>
+      </a>
+      <div className="mt-1 flex items-center justify-center gap-2 text-[11px]">
+        <a
+          href={bandcampArtistUrl(related.name)}
+          target="_blank"
+          rel="noreferrer noopener"
+          className="text-white/55 transition-colors hover:text-white"
+        >
+          Bandcamp
+        </a>
+        <span className="text-white/25">·</span>
+        <a
+          href={youtubeSearchUrl(related.name)}
+          target="_blank"
+          rel="noreferrer noopener"
+          className="text-white/55 transition-colors hover:text-white"
+        >
+          YouTube
+        </a>
+      </div>
+    </div>
   )
 }
 

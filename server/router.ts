@@ -13,9 +13,21 @@ import type { Library } from './scanner.ts'
 import type { Playlists } from './playlists.ts'
 import type { SettingsStore } from './settings.ts'
 import { editAlbum, renameArtist, applyAlbumTags, readFullTags } from './metadata.ts'
-import { getArtistRelated } from './artist-related.ts'
+import { getArtistRelated, setArtistTags } from './artist-related.ts'
+import type { PortraitStore } from './artist-portrait.ts'
+import {
+  getMixes,
+  getMissingAlbums,
+  getRecommendations,
+} from './discover.ts'
 import { saveUpload } from './upload.ts'
 import { recordPlay, getPlayHistory } from './play-history.ts'
+import {
+  appendListen,
+  getListenStats,
+  seedIfEmpty,
+  type ListenWindow,
+} from './listen-log.ts'
 import { transcodedPath } from './transcode.ts'
 
 // A fresh id per server process. The in-app updater watches this: it only
@@ -72,6 +84,8 @@ interface RouterDeps {
   settings: SettingsStore
   /** Swap the library/playlists to a new musicDir and trigger a fresh scan. */
   onMusicDirChange: (newDir: string) => Promise<void>
+  /** Portraits for artists that aren't in the library (Deezer-backed). */
+  portraits: PortraitStore
 }
 
 export interface Router {
@@ -372,7 +386,8 @@ export function createRouter(deps: RouterDeps): Router {
   let library = deps.library
   let playlists = deps.playlists
   let ready = deps.ready
-  const { artCacheDir, transcodeCacheDir, settings, onMusicDirChange } = deps
+  const { artCacheDir, transcodeCacheDir, settings, onMusicDirChange, portraits } =
+    deps
 
   /** Map track ids to their absolute file paths. */
   function pathsFor(trackIds: string[]): string[] {
@@ -895,6 +910,30 @@ export function createRouter(deps: RouterDeps): Router {
         sendJson(res, dto)
         return true
       }
+      // The user's own tag list for an artist. PUT the full desired list; the
+      // server works out which are additions and which are Last.fm genres the
+      // user dropped, so hand edits survive the next enrichment refresh.
+      if (
+        segs.length === 4 &&
+        segs[1] === 'artists' &&
+        segs[3] === 'tags' &&
+        method === 'PUT'
+      ) {
+        const body = (await readBody(req)) as { tags?: unknown }
+        if (!Array.isArray(body.tags)) {
+          sendJson(res, { error: 'tags must be an array of strings.' }, 400)
+          return true
+        }
+        const tags = body.tags.filter((t): t is string => typeof t === 'string')
+        const saved = await setArtistTags(library, seg(2), tags)
+        if (!saved) {
+          sendJson(res, { error: 'Unknown artist.' }, 404)
+          return true
+        }
+        sendJson(res, { ok: true, genres: saved })
+        return true
+      }
+
       if (
         segs.length === 4 &&
         segs[1] === 'artists' &&
@@ -980,8 +1019,88 @@ export function createRouter(deps: RouterDeps): Router {
           const body = (await readBody(req)) as { trackId?: string }
           if (typeof body.trackId === 'string' && body.trackId) {
             await recordPlay(body.trackId)
+            // Also append to the permanent log. Names are resolved and stored
+            // now, while the track is still in the index, so the history stays
+            // readable after a rescan renames or removes the file.
+            const t = library.track(body.trackId)
+            if (t) {
+              const album = library.album(t.albumId)
+              const artist = library.artist(t.artistId)
+              await appendListen({
+                at: Date.now(),
+                trackId: t.id,
+                title: t.tagTitle || t.fileTitle,
+                artist: artist?.name ?? t.tagArtist ?? '',
+                album: album?.name ?? t.tagAlbum ?? '',
+                artistId: t.artistId,
+                albumId: t.albumId,
+              })
+            }
           }
           sendJson(res, { ok: true })
+          return true
+        }
+      }
+
+      // --- listening history ------------------------------------------------
+      // What you've been playing over a window, the basis for time-scoped
+      // recommendations. Reads the permanent log, not the 200-entry panel
+      // buffer, so "last 30 days" means it.
+      if (
+        segs.length === 3 &&
+        segs[1] === 'listen' &&
+        segs[2] === 'stats' &&
+        method === 'GET'
+      ) {
+        // First run on an upgraded install: rescue the ring buffer's entries.
+        await seedIfEmpty(async () => {
+          const history = await getPlayHistory()
+          return history.flatMap((h) => {
+            const t = library.track(h.trackId)
+            if (!t) return []
+            return [
+              {
+                at: h.at,
+                trackId: t.id,
+                title: t.tagTitle || t.fileTitle,
+                artist: library.artist(t.artistId)?.name ?? t.tagArtist ?? '',
+                album: library.album(t.albumId)?.name ?? t.tagAlbum ?? '',
+                artistId: t.artistId,
+                albumId: t.albumId,
+              },
+            ]
+          })
+        })
+
+        const raw = url.searchParams.get('window') ?? '30d'
+        const allowed: ListenWindow[] = ['today', '7d', '30d', '90d', 'all']
+        const window = (allowed as string[]).includes(raw)
+          ? (raw as ListenWindow)
+          : '30d'
+        sendJson(res, await getListenStats(window, Date.now()))
+        return true
+      }
+
+      // --- discover ---------------------------------------------------------
+      // Mixes are pure local computation; recommendations read the sidecars
+      // already on disk; missing-albums is the only one that may go online.
+      if (segs.length === 3 && segs[1] === 'discover' && method === 'GET') {
+        if (segs[2] === 'mixes') {
+          sendJson(res, { mixes: await getMixes(library, Date.now()) })
+          return true
+        }
+        if (segs[2] === 'recommendations') {
+          const raw = url.searchParams.get('window') ?? '30d'
+          const allowed: ListenWindow[] = ['today', '7d', '30d', '90d', 'all']
+          const window = (allowed as string[]).includes(raw)
+            ? (raw as ListenWindow)
+            : '30d'
+          sendJson(res, await getRecommendations(library, window, Date.now()))
+          return true
+        }
+        if (segs[2] === 'missing-albums') {
+          const { lastfmApiKey } = await settings.load()
+          sendJson(res, await getMissingAlbums(library, lastfmApiKey, Date.now()))
           return true
         }
       }
@@ -1242,6 +1361,30 @@ export function createRouter(deps: RouterDeps): Router {
       }
 
       // --- cover art ------------------------------------------------------
+      // A portrait for an artist we don't own, by name. Served from the local
+      // cache after the first fetch, so the browser never contacts Deezer and
+      // repeat views work offline. 404 simply means "no picture" — the UI
+      // falls back to its placeholder.
+      if (segs.length === 2 && segs[1] === 'portrait' && method === 'GET') {
+        const name = (url.searchParams.get('name') ?? '').trim()
+        const size = Math.min(
+          640,
+          Math.max(48, Number(url.searchParams.get('size')) || 220),
+        )
+        const buf = name ? await portraits.bytesFor(name, size) : null
+        if (!buf) {
+          res.writeHead(404).end()
+          return true
+        }
+        res.writeHead(200, {
+          'Content-Type': 'image/jpeg',
+          'Content-Length': buf.length,
+          'Cache-Control': 'public, max-age=604800',
+        })
+        res.end(buf)
+        return true
+      }
+
       if (segs.length === 3 && segs[1] === 'art' && method === 'GET') {
         const size = Math.min(1200, Math.max(48, Number(url.searchParams.get('size')) || 400))
         await serveArt(res, seg(2), size)

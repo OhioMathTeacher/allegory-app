@@ -10,6 +10,7 @@ import {
   Repeat,
   Repeat1,
   Pencil,
+  ChevronUp,
 } from 'lucide-react'
 import { usePlayer } from '../lib/player'
 import { useConnected } from '../lib/connection'
@@ -24,11 +25,13 @@ interface PlayerBarProps {
   /** Jump to the current track's album / artist pages from the bar. */
   onOpenAlbum: (album: Album) => void
   onOpenArtist: (artist: Artist) => void
+  /** Expand into Now Playing (queue, notes, song details). */
+  onExpand: () => void
 }
 
 // One player bar for every width — the same phone-style transport on desktop
 // and phone alike.
-export function PlayerBar({ onOpenAlbum, onOpenArtist }: PlayerBarProps) {
+export function PlayerBar({ onOpenAlbum, onOpenArtist, onExpand }: PlayerBarProps) {
   const conn = useConnected()
   const player = usePlayer()
   const track = player.currentTrack
@@ -78,9 +81,22 @@ export function PlayerBar({ onOpenAlbum, onOpenArtist }: PlayerBarProps) {
           </div>
         )}
         <div className="flex min-w-0 flex-1 flex-col">
-          <div className="truncate text-2xl font-semibold text-white">
-            {track ? track.name : 'Nothing playing'}
-          </div>
+          {/* The title is the handle for Now Playing — the queue, the notes and
+              the song's details live one tap up from here. */}
+          <button
+            type="button"
+            onClick={onExpand}
+            disabled={!track}
+            title={track ? 'Now Playing — queue, notes, details' : undefined}
+            className="group flex min-w-0 items-center gap-1.5 text-left disabled:cursor-default"
+          >
+            <span className="truncate text-2xl font-semibold text-white">
+              {track ? track.name : 'Nothing playing'}
+            </span>
+            {track && (
+              <ChevronUp className="h-4 w-4 shrink-0 text-white/35 transition-colors group-hover:text-white/70" />
+            )}
+          </button>
           {track &&
             (track.artistId ? (
               <button

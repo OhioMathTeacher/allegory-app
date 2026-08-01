@@ -11,6 +11,8 @@ interface AlbumEditorProps {
   album: Album
   onClose: () => void
   onSaved?: () => void
+  /** Which tab to open on. Clicking a cover should land on 'cover'. */
+  initialTab?: Tab
 }
 
 type Tab = 'meta' | 'cover'
@@ -23,8 +25,8 @@ type Tab = 'meta' | 'cover'
  *     dir; sharp resizes to 1200² and re-encodes JPEG so the source size
  *     doesn't matter.
  */
-export function AlbumEditor({ album, onClose, onSaved }: AlbumEditorProps) {
-  const [tab, setTab] = useState<Tab>('meta')
+export function AlbumEditor({ album, onClose, onSaved, initialTab }: AlbumEditorProps) {
+  const [tab, setTab] = useState<Tab>(initialTab ?? 'meta')
 
   return (
     <div

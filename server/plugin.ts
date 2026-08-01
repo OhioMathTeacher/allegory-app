@@ -26,6 +26,7 @@ import { createLibrary } from './scanner.ts'
 import { createPlaylists } from './playlists.ts'
 import { createRouter } from './router.ts'
 import { createSettings } from './settings.ts'
+import { createPortraits } from './artist-portrait.ts'
 import { attachRemote } from './remote.ts'
 
 export interface TsmOptions {
@@ -99,6 +100,7 @@ export function allegoryLibrary(options: TsmOptions): Plugin {
     transcodeCacheDir,
     settings,
     onMusicDirChange,
+    portraits: createPortraits(cacheDir),
   })
 
   // Bring the library online using the persisted music dir (or the env

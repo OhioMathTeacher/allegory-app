@@ -216,6 +216,9 @@ export interface RelatedArtist {
   mbid?: string
   /** Set when this artist is in the library — the card links to their page. */
   artistId?: string
+  /** The library's own spelling, when matched — the match is fuzzy, so this
+   *  can differ from `name` ("Dio" vs "Dio, Ronnie James"). */
+  libraryName?: string
   /** Truthy when the matched library artist has a cover image. */
   imageTag?: string
 }
@@ -238,6 +241,25 @@ export async function getArtistRecentlyPlayed(
   artistId: string,
 ): Promise<RecentResult> {
   return getJson<RecentResult>(conn, `/artists/${artistId}/recently-played`)
+}
+
+/**
+ * Replace an artist's tag list with exactly `tags`. The server splits it back
+ * into "added by hand" and "Last.fm genres the user dropped", so edits survive
+ * the next enrichment refresh. Returns the list as stored.
+ */
+export async function setArtistTags(
+  conn: Connection,
+  artistId: string,
+  tags: string[],
+): Promise<string[]> {
+  const data = await send<{ ok: true; genres: string[] }>(
+    conn,
+    'PUT',
+    `/artists/${artistId}/tags`,
+    { tags },
+  )
+  return data.genres
 }
 
 /**
@@ -530,6 +552,79 @@ export async function getRecentlyPlayed(conn: Connection): Promise<RecentResult>
   return getJson<RecentResult>(conn, '/recent/played')
 }
 
+// --- discover ---------------------------------------------------------------
+
+/** Time windows the Discover page can reason over. */
+export type ListenWindow = 'today' | '7d' | '30d' | '90d' | 'all'
+
+export interface Mix {
+  id: string
+  title: string
+  subtitle: string
+  trackIds: string[]
+  tracks: Track[]
+}
+
+export interface Recommendation {
+  artistId: string
+  name: string
+  imageTag?: string
+  reason: string
+}
+
+export interface MissingAlbum {
+  artistId: string
+  artist: string
+  album: string
+  playcount?: number
+}
+
+/** Generated mixes. Computed locally on the server — works offline. */
+export async function getMixes(conn: Connection): Promise<Mix[]> {
+  const data = await getJson<{ mixes: Mix[] }>(conn, '/discover/mixes')
+  return data.mixes
+}
+
+/** Artists in your library worth playing next, scored over a listening window. */
+export async function getRecommendations(
+  conn: Connection,
+  window: ListenWindow,
+): Promise<{ window: ListenWindow; basis: number; items: Recommendation[] }> {
+  return getJson(conn, `/discover/recommendations?window=${window}`)
+}
+
+/** Well-known albums by artists you own — that you don't own. */
+export async function getMissingAlbums(
+  conn: Connection,
+): Promise<{ configured: boolean; items: MissingAlbum[] }> {
+  return getJson(conn, '/discover/missing-albums')
+}
+
+export interface ListenCount<T> {
+  item: T
+  plays: number
+  lastAt: number
+}
+
+export interface ListenStats {
+  window: ListenWindow
+  totalPlays: number
+  since: number
+  /** Epoch ms of the oldest play on record, or null when nothing is logged. */
+  logStartsAt: number | null
+  topArtists: ListenCount<{ name: string; artistId?: string }>[]
+  topAlbums: ListenCount<{ name: string; artist: string; albumId?: string }>[]
+  topTracks: ListenCount<{ title: string; artist: string; trackId: string }>[]
+}
+
+/** What you've actually been playing over a window, from the permanent log. */
+export async function getListenStats(
+  conn: Connection,
+  window: ListenWindow,
+): Promise<ListenStats> {
+  return getJson<ListenStats>(conn, `/listen/stats?window=${window}`)
+}
+
 /** Report that a track was played. Best-effort — call sites swallow failures. */
 export async function reportPlay(conn: Connection, trackId: string): Promise<void> {
   await send(conn, 'POST', '/recent/played', { trackId })
@@ -555,6 +650,46 @@ export function albumImageUrl(
   // Include the tag so the URL changes when the art changes (e.g. a re-uploaded
   // playlist cover) — otherwise the long-cached old image sticks across reloads.
   return `${conn.serverUrl}/art/${itemId}?size=${size}${tag ? `&t=${encodeURIComponent(tag)}` : ''}`
+}
+
+/**
+ * A portrait for an artist that isn't in the library, by name. The server
+ * fetches, resizes and caches it; a 404 means there's no picture, which the
+ * caller should treat as "show the placeholder".
+ */
+export function artistPortraitUrl(
+  conn: Connection,
+  name: string,
+  size = 220,
+): string {
+  return `${conn.serverUrl}/portrait?name=${encodeURIComponent(name)}&size=${size}`
+}
+
+// --- "go hear this" links ---------------------------------------------------
+// None of these need a key or an API call; they're plain search URLs. Which
+// service to point at depends on what's being linked, and the two cases differ:
+//
+//   an ARTIST we don't own   often independent — Bandcamp is where you can
+//                            actually hear them AND pay them directly
+//   an ALBUM we don't own    surfaced because it's well known, which in
+//                            practice means major-label back catalogue that
+//                            isn't on Bandcamp at all
+//
+// So artists get Bandcamp first, records get streaming first, and both get a
+// fallback so a miss on one service isn't a dead end.
+
+/** Bandcamp's artists-&-labels tab. `item_type=b` is the artist filter — do
+ *  NOT use it for an album query; it will match nothing. */
+export function bandcampArtistUrl(name: string): string {
+  return `https://bandcamp.com/search?q=${encodeURIComponent(name)}&item_type=b`
+}
+
+export function spotifySearchUrl(query: string): string {
+  return `https://open.spotify.com/search/${encodeURIComponent(query)}`
+}
+
+export function youtubeSearchUrl(query: string): string {
+  return `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`
 }
 
 export function trackImageUrl(conn: Connection, track: Track, size = 400): string {
