@@ -22,6 +22,10 @@ import sharp from 'sharp'
 
 const TIMEOUT_MS = 6000
 const DEEZER_SEARCH = 'https://api.deezer.com/search/artist'
+// An artist headshot is tens of kilobytes. These ceilings are generous for
+// anything legitimate and still refuse the pathological cases outright.
+const MAX_PORTRAIT_BYTES = 8 * 1024 * 1024
+const MAX_PORTRAIT_PIXELS = 40_000_000 // ~6300x6300
 // Re-check a miss after this long; an artist may get added to Deezer later.
 const MISS_TTL_MS = 1000 * 60 * 60 * 24 * 30 // 30 days
 
@@ -148,10 +152,31 @@ export function createPortraits(cacheDir: string) {
     const controller = new AbortController()
     const timer = setTimeout(() => controller.abort(), TIMEOUT_MS)
     try {
-      const res = await fetch(url, { signal: controller.signal })
+      const res = await fetch(url, {
+        signal: controller.signal,
+        headers: { Accept: 'image/*' },
+      })
       if (!res.ok) return null
+
+      // Everything below the fetch is about what reaches sharp. It decodes in
+      // native code (libvips), so hostile bytes are the one input worth being
+      // strict about — the same discipline the paste-a-URL cover picker in
+      // router.ts already applies. Deezer is a known host over HTTPS, not an
+      // arbitrary one, but "probably fine" is not a reason to skip the checks.
+      const type = (res.headers.get('content-type') ?? '').toLowerCase()
+      if (type && !type.startsWith('image/')) return null
+      const declared = Number(res.headers.get('content-length') ?? '')
+      if (Number.isFinite(declared) && declared > MAX_PORTRAIT_BYTES) return null
+
       const raw = Buffer.from(await res.arrayBuffer())
-      const buf = await sharp(raw)
+      // Re-check after the fact: content-length is a claim, not a guarantee.
+      if (raw.length === 0 || raw.length > MAX_PORTRAIT_BYTES) return null
+
+      const buf = await sharp(raw, {
+        // Portraits are small headshots. Capping pixels keeps a decompression
+        // bomb — tiny file, enormous canvas — from eating memory on decode.
+        limitInputPixels: MAX_PORTRAIT_PIXELS,
+      })
         .resize(size, size, { fit: 'cover', position: 'attention' })
         .jpeg({ quality: 82 })
         .toBuffer()
