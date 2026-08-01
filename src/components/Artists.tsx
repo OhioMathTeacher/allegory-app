@@ -38,39 +38,42 @@ function groupByLetter(artists: Artist[]): [string, Artist[]][] {
   return SECTIONS.filter((s) => groups.has(s)).map((s) => [s, groups.get(s)!])
 }
 
-const SELECTED_KEY = 'allegory.artists.letter'
+const SELECTED_KEY = 'allegory.artists.key'
 
 /**
- * Per-letter styling so the keypad reads as a set of found objects rather than
- * 27 identical slabs — a ransom-note look. Deterministic from the character, so
- * a given letter always wears the same face and the row doesn't reshuffle on
- * every render. The tilt straightens out when a key is chosen, which is what
- * makes the selection feel like it settled into place.
+ * A rolodex divider set: three letters per key, nine keys, which lays out as a
+ * 3x3 dialpad on a phone and one row on a desktop. Three-letter spans split
+ * this library far more evenly than either equal halves or a T9 pad — 12 to 98
+ * artists per key, where A-F alone would have held 170 of 497 and T9's "#" key
+ * would have held one. "#" rides along with A-B rather than getting a key of
+ * its own for the sake of a single artist.
  */
-function keyFace(letter: string): { rotate: number; cls: string } {
-  const n = letter.charCodeAt(0)
-  const rotate = [-6, 3, -2, 5, -4, 1, 6, -3][n % 8]
-  const weight = ['font-bold', 'font-black', 'font-semibold', 'font-black'][n % 4]
-  const size = ['text-lg', 'text-xl', 'text-2xl', 'text-lg', 'text-xl'][n % 5]
-  const serif = n % 3 === 0 ? 'font-serif' : ''
-  const caseHint = n % 7 === 0 ? 'lowercase' : ''
-  return { rotate, cls: `${weight} ${size} ${serif} ${caseHint}` }
-}
+const KEYPAD: { label: string; letters: string[] }[] = [
+  { label: '#–B', letters: ['#', 'A', 'B'] },
+  { label: 'C–E', letters: ['C', 'D', 'E'] },
+  { label: 'F–H', letters: ['F', 'G', 'H'] },
+  { label: 'I–K', letters: ['I', 'J', 'K'] },
+  { label: 'L–N', letters: ['L', 'M', 'N'] },
+  { label: 'O–Q', letters: ['O', 'P', 'Q'] },
+  { label: 'R–T', letters: ['R', 'S', 'T'] },
+  { label: 'U–W', letters: ['U', 'V', 'W'] },
+  { label: 'X–Z', letters: ['X', 'Y', 'Z'] },
+]
 
 export function Artists({ onSelectArtist }: ArtistsProps) {
   const conn = useConnected()
-  // One letter at a time. A keypad is a filter, not an accordion: the whole
-  // alphabet stays on screen (one line on a desktop, a few rows on a phone)
-  // and only the chosen letter's artists are listed, so there is never a long
-  // scroll to get anywhere.
+  // One key at a time. The pad is a filter, not an accordion: all nine keys
+  // stay on screen — a 3x3 dialpad on a phone, one row on a desktop — and only
+  // the chosen group's artists are listed, so nothing is ever more than a tap
+  // and a short scroll away.
   const [selected, setSelected] = useState<string>(
-    () => localStorage.getItem(SELECTED_KEY) ?? 'A',
+    () => localStorage.getItem(SELECTED_KEY) ?? '#–B',
   )
 
-  function pick(letter: string) {
-    setSelected(letter)
+  function pick(label: string) {
+    setSelected(label)
     try {
-      localStorage.setItem(SELECTED_KEY, letter)
+      localStorage.setItem(SELECTED_KEY, label)
     } catch {
       // Non-fatal; the choice just won't survive a reload.
     }
@@ -113,58 +116,69 @@ export function Artists({ onSelectArtist }: ArtistsProps) {
         )}
 
         {artists && artists.length > 0 && (() => {
-          const groups = groupByLetter(artists)
-          // Fall back to the first letter that exists, so a stored choice for a
-          // letter you no longer own anything under can't leave the page blank.
-          const active = groups.find(([l]) => l === selected) ?? groups[0]
+          const byLetter = groupByLetter(artists)
+          const counts = new Map(byLetter.map(([l, g]) => [l, g.length]))
+          const sizeOf = (k: (typeof KEYPAD)[number]) =>
+            k.letters.reduce((n, l) => n + (counts.get(l) ?? 0), 0)
+          // Only offer keys that hold something, and never leave the page empty
+          // if a stored choice has since been emptied out.
+          const keys = KEYPAD.filter((k) => sizeOf(k) > 0)
+          const active = keys.find((k) => k.label === selected) ?? keys[0]
+          const shown = byLetter.filter(([l]) => active.letters.includes(l))
+
           return (
             <>
-              <div className="mb-5 flex flex-wrap gap-1 sm:gap-1.5">
-                {groups.map(([letter, group]) => {
-                  const on = letter === active[0]
-                  const face = keyFace(letter)
+              {/* 3x3 dialpad on a phone, one row once there's width for it. */}
+              <div className="mb-5 grid grid-cols-3 gap-1.5 sm:flex sm:flex-wrap">
+                {keys.map((k) => {
+                  const on = k.label === active.label
                   return (
                     <button
-                      key={letter}
+                      key={k.label}
                       type="button"
-                      onClick={() => pick(letter)}
+                      onClick={() => pick(k.label)}
                       aria-pressed={on}
-                      title={`${group.length} artist${group.length === 1 ? '' : 's'}`}
-                      style={{
-                        transform: `rotate(${on ? 0 : face.rotate}deg)`,
-                        ...(on ? { background: 'var(--accent)' } : {}),
-                      }}
-                      className={`flex h-9 w-9 items-center justify-center rounded-lg leading-none transition-all duration-200 sm:h-11 sm:w-11 ${face.cls} ${
+                      style={on ? { background: 'var(--accent)' } : undefined}
+                      className={`flex flex-col items-center justify-center rounded-lg px-3 py-2 tabular-nums transition-colors sm:min-w-[76px] ${
                         on
-                          ? 'text-black shadow-lg'
-                          : 'border border-line bg-elevated text-white/80 hover:-translate-y-0.5 hover:bg-white/10 hover:text-white'
+                          ? 'text-black'
+                          : 'border border-line bg-elevated text-white/80 hover:bg-white/10 hover:text-white'
                       }`}
                     >
-                      {letter}
+                      <span className="text-base font-semibold leading-none tracking-wide">
+                        {k.label}
+                      </span>
+                      <span
+                        className={`mt-1 text-[11px] leading-none ${on ? 'text-black/60' : 'text-white/45'}`}
+                      >
+                        {sizeOf(k)}
+                      </span>
                     </button>
                   )
                 })}
               </div>
 
-              <div className="mb-2 flex items-baseline gap-2">
-                <span className="text-2xl font-bold tracking-tight text-white">
-                  {active[0]}
-                </span>
-                <span className="text-sm text-white/50">
-                  {active[1].length} artist{active[1].length === 1 ? '' : 's'}
-                </span>
-              </div>
-
-              <div className="flex flex-col">
-                {active[1].map((artist, i) => (
-                  <ArtistRow
-                    key={artist.id}
-                    artist={artist}
-                    index={i}
-                    onSelect={onSelectArtist}
-                  />
-                ))}
-              </div>
+              {/* Rolodex dividers: a 98-artist key still needs signposts. */}
+              {shown.map(([letter, group]) => (
+                <div key={letter}>
+                  <div className="sticky top-[104px] z-[5] flex items-baseline gap-2 bg-bg/95 py-1 backdrop-blur">
+                    <span className="text-lg font-bold tracking-tight text-white/90">
+                      {letter}
+                    </span>
+                    <span className="text-xs text-white/40">{group.length}</span>
+                  </div>
+                  <div className="flex flex-col">
+                    {group.map((artist, i) => (
+                      <ArtistRow
+                        key={artist.id}
+                        artist={artist}
+                        index={i}
+                        onSelect={onSelectArtist}
+                      />
+                    ))}
+                  </div>
+                </div>
+              ))}
             </>
           )
         })()}
