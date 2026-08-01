@@ -9,10 +9,14 @@
  *
  * Three deliberate choices, each of which has bitten someone before:
  *
- *   1. **Localhost is exempt.** Requests from 127.0.0.1 skip the check, so
- *      `bin/allegory-launch` and any local script keep working. This concedes
- *      nothing: anyone with a shell on the box can read the music files
- *      directly, so requiring a password from localhost would be theatre.
+ *   1. **Localhost is exempt — unless a foreign web page is asking.** Requests
+ *      from 127.0.0.1 skip the check, so `bin/allegory-launch` and any local
+ *      script keep working. Against a shell that concedes nothing: anyone with
+ *      a login on the box can read the music files directly, so a password at
+ *      the console would be theatre. Against a *browser* it concedes
+ *      everything, because a page on any site you visit can fetch localhost
+ *      and its requests are indistinguishable by address. So the exemption is
+ *      withdrawn whenever the request carries a cross-site `Origin`.
  *
  *   2. **Sessions are stateless.** The cookie carries an HMAC-signed token
  *      rather than an id into a session table, so a server restart doesn't log
@@ -102,6 +106,36 @@ function throttleDelay(key: string): number {
 export function isLoopback(req: IncomingMessage): boolean {
   const addr = req.socket.remoteAddress ?? ''
   return addr === '127.0.0.1' || addr === '::1' || addr === '::ffff:127.0.0.1'
+}
+
+/**
+ * True when the request is a browser request from *another* site.
+ *
+ * This exists to qualify the loopback exemption, which is otherwise wider than
+ * it looks. A browser running on the server machine is itself a loopback
+ * client: JavaScript on any page you happen to visit can `fetch()`
+ * `http://127.0.0.1:4173/api/...`, and those requests arrive from 127.0.0.1
+ * like any other local process. Left unqualified, the exemption hands a
+ * hostile page the whole library — and, since it also skips the gate on
+ * writes, the ability to change the password or trigger the updater.
+ *
+ * The distinction that matters is not *where* the request came from but
+ * *who wrote the code that made it*. A shell script has no `Origin` header;
+ * the app itself sends one matching the server's own `Host`. A page from
+ * somewhere else sends its own, and that is exactly the case to refuse.
+ */
+export function isForeignOrigin(req: IncomingMessage): boolean {
+  const origin = req.headers.origin
+  if (!origin) return false // curl, the launcher, any non-browser caller
+  const host = req.headers.host
+  if (!host) return true
+  try {
+    // `Origin: null` (sandboxed iframes, some redirects) fails to parse and
+    // is treated as foreign, which is the safe reading.
+    return new URL(origin).host !== host
+  } catch {
+    return true
+  }
 }
 
 /** Pull a cookie value out of a request's Cookie header. */
@@ -254,7 +288,10 @@ export function createAuth(cacheDir: string) {
    */
   async function authorize(req: IncomingMessage): Promise<boolean> {
     if (!(await isEnabled())) return true
-    if (isLoopback(req)) return true
+    // Loopback is exempt, but not when the caller is a web page from another
+    // site — see isForeignOrigin. Such a request reaches us from 127.0.0.1
+    // only because the browser displaying it happens to run here.
+    if (isLoopback(req) && !isForeignOrigin(req)) return true
     return checkToken(tokenFrom(req))
   }
 
