@@ -49,10 +49,21 @@ lock_after="$(sha1sum package-lock.json 2>/dev/null | cut -d' ' -f1 || true)"
 # "tsc: command not found". Since a no-dependency update would otherwise skip
 # install, the updater could never heal itself — so the in-app update would
 # hang forever. Checking for tsc/vite lets it self-repair.
+#
+# NODE_ENV=development on the install is load-bearing, not decoration. The
+# server spawns this script with no `env` of its own, so we inherit its
+# process.env — and under `vite preview` that includes NODE_ENV=production,
+# which vite assigns at runtime (so it is invisible in /proc/PID/environ).
+# npm turns that into `omit=dev` and quietly deletes vite and typescript, which
+# breaks the build AND the restart, since ExecStart is `npm run preview`.
+# That was the "intermittent" tsc loss above: it happens on every update from
+# the systemd/preview server and never from `npm run dev`. It also made the
+# self-repair unreachable, because the repair install inherited the same
+# environment and pruned exactly what it was trying to restore.
 if [ "$lock_before" != "$lock_after" ] || [ ! -d node_modules ] \
    || [ ! -x node_modules/.bin/tsc ] || [ ! -x node_modules/.bin/vite ]; then
   log "installing dependencies (lockfile changed or build tools missing)"
-  npm install >>"$LOG_FILE" 2>&1
+  NODE_ENV=development npm install --include=dev >>"$LOG_FILE" 2>&1
 else
   log "dependencies present — skipping npm install"
 fi
@@ -67,6 +78,18 @@ if npm run build >>"$LOG_FILE" 2>&1; then
   log "build ok"
 else
   log "build FAILED — keeping previous dist, continuing to restart"
+fi
+
+# The build above is deliberately non-fatal, but a missing vite is a different
+# kind of failure: every way we start the server below runs vite, so restarting
+# without it takes the library down until someone reaches a terminal — which is
+# the one thing an in-app updater must never require. Stop while the old server
+# is still serving.
+if [ ! -x node_modules/.bin/vite ]; then
+  log "FATAL: node_modules/.bin/vite is missing after install."
+  log "Refusing to restart — the current server keeps running on the old code."
+  log "Recover with: NODE_ENV=development npm install --include=dev"
+  exit 1
 fi
 
 # Restart. If a systemd user service manages the server, restart it (in a
