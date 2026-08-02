@@ -132,9 +132,10 @@ export function Playlists({ onSelectPlaylist, onOpenNotes }: PlaylistsProps) {
 
   return (
     <div>
-      <header className="sticky top-0 z-10 bg-bg/95 px-8 pt-8 pb-4 backdrop-blur">
+      <header className="sticky top-0 z-10 bg-bg/95 px-8 pt-4 pb-4 backdrop-blur sm:pt-8">
         <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
+          {/* Title redundant with the tab row on a phone; the New button stays. */}
+          <div className="hidden min-w-0 sm:block">
             <h1 className="text-3xl font-semibold tracking-tight">Playlists</h1>
             <p className="mt-1 text-sm text-white/85">
               {playlists

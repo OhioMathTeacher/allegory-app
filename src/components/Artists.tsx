@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import type { MouseEvent } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Music2, Play, Loader2 } from 'lucide-react'
@@ -58,20 +58,56 @@ const KEYPAD: { label: string; letters: string[] }[] = [
   { label: 'X–Z', letters: ['X', 'Y', 'Z'] },
 ]
 
+/**
+ * On a phone the nine-key pad stacks 3x3 and fills the screen before a single
+ * artist shows. Mobile collapses to three keys, each merging three consecutive
+ * desktop keys into a third of the alphabet, so the pad lays out as one row. The
+ * trade is more scroll per key — but the letter dividers below still signpost
+ * the way, and the artists are no longer buried under the pad. Desktop keeps all
+ * nine. Derived from KEYPAD so the two can never drift out of sync.
+ */
+const MOBILE_KEYPAD = [0, 3, 6].map((start) => {
+  const letters = KEYPAD.slice(start, start + 3).flatMap((k) => k.letters)
+  return { label: `${letters[0]}–${letters[letters.length - 1]}`, letters }
+})
+
+/** True below Tailwind's `sm` breakpoint, tracked live so rotating or resizing
+ *  the phone swaps the keypad rather than stranding a stale one. */
+function useIsMobile(): boolean {
+  const [mobile, setMobile] = useState(
+    () =>
+      typeof window !== 'undefined' &&
+      window.matchMedia('(max-width: 639px)').matches,
+  )
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 639px)')
+    const onChange = () => setMobile(mq.matches)
+    mq.addEventListener('change', onChange)
+    return () => mq.removeEventListener('change', onChange)
+  }, [])
+  return mobile
+}
+
 export function Artists({ onSelectArtist }: ArtistsProps) {
   const conn = useConnected()
-  // One key at a time. The pad is a filter, not an accordion: all nine keys
-  // stay on screen — a 3x3 dialpad on a phone, one row on a desktop — and only
-  // the chosen group's artists are listed, so nothing is ever more than a tap
-  // and a short scroll away.
-  const [selected, setSelected] = useState<string>(
-    () => localStorage.getItem(SELECTED_KEY) ?? '#–B',
-  )
+  const isMobile = useIsMobile()
 
-  function pick(label: string) {
-    setSelected(label)
+  // One key at a time. The pad is a filter, not an accordion: every key stays on
+  // screen — one row on mobile, one row on desktop — and only the chosen group's
+  // artists are listed, so nothing is more than a tap and a short scroll away.
+  // We store the anchor *letter* rather than a key label, so the same position
+  // resolves into whichever pad (three keys or nine) is on screen.
+  const [anchor, setAnchor] = useState<string>(() => {
+    // Older builds stored a key label ('#–B'); its first character is the anchor.
+    const first = localStorage.getItem(SELECTED_KEY)?.[0] ?? '#'
+    return SECTIONS.includes(first) ? first : '#'
+  })
+
+  function pick(key: { letters: string[] }) {
+    const first = key.letters[0]
+    setAnchor(first)
     try {
-      localStorage.setItem(SELECTED_KEY, label)
+      localStorage.setItem(SELECTED_KEY, first)
     } catch {
       // Non-fatal; the choice just won't survive a reload.
     }
@@ -88,7 +124,9 @@ export function Artists({ onSelectArtist }: ArtistsProps) {
 
   return (
     <div>
-      <header className="sticky top-0 z-10 bg-bg/95 px-4 pt-6 pb-4 backdrop-blur sm:px-8 sm:pt-8">
+      {/* The tab row already names the section; on a phone this big title is
+          redundant and costs a screenful, so it shows only from `sm` up. */}
+      <header className="sticky top-0 z-10 hidden bg-bg/95 px-4 pt-6 pb-4 backdrop-blur sm:block sm:px-8 sm:pt-8">
         <h1 className="text-3xl font-semibold tracking-tight">Artists</h1>
         <p className="mt-1 text-sm text-white/85">
           {artists
@@ -97,7 +135,7 @@ export function Artists({ onSelectArtist }: ArtistsProps) {
         </p>
       </header>
 
-      <div className="px-4 pb-8 sm:px-8">
+      <div className="px-4 pb-8 pt-4 sm:px-8 sm:pt-0">
         {isLoading && <SkeletonList />}
 
         {isError && (
@@ -118,10 +156,13 @@ export function Artists({ onSelectArtist }: ArtistsProps) {
           const counts = new Map(byLetter.map(([l, g]) => [l, g.length]))
           const sizeOf = (k: (typeof KEYPAD)[number]) =>
             k.letters.reduce((n, l) => n + (counts.get(l) ?? 0), 0)
-          // Only offer keys that hold something, and never leave the page empty
-          // if a stored choice has since been emptied out.
-          const keys = KEYPAD.filter((k) => sizeOf(k) > 0)
-          const active = keys.find((k) => k.label === selected) ?? keys[0]
+          // Three keys on a phone, nine once there's width for them. Only offer
+          // keys that hold something, and never leave the page empty if a stored
+          // choice has since been emptied out.
+          const keys = (isMobile ? MOBILE_KEYPAD : KEYPAD).filter(
+            (k) => sizeOf(k) > 0,
+          )
+          const active = keys.find((k) => k.letters.includes(anchor)) ?? keys[0]
           const shown = byLetter.filter(([l]) => active.letters.includes(l))
 
           return (
@@ -134,7 +175,7 @@ export function Artists({ onSelectArtist }: ArtistsProps) {
                     <button
                       key={k.label}
                       type="button"
-                      onClick={() => pick(k.label)}
+                      onClick={() => pick(k)}
                       aria-pressed={on}
                       style={on ? { background: 'var(--accent)' } : undefined}
                       className={`flex flex-col items-center justify-center rounded-lg px-3 py-2 tabular-nums transition-colors sm:min-w-[76px] ${
@@ -159,7 +200,7 @@ export function Artists({ onSelectArtist }: ArtistsProps) {
               {/* Rolodex dividers: a 98-artist key still needs signposts. */}
               {shown.map(([letter, group]) => (
                 <div key={letter}>
-                  <div className="sticky top-[104px] z-[5] flex items-baseline gap-2 bg-bg/95 py-1 backdrop-blur">
+                  <div className="sticky top-0 z-[5] flex items-baseline gap-2 bg-bg/95 py-1 backdrop-blur sm:top-[104px]">
                     <span className="text-lg font-bold tracking-tight text-white/90">
                       {letter}
                     </span>

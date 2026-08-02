@@ -91,12 +91,13 @@ export function Recently({ onSelectAlbum, onSelectArtist }: RecentlyProps) {
 
   return (
     <div>
-      <header className="sticky top-0 z-10 bg-bg/95 px-4 pt-6 pb-4 backdrop-blur sm:px-8 sm:pt-8">
+      {/* Redundant with the tab row on a phone — desktop only (see Artists). */}
+      <header className="sticky top-0 z-10 hidden bg-bg/95 px-4 pt-6 pb-4 backdrop-blur sm:block sm:px-8 sm:pt-8">
         <h1 className="text-3xl font-semibold tracking-tight">Recently</h1>
         <p className="mt-1 text-sm text-white/85">Played &amp; added</p>
       </header>
 
-      <div className="flex flex-col gap-2 px-4 pb-8 sm:px-8">
+      <div className="flex flex-col gap-2 px-4 pb-8 pt-4 sm:px-8 sm:pt-0">
         {/* Always open, and first: this is the summary the page exists to
             give. The accordions below are the detail behind it. */}
         <section className="mb-3">

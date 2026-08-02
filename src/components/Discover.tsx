@@ -108,7 +108,10 @@ export function Discover({ onSelectArtist }: DiscoverProps) {
 
   return (
     <div>
-      <header className="sticky top-0 z-10 bg-bg/95 px-4 pt-6 pb-4 backdrop-blur sm:px-8 sm:pt-8">
+      {/* Whole header is desktop-only: the tab row already says "Discover", and
+          the time-window buttons take too much room on a phone. Mobile just uses
+          the current default window. */}
+      <header className="sticky top-0 z-10 hidden bg-bg/95 px-4 pt-6 pb-4 backdrop-blur sm:block sm:px-8 sm:pt-8">
         <h1 className="text-3xl font-semibold tracking-tight">Discover</h1>
         <p className="mt-1 text-sm text-white/60">
           Built from what you actually play
@@ -132,7 +135,7 @@ export function Discover({ onSelectArtist }: DiscoverProps) {
         </div>
       </header>
 
-      <div className="flex flex-col gap-10 px-4 pb-10 sm:px-8">
+      <div className="flex flex-col gap-10 px-4 pb-10 pt-4 sm:px-8 sm:pt-0">
         {/* --- mixes --- */}
         <Section title="Mixes" note="Made fresh each day">
           {mixes.isLoading ? (
@@ -140,7 +143,11 @@ export function Discover({ onSelectArtist }: DiscoverProps) {
           ) : !mixes.data || mixes.data.length === 0 ? (
             <Empty text="Mixes appear once there's a bit of listening history to draw on." />
           ) : (
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            /* grid-cols-1 (not bare `grid`) is load-bearing: it makes the
+               mobile column minmax(0,1fr) so cards shrink and their text
+               truncates. A bare auto track grows to the widest card and pushes
+               the whole page wider than the phone. */
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {mixes.data.map((mix, i) => (
                 <MixCard
                   key={mix.id}
@@ -180,7 +187,10 @@ export function Discover({ onSelectArtist }: DiscoverProps) {
               }
             />
           ) : (
-            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+            /* One per row on a phone — the card is avatar+text, so full width
+               reads cleanly and the name/reason stop truncating. Desktop keeps
+               the multi-column grid. */
+            <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-3 sm:gap-4 lg:grid-cols-4">
               {recs.data.items.slice(0, 12).map((r) => (
                 <button
                   key={r.artistId}

@@ -461,7 +461,8 @@ function AlbumSection({ album }: { album: AlbumGroup }) {
 function Header({ online }: { online: boolean }) {
   return (
     <div className="flex items-center justify-between gap-3">
-      <h1 className="text-2xl font-bold tracking-tight">Downloads</h1>
+      {/* Redundant with the tab row on a phone; the offline badge stays. */}
+      <h1 className="hidden text-2xl font-bold tracking-tight sm:block">Downloads</h1>
       {!online && <OfflineBadge />}
     </div>
   )

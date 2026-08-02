@@ -238,6 +238,7 @@ export function AppShell() {
             <TopButton
               onClick={() => setView({ type: 'playlists' })}
               label="Playlists"
+              active={section === 'playlists'}
             >
               <ListMusic className="h-7 w-7" />
             </TopButton>
@@ -265,12 +266,16 @@ export function AppShell() {
             Derived from WINDOWS so a new window can't be half-added. */}
         {(WINDOWS as readonly string[]).includes(section) && (
           <div className="flex shrink-0 items-center justify-center gap-1 border-b border-line bg-bg/95 px-2 py-2 backdrop-blur">
+            {/* Playlists is intentionally absent here — it lives in the top bar
+                (a place reached by icon, not a swipe-between tab). It stays in
+                WINDOWS, so this row still shows on the Playlists page and you can
+                tap straight back out. `idx` indexes WINDOWS, so the gap at 3 is
+                correct: Downloads is WINDOWS[4]. */}
             {(
               [
                 ['artists', 'Artists', 0],
                 ['recent', 'Recently', 1],
                 ['discover', 'Discover', 2],
-                ['playlists', 'Playlists', 3],
                 ['downloads', 'Downloads', 4],
               ] as const
             ).map(([key, label, idx]) => (
@@ -279,7 +284,7 @@ export function AppShell() {
                   type="button"
                   onClick={() => goToWindow(idx)}
                   aria-pressed={view.type === key}
-                  className={`rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${
+                  className={`rounded-full px-3 py-1.5 text-sm font-medium transition-colors sm:px-4 ${
                     view.type === key
                       ? 'bg-[color:var(--accent-soft)] text-[color:var(--accent)]'
                       : 'text-white/88 hover:bg-white/14 hover:text-white/90'
