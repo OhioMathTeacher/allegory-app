@@ -8,6 +8,7 @@ set -euo pipefail
 REPO="$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)"
 CACHE_DIR="$REPO/.allegory-cache"
 URL_FILE="$CACHE_DIR/url"
+REMOTE_FILE="$CACHE_DIR/remote"
 LOG_FILE="$CACHE_DIR/launcher.log"
 
 mkdir -p "$CACHE_DIR"
@@ -53,6 +54,50 @@ open_browser() {
     xdg-open "$url" >/dev/null 2>&1 &
   fi
 }
+
+# --- A library on another machine -------------------------------------------
+# The machine you sit at is not always the machine holding the music. A laptop
+# with a partial library on an external drive, and a desktop holding the whole
+# collection, is a common enough split — and left to itself this script always
+# starts the *local* server, so the menu entry quietly opens the smaller
+# library.
+#
+# Write a URL into `.allegory-cache/remote` (or set ALLEGORY_REMOTE) and that
+# becomes what the launcher opens:
+#
+#     echo 'http://other-machine.example:4173/' > .allegory-cache/remote
+#
+# Deliberately NOT `url`: that file is scratch state, and the block below
+# deletes it whenever a probe fails. This is configuration, so it is never
+# removed automatically — a tunnel that is down for a minute must not silently
+# and permanently demote you back to the partial library.
+#
+# A password-protected library answers 401 here, not 200. That still counts as
+# reachable: we are asking whether a server responds, not whether we are
+# already logged in.
+remote=""
+if [ -n "${ALLEGORY_REMOTE:-}" ]; then
+  remote="${ALLEGORY_REMOTE}"
+elif [ -f "$REMOTE_FILE" ]; then
+  remote="$(head -n1 "$REMOTE_FILE" 2>/dev/null | tr -d '[:space:]')"
+fi
+
+if [ -n "$remote" ]; then
+  if curl -ks --max-time 5 -o /dev/null "$remote"; then
+    open_browser "$remote"
+    exit 0
+  fi
+  # Unreachable. Offer the local library rather than opening it unasked, so a
+  # dropped tunnel can never be mistaken for a library that lost most of its
+  # tracks.
+  if command -v zenity >/dev/null 2>&1; then
+    zenity --question --width=560 --title="Allegory" \
+      --text="The library at\n\n<tt>$remote</tt>\n\nis not answering. Tailscale may be disconnected, or that machine may be off.\n\nOpen this machine's local library instead? It holds only part of the collection." \
+      || exit 0
+  else
+    notify "Allegory" "$remote is not answering — starting the local library instead." error
+  fi
+fi
 
 # The everyday setup is the systemd user service (allegory.service), which
 # serves the built app on 4173 from this repo and starts at login. If it's up,
