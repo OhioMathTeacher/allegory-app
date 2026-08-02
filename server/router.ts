@@ -239,6 +239,20 @@ async function readImageUpload(req: IncomingMessage): Promise<Buffer> {
 }
 
 /** Run a git command in the repo (process.cwd()), capturing its output. */
+/**
+ * The `version` field out of a package.json blob, or '' if it can't be read.
+ * Used to label updates with a version number rather than a bare short SHA —
+ * "1.8.1 → 1.8.2" says something; "fe19cc9 → 4337c9f" does not.
+ */
+function packageVersion(json: string): string {
+  try {
+    const v = (JSON.parse(json) as { version?: unknown }).version
+    return typeof v === 'string' ? v : ''
+  } catch {
+    return ''
+  }
+}
+
 function runGit(
   args: string[],
   timeoutMs = 12000,
@@ -809,12 +823,26 @@ export function createRouter(deps: RouterDeps): Router {
           ahead = a || 0
           behind = b || 0
         }
+        // Version numbers for both sides. The installed one comes from the
+        // working tree, which is what the server is actually running (vite
+        // compiles server/*.ts at request time, so disk is the source of
+        // truth). The published one is read out of origin/main's blob without
+        // touching the working tree. Both are best-effort: an install with an
+        // unreadable package.json still gets a working update panel, just with
+        // SHAs alone, so this can never be the thing that breaks updating.
+        const currentVersion = packageVersion(
+          await readFile(join(process.cwd(), 'package.json'), 'utf8').catch(() => ''),
+        )
+        const latestPkg = await runGit(['show', 'origin/main:package.json'])
+        const latestVersion = latestPkg.ok ? packageVersion(latestPkg.stdout) : ''
         sendJson(res, {
           bootId: BOOT_ID,
           current: head.stdout.trim(),
           currentMessage: headMsg.stdout.trim(),
+          currentVersion,
           latest: latest.stdout.trim(),
           latestMessage: latestMsg.stdout.trim(),
+          latestVersion,
           ahead,
           behind,
           available: behind > 0,

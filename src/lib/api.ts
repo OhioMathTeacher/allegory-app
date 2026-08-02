@@ -156,8 +156,12 @@ export interface UpdateStatus {
   bootId?: string
   current: string
   currentMessage: string
+  /** Installed version from package.json, e.g. "1.8.1". '' if unreadable. */
+  currentVersion?: string
   latest: string
   latestMessage: string
+  /** Published version from origin/main's package.json. '' if unreadable. */
+  latestVersion?: string
   ahead: number
   behind: number
   available: boolean

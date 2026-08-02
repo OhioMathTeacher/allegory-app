@@ -9,6 +9,17 @@ type Phase = 'idle' | 'updating' | 'timeout'
 const sleep = (ms: number) => new Promise((r) => window.setTimeout(r, ms))
 
 /**
+ * Label a build as "v1.8.1 (fe19cc9)" — the version first, because that is what
+ * you can compare against a release note, with the SHA kept for the case where
+ * two builds share a version (every commit between releases does).
+ * Falls back to the bare SHA when the server is too old to send a version.
+ */
+function stamp(version: string | undefined, sha: string | undefined): string {
+  if (version && sha) return `v${version} (${sha})`
+  return version ? `v${version}` : (sha ?? 'unknown')
+}
+
+/**
  * In-app updater. Shows whether a newer version is published and, when one is,
  * applies it and restarts the server — polling until the new version is live,
  * then reloading the page.
@@ -114,6 +125,14 @@ export function UpdatePanel() {
   }
 
   const available = data?.available
+  // "v1.8.1 → v1.8.2", but only when both versions are known AND actually
+  // differ. Commits published between releases carry the same version, and
+  // "v1.8.1 → v1.8.1" would read as a no-op — in that case fall back to the
+  // commit count, which is the only thing that distinguishes them.
+  const versionJump =
+    data?.currentVersion && data?.latestVersion && data.currentVersion !== data.latestVersion
+      ? `v${data.currentVersion} → v${data.latestVersion}`
+      : ''
   return (
     <Shell>
       <div className="flex flex-col gap-3">
@@ -121,22 +140,32 @@ export function UpdatePanel() {
           {available ? (
             <div className="flex items-center gap-1.5 text-sm font-semibold text-[var(--accent)]">
               <ArrowUpCircle className="h-4 w-4 shrink-0" />
-              Update available — {data?.behind} commit
-              {data?.behind === 1 ? '' : 's'} behind
+              {versionJump ? (
+                <span>Update available — {versionJump}</span>
+              ) : (
+                <span>
+                  Update available — {data?.behind} commit
+                  {data?.behind === 1 ? '' : 's'} behind
+                </span>
+              )}
             </div>
           ) : (
             <div className="flex items-center gap-1.5 text-sm text-emerald-300/90">
               <Check className="h-4 w-4 shrink-0" />
-              You’re up to date.
+              You’re up to date{data?.currentVersion ? ` on v${data.currentVersion}` : ''}.
             </div>
           )}
           <div className="mt-1 truncate text-xs text-white/74">
-            Installed {data?.current}
+            Installed {stamp(data?.currentVersion, data?.current)}
             {data?.currentMessage ? ` · ${data.currentMessage}` : ''}
           </div>
-          {available && data?.latestMessage && (
+          {available && (
             <div className="mt-0.5 truncate text-xs text-white/74">
-              Latest {data.latest} · {data.latestMessage}
+              Latest {stamp(data?.latestVersion, data?.latest)}
+              {data?.latestMessage ? ` · ${data.latestMessage}` : ''}
+              {versionJump && data?.behind
+                ? ` · ${data.behind} commit${data.behind === 1 ? '' : 's'} behind`
+                : ''}
             </div>
           )}
           {data && !data.fetchOk && (
