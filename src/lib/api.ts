@@ -627,6 +627,20 @@ export async function getMixes(conn: Connection): Promise<Mix[]> {
   return data.mixes
 }
 
+/** More tracks in a mix's theme, so a playing mix never runs dry. `exclude` is
+ *  the current queue's track ids. Returns [] when the theme is exhausted. */
+export async function getMoreMixTracks(
+  conn: Connection,
+  mixId: string,
+  exclude: string[],
+): Promise<Track[]> {
+  const data = await send<{ tracks: Track[] }>(conn, 'POST', '/discover/mixes/more', {
+    mixId,
+    exclude,
+  })
+  return data.tracks
+}
+
 /** Artists in your library worth playing next, scored over a listening window. */
 export async function getRecommendations(
   conn: Connection,

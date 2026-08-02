@@ -21,6 +21,12 @@ export interface PlayerContextValue {
   playbackRate: number
   setPlaybackRate: (rate: number) => void
   playQueue: (tracks: Track[], startIndex: number) => void
+  /** Id of the mix currently driving the queue, or null. When set, the queue
+   *  tops itself up in that theme as it nears the end (endless mix). */
+  mixId: string | null
+  /** Start an endless mix: play its opening tracks and remember the theme so the
+   *  queue refills as it runs down. */
+  playMix: (mixId: string, tracks: Track[]) => void
   /** Insert tracks right after the current one (or start playing if idle). */
   playNext: (tracks: Track[]) => void
   /** Append tracks to the end of the queue (or start playing if idle). */

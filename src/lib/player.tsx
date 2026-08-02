@@ -8,7 +8,7 @@ import {
 } from 'react'
 import type { ReactNode } from 'react'
 import type { Track } from './types'
-import { audioStreamUrl, trackImageUrl, reportPlay } from './api'
+import { audioStreamUrl, trackImageUrl, reportPlay, getMoreMixTracks } from './api'
 import { useConnected } from './connection'
 import { extractPalette } from './colors'
 import { remoteUrl } from './remote-protocol'
@@ -61,24 +61,32 @@ function loadRepeat(): RepeatMode {
 interface SavedQueue {
   queue: Track[]
   currentIndex: number
+  /** The endless-mix theme driving the queue, if any — restored so a reload
+   *  keeps topping the mix up. */
+  mixId: string | null
 }
 
 /** Restore the queue and the cursor position. Returns empty if nothing saved. */
 function loadQueue(): SavedQueue {
   try {
     const raw = localStorage.getItem(QUEUE_STORAGE_KEY)
-    if (!raw) return { queue: [], currentIndex: -1 }
+    if (!raw) return { queue: [], currentIndex: -1, mixId: null }
     const parsed = JSON.parse(raw) as Partial<SavedQueue>
-    if (!Array.isArray(parsed.queue)) return { queue: [], currentIndex: -1 }
+    if (!Array.isArray(parsed.queue)) return { queue: [], currentIndex: -1, mixId: null }
     const idx = typeof parsed.currentIndex === 'number' ? parsed.currentIndex : -1
     return {
       queue: parsed.queue as Track[],
       currentIndex: Math.min(idx, parsed.queue.length - 1),
+      mixId: typeof parsed.mixId === 'string' ? parsed.mixId : null,
     }
   } catch {
-    return { queue: [], currentIndex: -1 }
+    return { queue: [], currentIndex: -1, mixId: null }
   }
 }
+
+/** How many tracks may remain after the current one before an endless mix tops
+ *  itself up, and how the client asks the server for the next batch. */
+const MIX_REFILL_AT = 1
 
 export function PlayerProvider({ children }: { children: ReactNode }) {
   const conn = useConnected()
@@ -103,6 +111,11 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const [outputDeviceId, setOutputDeviceId] = useState<string>(
     () => localStorage.getItem(OUTPUT_STORAGE_KEY) ?? '',
   )
+  // The endless-mix theme driving the queue, or null. Set by playMix, cleared
+  // when any other queue starts. Drives the refill effect below.
+  const [mixId, setMixId] = useState<string | null>(initialQueue.current.mixId)
+  // Guards against firing a second top-up while one is already in flight.
+  const refillingRef = useRef(false)
 
   const currentTrack = currentIndex >= 0 ? queue[currentIndex] ?? null : null
 
@@ -159,12 +172,34 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     try {
       localStorage.setItem(
         QUEUE_STORAGE_KEY,
-        JSON.stringify({ queue, currentIndex }),
+        JSON.stringify({ queue, currentIndex, mixId }),
       )
     } catch {
       // Quota exceeded or storage disabled — survivable.
     }
-  }, [queue, currentIndex])
+  }, [queue, currentIndex, mixId])
+
+  // Endless mixes: once the cursor is within MIX_REFILL_AT of the end, ask the
+  // server for more tracks in the same theme (excluding what's queued) and
+  // append them. Deep cuts eventually returns nothing and the mix ends; the
+  // other themes recycle, so they run indefinitely. Host-only — remotes don't
+  // own the queue.
+  useEffect(() => {
+    if (!mixId || currentIndex < 0) return
+    if (queue.length - 1 - currentIndex > MIX_REFILL_AT) return
+    if (refillingRef.current) return
+    refillingRef.current = true
+    getMoreMixTracks(conn, mixId, queue.map((t) => t.id))
+      .then((more) => {
+        if (more.length > 0) setQueue((q) => q.concat(more))
+      })
+      .catch(() => {
+        // Offline or the theme dried up — leave the mix to end naturally.
+      })
+      .finally(() => {
+        refillingRef.current = false
+      })
+  }, [mixId, currentIndex, queue, conn])
 
   useEffect(() => {
     const audio = audioRef.current!
@@ -523,8 +558,16 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
 
   const playQueue = useCallback((tracks: Track[], startIndex: number) => {
     userStartedRef.current = true
+    setMixId(null) // a plain queue doesn't refill; only playMix keeps going
     setQueue(tracks)
     setCurrentIndex(startIndex)
+  }, [])
+
+  const playMix = useCallback((id: string, tracks: Track[]) => {
+    userStartedRef.current = true
+    setMixId(id)
+    setQueue(tracks)
+    setCurrentIndex(0)
   }, [])
 
   const playNext = useCallback((tracks: Track[]) => {
@@ -730,6 +773,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       playbackRate,
       setPlaybackRate,
       playQueue,
+      mixId,
+      playMix,
       playNext,
       addToQueue,
       togglePlay,
@@ -762,6 +807,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       playbackRate,
       setPlaybackRate,
       playQueue,
+      mixId,
+      playMix,
       playNext,
       addToQueue,
       togglePlay,

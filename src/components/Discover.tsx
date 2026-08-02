@@ -68,11 +68,6 @@ function readWindow(): ListenWindow {
 export function Discover({ onSelectArtist }: DiscoverProps) {
   const conn = useConnected()
   const [range, setRange] = useState<ListenWindow>(readWindow)
-  // Which mix the user last pressed Play on. Paired with a check that the
-  // playing track really belongs to it, this is what keeps ONE card lit —
-  // `--accent` is global (it's sampled from the current album art), so a card
-  // can't tell from colour alone whether it's the one playing.
-  const [launchedMix, setLaunchedMix] = useState<string | null>(null)
   // Only the two long lists collapse. The playing summary is a few rows, and
   // Mixes are the point of the page — burying them behind a click would be a
   // worse page, not a shorter one.
@@ -153,8 +148,6 @@ export function Discover({ onSelectArtist }: DiscoverProps) {
                   key={mix.id}
                   mix={mix}
                   index={i}
-                  launchedMix={launchedMix}
-                  onLaunch={() => setLaunchedMix(mix.id)}
                 />
               ))}
             </div>
@@ -314,9 +307,6 @@ function Section({ title, note, children }: SectionProps) {
 interface MixCardProps {
   mix: Mix
   index: number
-  /** The mix the user last pressed Play on, or null if none this visit. */
-  launchedMix: string | null
-  onLaunch: () => void
 }
 
 /**
@@ -371,7 +361,7 @@ function MixCover({ mix }: { mix: Mix }) {
   )
 }
 
-function MixCard({ mix, index, launchedMix, onLaunch }: MixCardProps) {
+function MixCard({ mix, index }: MixCardProps) {
   const player = usePlayer()
   const [busy, setBusy] = useState(false)
   const { icon, accent } = mixFace(mix.id)
@@ -384,23 +374,16 @@ function MixCard({ mix, index, launchedMix, onLaunch }: MixCardProps) {
       : artists.slice(0, 2).join(', ') +
         (artists.length > 2 ? ` +${artists.length - 2} more` : '')
 
-  // Membership in the mix is the real signal — it means playback still came
-  // from here, so starting anything else in the app puts this card back to
-  // rest. The launched id only breaks ties between mixes that happen to share
-  // a track, and is deliberately allowed to be null: leaving Discover and
-  // coming back remounts this, and a mix that's still playing should still
-  // read as playing.
-  const fromThisMix =
-    !!player.currentTrack && mix.trackIds.includes(player.currentTrack.id)
-  const playing =
-    fromThisMix && (launchedMix === null || launchedMix === mix.id)
+  // The player names the mix it's driving, so exactly one card lights — and it
+  // stays lit as an endless mix refills past its opening tracks (the appended
+  // tracks aren't in mix.trackIds, so a membership test would go dark).
+  const playing = player.mixId === mix.id
 
   function play(shuffled: boolean) {
     if (busy || mix.tracks.length === 0) return
     setBusy(true)
     try {
-      onLaunch()
-      player.playQueue(shuffled ? shuffle(mix.tracks) : mix.tracks, 0)
+      player.playMix(mix.id, shuffled ? shuffle(mix.tracks) : mix.tracks)
     } finally {
       setBusy(false)
     }

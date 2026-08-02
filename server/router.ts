@@ -22,6 +22,7 @@ import {
 import type { PortraitStore } from './artist-portrait.ts'
 import {
   getMixes,
+  moreMixTracks,
   getMissingAlbums,
   getRecommendations,
 } from './discover.ts'
@@ -1294,6 +1295,28 @@ export function createRouter(deps: RouterDeps): Router {
       }
 
       // --- discover ---------------------------------------------------------
+      // Top up a playing mix: more tracks in the same theme, excluding what's
+      // already queued. POST because the exclude list is the whole queue.
+      if (
+        segs.length === 4 &&
+        segs[1] === 'discover' &&
+        segs[2] === 'mixes' &&
+        segs[3] === 'more' &&
+        method === 'POST'
+      ) {
+        const body = (await readBody(req)) as { mixId?: string; exclude?: string[] }
+        const mixId = typeof body.mixId === 'string' ? body.mixId : ''
+        const exclude = Array.isArray(body.exclude)
+          ? body.exclude.filter((x): x is string => typeof x === 'string')
+          : []
+        if (!mixId) {
+          sendJson(res, { tracks: [] })
+          return true
+        }
+        sendJson(res, { tracks: await moreMixTracks(library, mixId, Date.now(), exclude) })
+        return true
+      }
+
       // Mixes are pure local computation; recommendations read the sidecars
       // already on disk; missing-albums is the only one that may go online.
       if (segs.length === 3 && segs[1] === 'discover' && method === 'GET') {

@@ -145,6 +145,11 @@ export function RemotePlayerProvider({ children }: RemotePlayerProviderProps) {
       setPlaybackRate: noop,
       playQueue: (tracks, startIndex) =>
         sendTracks('playQueue', tracks, startIndex),
+      // Endless refill lives in the host's player; over remote we just send the
+      // opening batch as a queue, so a remote-launched mix plays but doesn't
+      // top itself up. `mixId` is always null here — this phone owns no queue.
+      mixId: null,
+      playMix: (_id, tracks) => sendTracks('playQueue', tracks, 0),
       playNext: (tracks) => sendTracks('playNext', tracks),
       addToQueue: (tracks) => sendTracks('addToQueue', tracks),
       togglePlay: () => sendCmd('togglePlay'),
