@@ -21,6 +21,7 @@ import mutagen
 
 MUSIC = "/media/MUSIC"
 AUD = {".mp3", ".flac", ".m4a", ".ogg", ".wav", ".aiff"}
+CD_SUBDIR = re.compile(r"^(?:(?:cd|dis[ck])[\s._-]*\d+|\d+)$|^(?:cd|dis[ck])[\s._-]*\d+", re.I)
 
 
 def safe(s):
@@ -46,13 +47,20 @@ def album_of(d):
 
 
 def main():
-    artists = sys.argv[1:]
-    write = "--write" in artists
-    artists = [a for a in artists if a != "--write"]
-    if not artists:
+    argv = sys.argv[1:]
+    write = "--write" in argv
+    every = "--all" in argv
+    safe_only = "--safe" in argv
+    artists = [a for a in argv if not a.startswith("--")]
+    if every:
+        artists = [d for d in sorted(os.listdir(MUSIC))
+                   if os.path.isdir(os.path.join(MUSIC, d))
+                   and d not in ("lost+found", "Playlists")]
+    elif not artists:
         artists = ["Melvins", "Dinosaur Jr"]
 
     moves, skips, loose = [], [], []
+    # (safe_only is read inside the loop below)
     for artist in artists:
         base = os.path.join(MUSIC, artist)
         if not os.path.isdir(base):
@@ -88,6 +96,31 @@ def main():
                 skips.append((root, f"disagreeing tags: {dict(names)}"))
                 continue
             album = safe(names.most_common(1)[0][0])
+
+            # Album tags are not reliably better than folder names — seen in the
+            # wild: "Rubber Soul" tagged as "The Beatles Collection", and
+            # "Black Gives Way to Blue" tagged with a track title. Only rename
+            # when the folder name carries no information of its own: an opaque
+            # code (BSLAT, LS) or a scene-release string. Everything else is
+            # reported for review rather than renamed.
+            folder_name = os.path.basename(root)
+            # CD1/Disc 2/etc are disc subfolders, not albums — Allegory already
+            # folds them into the parent. Renaming them would collapse both
+            # discs of a set onto one target.
+            if CD_SUBDIR.match(folder_name):
+                continue
+            # An opaque code needs at least two letters, so real album names
+            # that happen to be numeric ("77", "1983") are not swept up.
+            cryptic = (bool(re.match(r"^[A-Z0-9]{2,10}$", folder_name))
+                       and len(re.findall(r"[A-Z]", folder_name)) >= 2)
+            scene = bool(re.search(r"[-_]\d{4}[-_]|__mlib|www\.|-cd-|-flac-",
+                                   folder_name.lower()))
+            if safe_only and not (cryptic or scene):
+                continue
+            if re.search(r"unknown album|^track\d|^audiotrack", album, re.I):
+                skips.append((root, f"junk album tag: {album!r}"))
+                continue
+
             dest = os.path.join(base, album)
             if os.path.normpath(dest) == os.path.normpath(root):
                 continue
@@ -95,6 +128,13 @@ def main():
                 skips.append((root, f"target exists: {album!r}"))
                 continue
             moves.append((root, dest))
+
+    targets = Counter(d for _, d in moves)
+    collisions = {d for d, n in targets.items() if n > 1}
+    if collisions:
+        moves = [(s_, d) for s_, d in moves if d not in collisions]
+        for d in sorted(collisions):
+            skips.append((d, "COLLISION — two folders map to this name"))
 
     print(f"{'APPLYING' if write else 'DRY RUN'} — "
           f"{len(moves)} folders renamed, {len(loose)} loose files filed\n")
