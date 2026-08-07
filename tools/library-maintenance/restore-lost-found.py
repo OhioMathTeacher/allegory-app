@@ -73,7 +73,13 @@ def plan_talking_heads():
             continue
         num = g("tracknumber").split("/")[0].zfill(2)
         title = safe(g("title")) or e
-        dst = os.path.join(MUSIC, TH_ALBUM, f"{num} {title}.mp3")
+        # fsck-orphaned files have no extension, and the container is NOT
+        # guaranteed to be MP3 — these turned out to be Ogg Vorbis. Navidrome
+        # dispatches on the extension, so guessing wrong makes a perfectly
+        # playable file scan as [Unknown Album].
+        ext = {"OggVorbis": ".ogg", "OggOpus": ".opus", "FLAC": ".flac",
+               "MP4": ".m4a", "MP3": ".mp3"}.get(type(mutagen.File(p)).__name__, ".mp3")
+        dst = os.path.join(MUSIC, TH_ALBUM, f"{num} {title}{ext}")
         jobs.append((p, dst))
     return jobs
 

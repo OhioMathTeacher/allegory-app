@@ -1,0 +1,27 @@
+[Unit]
+Description=Navidrome music server (Subsonic API for phone clients)
+Documentation=https://www.navidrome.org/docs/
+# Bound to the Tailscale address, so wait for networking to settle.
+After=network-online.target
+Wants=network-online.target
+# The library lives on a USB drive. Without this the scanner can start before
+# /media/MUSIC is mounted and index an empty library — the exact failure the
+# fstab nofail entry was added to prevent on the Allegory side.
+RequiresMountsFor=/media/MUSIC
+# Don't flap: if it crashes 5 times in 60s, stop trying and surface it.
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+[Service]
+Type=simple
+WorkingDirectory=/home/todd/navidrome-trial
+ExecStart=/home/todd/navidrome-trial/navidrome --configfile /home/todd/navidrome-trial/navidrome.toml
+Restart=on-failure
+RestartSec=3
+# Navidrome only ever reads the library; enforce that at the kernel level
+# rather than trusting config. Replaces the bwrap --ro-bind wrapper used while
+# this was a hand-started trial.
+ReadOnlyPaths=/media/MUSIC
+
+[Install]
+WantedBy=default.target
