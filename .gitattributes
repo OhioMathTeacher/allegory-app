@@ -1,0 +1,17 @@
+# Git decides text-vs-binary by sniffing for NUL bytes, and server/scanner.ts
+# legitimately contains two: one inside the JUNK_CHARS character class (a
+# literal control character, which is why that line carries an eslint
+# no-control-regex disable), and one used as a '\0' key separator when keying
+# albums by artist+album.
+#
+# That was enough for git to classify the whole file as binary: `git log -p`
+# and GitHub showed "Binary files differ" instead of a diff, grep skipped it
+# without saying so, and a merge would have been impossible to resolve except
+# by choosing one side wholesale.
+#
+# Setting `diff` marks these as text even when they contain such bytes;
+# `merge` selects the ordinary 3-way text merge. Note this deliberately does
+# NOT set the `text` attribute, which would turn on end-of-line normalisation
+# and rewrite files on checkout.
+*.ts   diff merge
+*.tsx  diff merge
