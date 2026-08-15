@@ -11,6 +11,7 @@ import { basename, dirname, extname, isAbsolute, join, relative } from 'node:pat
 import sharp from 'sharp'
 import type { Library } from './scanner.ts'
 import type { Playlists } from './playlists.ts'
+import { findDuplicates, quarantineFiles } from './duplicates.ts'
 import type { SettingsStore } from './settings.ts'
 import { isLoopback, type Auth } from './auth.ts'
 import { editAlbum, renameArtist, applyAlbumTags, readFullTags } from './metadata.ts'
@@ -660,6 +661,42 @@ export function createRouter(deps: RouterDeps): Router {
       // --- cleanup analysis (duplicate/variant + junk artists) ------------
       if (segs.length === 2 && segs[1] === 'cleanup' && method === 'GET') {
         sendJson(res, library.cleanupReport())
+        return true
+      }
+
+      // --- duplicate FILES (byte-identical audio in the library) ----------
+      // Distinct from the cleanup report above (which groups artist *names*)
+      // and from playlist dedupe (which drops repeated references). This
+      // finds the same bytes stored twice, so acting on it deletes audio —
+      // hence quarantine rather than unlink, and never automatically.
+      if (segs.length === 2 && segs[1] === 'duplicates' && method === 'GET') {
+        const candidates = library.allTracks().map((t) => ({ id: t.id, path: t.path }))
+        sendJson(res, await findDuplicates(library.musicDir, candidates))
+        return true
+      }
+      if (
+        segs.length === 3 &&
+        segs[1] === 'duplicates' &&
+        segs[2] === 'quarantine' &&
+        method === 'POST'
+      ) {
+        const body = (await readBody(req)) as { ids?: string[] }
+        // Ids are resolved against the index rather than trusting paths from
+        // the client: an unknown id simply yields no path, so a crafted
+        // request cannot move a file the library does not already own.
+        const paths = (body.ids ?? [])
+          .map((id) => library.track(id)?.path)
+          .filter((p): p is string => !!p)
+        if (paths.length === 0) {
+          sendJson(res, { error: 'No known files were named.' }, 400)
+          return true
+        }
+        const today = new Date().toISOString().slice(0, 10)
+        const result = await quarantineFiles(library.musicDir, paths, today)
+        // Those files are gone from the library's point of view; reindex so
+        // the rest of the app stops offering them.
+        void library.scan().catch((e) => console.error('[allegory] rescan failed', e))
+        sendJson(res, result)
         return true
       }
 

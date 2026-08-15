@@ -51,6 +51,37 @@ export interface PlaylistsReport {
   error?: string
 }
 
+/** One file in a duplicate group — byte-identical to its siblings. */
+export interface DuplicateFile {
+  id: string
+  /** Path relative to the music dir. */
+  relPath: string
+  size: number
+  mtimeMs: number
+}
+
+/** Two or more byte-identical files. The suggested keeper is first. */
+export interface DuplicateGroup {
+  hash: string
+  size: number
+  members: DuplicateFile[]
+}
+
+export interface DuplicateReport {
+  scanned: number
+  hashed: number
+  groups: DuplicateGroup[]
+  /** Bytes freed if every group were reduced to one file. */
+  reclaimable: number
+}
+
+/** What a quarantine run did. */
+export interface QuarantineResult {
+  moved: number
+  failed: string[]
+  dir: string
+}
+
 /** What an album-merge did, for the confirmation message. */
 export interface MergeResult {
   moved: number

@@ -8,9 +8,11 @@ import type {
   Album,
   Artist,
   Connection,
+  DuplicateReport,
   MergeResult,
   Playlist,
   PlaylistsReport,
+  QuarantineResult,
   SearchResults,
   Track,
 } from './types'
@@ -611,6 +613,29 @@ export async function combinePlaylists(
     sourceIds,
   })
   return data?.id ?? ''
+}
+
+/**
+ * Find byte-identical audio files across the whole library. Expensive by
+ * design — it stats every track and hashes the ones sharing a size — so it
+ * runs only when asked.
+ */
+export async function findDuplicateFiles(
+  conn: Connection,
+): Promise<DuplicateReport> {
+  return getJson<DuplicateReport>(conn, '/duplicates')
+}
+
+/**
+ * Move the named files into the library's `.duplicates/` folder. Files are
+ * identified by track id, never by path, so the server only ever moves
+ * something it already has indexed.
+ */
+export async function quarantineDuplicates(
+  conn: Connection,
+  ids: string[],
+): Promise<QuarantineResult> {
+  return send<QuarantineResult>(conn, 'POST', '/duplicates/quarantine', { ids })
 }
 
 /** Re-scan the music directory for newly added (or removed) files. */
