@@ -1,10 +1,11 @@
 import { useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { motion } from 'motion/react'
-import { ListMusic, Plus, Pencil, Sparkles, Loader2 } from 'lucide-react'
+import { ListMusic, Plus, Pencil, Sparkles, Loader2, AlertTriangle } from 'lucide-react'
 import { useConnected } from '../lib/connection'
 import {
   getPlaylists,
+  getPlaylistsReport,
   getSongNotesIndex,
   createPlaylist,
   albumImageUrl,
@@ -50,6 +51,14 @@ export function Playlists({ onSelectPlaylist, onOpenNotes }: PlaylistsProps) {
   } = useQuery({
     queryKey: ['playlists', conn.serverUrl, conn.userId],
     queryFn: () => getPlaylists(conn),
+  })
+
+  // Files sitting in the playlist folder that the server did not load. Almost
+  // always empty; when it isn't, it is the whole explanation for a playlist
+  // that "disappeared", so it is worth a permanent line in this view.
+  const { data: report } = useQuery({
+    queryKey: ['playlists-report', conn.serverUrl, conn.userId],
+    queryFn: () => getPlaylistsReport(conn),
   })
 
   // Library context for the AI prompt — same cache keys as Socrates, so it's
@@ -279,6 +288,32 @@ export function Playlists({ onSelectPlaylist, onOpenNotes }: PlaylistsProps) {
         )}
 
         {isLoading && <SkeletonList />}
+
+        {report && (report.skipped.length > 0 || report.error) && (
+          <div className="mb-4 flex items-start gap-2 rounded-xl border border-amber-500/30 bg-amber-500/5 p-4 text-sm text-amber-300/90">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+            <div className="min-w-0">
+              {report.error ? (
+                <p>{report.error}</p>
+              ) : (
+                <>
+                  <p className="font-medium">
+                    {report.skipped.length} file{report.skipped.length === 1 ? '' : 's'} in
+                    this folder {report.skipped.length === 1 ? 'was' : 'were'} not loaded.
+                  </p>
+                  <ul className="mt-2 space-y-1 text-amber-200/75">
+                    {report.skipped.map((f) => (
+                      <li key={f.name} className="truncate">
+                        <span className="font-mono">{f.name}</span> — {f.reason}
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              )}
+              <p className="mt-2 break-all font-mono text-xs text-amber-200/55">{report.dir}</p>
+            </div>
+          </div>
+        )}
 
         {isError && (
           <div className="rounded-xl border border-line bg-surface/60 p-10 text-center text-sm text-white/78">

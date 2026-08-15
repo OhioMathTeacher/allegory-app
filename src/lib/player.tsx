@@ -607,7 +607,12 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   // dictation starts, which sidesteps the whole mic-interruption fight: iOS has
   // nothing to suspend, so the resume-retry machinery never arms. Marked as an
   // intentional pause so even a late interruption event won't try to resume.
+  //
+  // Touch devices only. There is no dictation to make room for on a desktop,
+  // where search is typed — stopping the music there is pure loss, and the
+  // same maxTouchPoints check already gates the resume machinery above.
   const pauseForSearch = useCallback(() => {
+    if (navigator.maxTouchPoints === 0) return
     const audio = audioRef.current!
     if (audio.paused || !audio.src) return
     pausedForSearchRef.current = true

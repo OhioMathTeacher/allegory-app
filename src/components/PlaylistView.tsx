@@ -1,11 +1,20 @@
 import { useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, Play, Shuffle, ListMusic, Pencil } from 'lucide-react'
+import {
+  ArrowLeft,
+  Play,
+  Shuffle,
+  ListMusic,
+  Pencil,
+  AlertTriangle,
+  CopyMinus,
+} from 'lucide-react'
 import { useConnected } from '../lib/connection'
 import {
   getPlaylistTracks,
   albumImageUrl,
   movePlaylistTrack,
+  removePlaylistDuplicates,
   uploadPlaylistImage,
 } from '../lib/api'
 import { usePlayer } from '../lib/player'
@@ -35,6 +44,11 @@ export function PlaylistView({ playlist, onBack, onSelectArtist }: PlaylistViewP
   const fileRef = useRef<HTMLInputElement>(null)
   const [artVersion, setArtVersion] = useState(0)
   const [uploadingArt, setUploadingArt] = useState(false)
+  // Duplicate count comes from the list query, so — like `name` — the prop is
+  // stale the moment we act on it. Track it locally from that starting point.
+  const [dupCount, setDupCount] = useState(playlist.duplicateCount ?? 0)
+  const [deduping, setDeduping] = useState(false)
+  const [dedupeResult, setDedupeResult] = useState<string | null>(null)
 
   async function handleArtFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -57,6 +71,34 @@ export function PlaylistView({ playlist, onBack, onSelectArtist }: PlaylistViewP
 
   const totalSeconds =
     tracks?.reduce((sum, t) => sum + ticksToSeconds(t.durationTicks), 0) ?? 0
+
+  // `trackCount` counts lines in the `.m3u`; `tracks` counts the ones that
+  // matched a real file. A gap means the playlist points at something the
+  // library doesn't have — which otherwise renders as an unexplained empty
+  // playlist, indistinguishable from one you never filled in.
+  const listedCount = playlist.trackCount ?? null
+  const missingCount =
+    tracks && listedCount !== null ? Math.max(0, listedCount - tracks.length) : 0
+
+  async function deleteDuplicates() {
+    setDeduping(true)
+    setDedupeResult(null)
+    try {
+      const removed = await removePlaylistDuplicates(conn, playlist.id)
+      setDupCount(0)
+      setDedupeResult(
+        removed === 0
+          ? 'No duplicates found.'
+          : `Removed ${removed} duplicate${removed === 1 ? '' : 's'}.`,
+      )
+      queryClient.invalidateQueries({ queryKey: ['playlist-tracks', playlist.id] })
+      queryClient.invalidateQueries({ queryKey: ['playlists'] })
+    } catch (err) {
+      setDedupeResult(err instanceof Error ? err.message : 'Something went wrong.')
+    } finally {
+      setDeduping(false)
+    }
+  }
 
   function play(shuffled: boolean) {
     if (!tracks || tracks.length === 0) return
@@ -167,13 +209,49 @@ export function PlaylistView({ playlist, onBack, onSelectArtist }: PlaylistViewP
           <Shuffle className="h-4 w-4" />
           Shuffle
         </button>
+        {/* Only worth offering when there's something to remove. Once it's
+            run, the result line replaces it rather than leaving a dead
+            button sitting there. */}
+        {dupCount > 0 && (
+          <button
+            onClick={deleteDuplicates}
+            disabled={deduping}
+            title="Remove entries that repeat a track already in this playlist"
+            className="flex items-center gap-2 rounded-full border border-line px-5 py-2.5 text-sm font-medium text-white/80 transition-colors hover:bg-white/14 disabled:opacity-40"
+          >
+            <CopyMinus className="h-4 w-4" />
+            {deduping
+              ? 'Removing…'
+              : `Delete Duplicates (${dupCount})`}
+          </button>
+        )}
+        {dedupeResult && (
+          <span className="text-sm text-white/70">{dedupeResult}</span>
+        )}
       </div>
 
       <div className="mt-9">
         {isLoading && <TrackSkeleton />}
+        {missingCount > 0 && tracks && tracks.length > 0 && (
+          <div className="mb-3 flex items-start gap-2 rounded-xl border border-amber-500/30 bg-amber-500/5 p-3 text-sm text-amber-300/90">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+            <span>
+              {missingCount} of {listedCount} entries in this playlist could not be found
+              on disk, so they aren’t shown.
+            </span>
+          </div>
+        )}
         {tracks && tracks.length === 0 && (
           <div className="rounded-xl border border-line bg-surface/60 p-10 text-center text-sm text-white/74">
-            This playlist is empty.
+            {missingCount > 0 ? (
+              <>
+                None of this playlist’s {listedCount} entries could be found on disk. The
+                tracks may have been moved or renamed, or the file’s paths may be written
+                for a different player.
+              </>
+            ) : (
+              'This playlist is empty.'
+            )}
           </div>
         )}
         {tracks && tracks.length > 0 && (

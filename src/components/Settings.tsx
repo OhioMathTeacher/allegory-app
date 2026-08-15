@@ -26,9 +26,33 @@ interface SettingsProps {
   onClose: () => void
 }
 
+/**
+ * Which machine is answering `/api`.
+ *
+ * Allegory serves the app *from* the machine holding the music, so the folder
+ * this screen edits lives on that box — not on the computer you happen to be
+ * sitting at. The picker below browses its disk, and a change here reaches
+ * every device pointed at it. All of that used to be left implicit.
+ */
+function serverIdentity(serverUrl: string): { host: string; isLocal: boolean } {
+  let host: string
+  try {
+    // A relative base ('/api') means this page's own origin is the server.
+    host = new URL(serverUrl, window.location.origin).host
+  } catch {
+    host = window.location.host
+  }
+  const name = host.replace(/:\d+$/, '')
+  return {
+    host,
+    isLocal: name === 'localhost' || name === '127.0.0.1' || name === '[::1]',
+  }
+}
+
 export function Settings({ firstRun, initialSection, onClose }: SettingsProps) {
   const conn = useConnected()
   const queryClient = useQueryClient()
+  const server = serverIdentity(conn.serverUrl)
 
   const { data: current } = useQuery({
     queryKey: ['settings'],
@@ -77,6 +101,18 @@ export function Settings({ firstRun, initialSection, onClose }: SettingsProps) {
 
   async function save() {
     if (!validation?.ok) return
+    // Repointing the library rescans the whole collection and changes what
+    // every device connected to this server sees — including a phone in
+    // another room. The screen looks like a local preference, so the blast
+    // radius has to be said out loud. First run has nothing to lose.
+    if (!firstRun && current?.musicDir && path !== current.musicDir) {
+      const where = server.isLocal ? 'this computer' : server.host
+      const proceed = window.confirm(
+        `Change the music library on ${where} to:\n\n${path}\n\n` +
+          `This affects every device connected to it, including phones, and starts a full rescan.`,
+      )
+      if (!proceed) return
+    }
     setSaving(true)
     setSaveError(null)
     try {
@@ -182,7 +218,9 @@ export function Settings({ firstRun, initialSection, onClose }: SettingsProps) {
                   ? 'Pick a model. Keys live only in this browser.'
                   : section === 'diagnostics'
                     ? 'Event log for chasing playback issues.'
-                    : 'Choose where Allegory looks for music.'}
+                    : server.isLocal
+                      ? 'Choose where Allegory looks for music.'
+                      : `Choose where Allegory looks for music on ${server.host}.`}
             </p>
           </div>
           {!firstRun && (
@@ -220,8 +258,16 @@ export function Settings({ firstRun, initialSection, onClose }: SettingsProps) {
         ) : (
         <div className="mt-5">
           <label className="text-[11px] font-medium uppercase tracking-wide text-white/74">
-            Music library folder
+            Music library folder{server.isLocal ? '' : ` on ${server.host}`}
           </label>
+          {!server.isLocal && (
+            <p className="mt-1 text-xs text-white/62">
+              This path is on{' '}
+              <span className="font-mono text-white/80">{server.host}</span>, the machine
+              serving Allegory — not on the computer you’re using. Changing it changes the
+              library for every device connected to it.
+            </p>
+          )}
           <div className="mt-1.5 flex gap-2">
             <input
               autoFocus
@@ -249,6 +295,13 @@ export function Settings({ firstRun, initialSection, onClose }: SettingsProps) {
 
           {picking && (
             <div className="mt-2">
+              <p className="mb-1.5 text-xs text-white/62">
+                Browsing folders on{' '}
+                <span className="font-mono text-white/80">
+                  {server.isLocal ? 'this computer' : server.host}
+                </span>
+                .
+              </p>
               <FolderPicker
                 initialPath={path || undefined}
                 onPick={(p) => {

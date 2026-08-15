@@ -41,6 +41,9 @@ export function TrackMenu({ track, excludePlaylistId }: TrackMenuProps) {
   const [done, setDone] = useState<string | null>(null)
   const [showAll, setShowAll] = useState(false)
   const [filter, setFilter] = useState('')
+  // Set when an add was declined because the track is already in that
+  // playlist — drives the "Add anyway" prompt below.
+  const [alreadyIn, setAlreadyIn] = useState<Playlist | null>(null)
   const download = useDownloadStatus(track.id)
 
   // Playlists load only once a menu is opened (the query is shared by key
@@ -80,6 +83,7 @@ export function TrackMenu({ track, excludePlaylistId }: TrackMenuProps) {
     setDone(null)
     setShowAll(false)
     setFilter('')
+    setAlreadyIn(null)
   }
 
   async function run(work: () => Promise<void>, message: string) {
@@ -94,13 +98,32 @@ export function TrackMenu({ track, excludePlaylistId }: TrackMenuProps) {
     }
   }
 
-  function addTo(playlist: Playlist) {
+  async function addTo(playlist: Playlist, allowDuplicates = false) {
     bumpPlaylist(playlist.id)
-    void run(async () => {
-      await addToPlaylist(conn, playlist.id, [track.id])
+    setAlreadyIn(null)
+    setBusy(true)
+    try {
+      const { added, skipped } = await addToPlaylist(
+        conn,
+        playlist.id,
+        [track.id],
+        allowDuplicates,
+      )
+      // Nothing added because it's already in there: say so and let them
+      // insist, rather than quietly making a second copy.
+      if (added === 0 && skipped > 0) {
+        setBusy(false)
+        setAlreadyIn(playlist)
+        return
+      }
       queryClient.invalidateQueries({ queryKey: ['playlists'] })
       queryClient.invalidateQueries({ queryKey: ['playlist-tracks', playlist.id] })
-    }, `Added to ${playlist.name}`)
+      setDone(`Added to ${playlist.name}`)
+      window.setTimeout(close, 900)
+    } catch (err) {
+      setBusy(false)
+      setDone(err instanceof Error ? err.message : 'Something went wrong.')
+    }
   }
 
   function createNew() {
@@ -159,6 +182,30 @@ export function TrackMenu({ track, excludePlaylistId }: TrackMenuProps) {
               <div className="flex items-center gap-2 px-2.5 py-2 text-sm text-white/75">
                 <Check className="h-4 w-4 shrink-0" style={{ color: 'var(--accent)' }} />
                 {done}
+              </div>
+            ) : alreadyIn ? (
+              <div className="p-1.5">
+                <p className="px-1 py-1 text-sm text-white/75">
+                  “{track.name}” is already in “{alreadyIn.name}”.
+                </p>
+                <div className="mt-2 flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => void addTo(alreadyIn, true)}
+                    disabled={busy}
+                    className="flex-1 rounded-md py-1.5 text-sm font-semibold text-black transition-transform hover:scale-[1.02] disabled:opacity-40"
+                    style={{ background: 'var(--accent)' }}
+                  >
+                    Add anyway
+                  </button>
+                  <button
+                    type="button"
+                    onClick={close}
+                    className="rounded-md border border-line px-3 py-1.5 text-sm text-white/70 transition-colors hover:bg-white/14"
+                  >
+                    Cancel
+                  </button>
+                </div>
               </div>
             ) : creating ? (
               <div className="p-1">
@@ -255,7 +302,7 @@ export function TrackMenu({ track, excludePlaylistId }: TrackMenuProps) {
                   <button
                     key={playlist.id}
                     type="button"
-                    onClick={() => addTo(playlist)}
+                    onClick={() => void addTo(playlist)}
                     disabled={busy}
                     className="block w-full truncate rounded-md px-2.5 py-2 text-left text-sm text-white/80 transition-colors hover:bg-white/14 disabled:opacity-50"
                   >

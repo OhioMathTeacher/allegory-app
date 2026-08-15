@@ -47,19 +47,57 @@ hand: open the menu → **Sound & Video** → right-click **Allegory** →
 
 ## What clicking it does
 
-`allegory.desktop` runs `bin/allegory-launch`, which:
+`allegory.desktop` runs `bin/allegory-launch`, which tries these in order and
+stops at the first that works:
 
-1. Checks `node_modules/` exists — if not, offers to run `npm install`
-   in a Zenity dialog.
-2. If a previous launch's URL file is still valid, opens that URL in
-   Firefox and exits (instant re-launch).
-3. Otherwise starts `npm run dev` detached, waits for the Vite plugin
-   to publish the live URL to `.allegory-cache/url`, and opens it.
-4. On any failure (server crash, timeout), pops a Zenity error dialog
-   with the last 20-ish lines of `.allegory-cache/launcher.log`.
+1. **A remote library**, if one is configured — see the next section. Opens
+   that URL and exits without starting anything locally.
+2. **The systemd service**, if `allegory.service` is active — probes
+   `localhost:4173` and opens it. Checked before starting a dev server,
+   because starting a second server when one is already running is how you
+   end up looking at the wrong one.
+3. **A previous launch's URL file**, if the server it names still answers —
+   opens that URL in Firefox and exits (instant re-launch).
+4. Otherwise: checks `node_modules/` exists (offering `npm install` in a
+   Zenity dialog if not), starts `npm run dev` detached, waits for the Vite
+   plugin to publish the live URL to `.allegory-cache/url`, and opens it.
+
+On any failure (server crash, timeout), it pops a Zenity error dialog with the
+last 20-ish lines of `.allegory-cache/launcher.log`.
 
 The server keeps running after the launcher exits. Click the icon
 again and it'll reuse the same server (just opens a new browser tab).
+
+## Opening a library on another machine
+
+The machine you sit at is not always the machine holding the music — a laptop
+with a partial library on an external drive, and a desktop holding the whole
+collection, is a common enough split. Left to itself the launcher always starts
+the *local* server, so the menu entry quietly opens the smaller library.
+
+Write a URL into `.allegory-cache/remote` and that becomes what the icon opens:
+
+```sh
+echo 'http://other-machine.example:4173/' > .allegory-cache/remote
+```
+
+`ALLEGORY_REMOTE` in the environment does the same thing and takes precedence.
+To go back to the local library, delete the file.
+
+Three deliberate details:
+
+- **It is not the `url` file.** That one is scratch state and gets deleted
+  whenever a probe fails. Configuration must not evaporate because a tunnel
+  was down for a minute.
+- **An unreachable remote asks first**, rather than opening the local library
+  unannounced. A silent fallback is indistinguishable from a library that has
+  lost most of its tracks.
+- **A 401 counts as reachable.** The question is whether a server answers, not
+  whether this device is logged in yet.
+
+`.allegory-cache/` is gitignored, so this is machine-local and survives the
+in-app updater (which runs `reset --hard origin/main`). It is also the right
+place for an address you don't want committed.
 
 ## Always-on (systemd user service)
 
@@ -75,6 +113,22 @@ crashes:
 That fills `allegory.service.in` (repo path + resolved `node`/`npm`)
 into `~/.config/systemd/user/allegory.service`, then enables and starts
 it. Re-run after moving the repo or upgrading node.
+
+### Which port the service actually uses
+
+The committed template runs the **dev server on 5173** (`ExecStart=__NPM__ run
+dev`). A deployment may instead serve the **built `dist/` on 4173** via
+`vite preview`, which is what the upstairs machine does — and
+`bin/allegory-launch` probes `localhost:4173` when `allegory.service` is active,
+so it assumes that arrangement.
+
+If you install the service from the template unmodified, you get 5173 and the
+launcher's 4173 probe simply misses, falling through to the URL-file and
+dev-server steps. Worth knowing before you go hunting: the template and the
+launcher currently disagree, and the rest of this file describes the 5173 path.
+
+A `dist/`-serving deployment needs `npm run build` after code changes; a restart
+alone won't pick them up.
 
 Useful commands:
 
@@ -108,6 +162,11 @@ http://<tailscale-ip>:5173/         e.g. http://100.x.y.z:5173/
 http://<host>.<tailnet>.ts.net:5173/   (if MagicDNS is on)
 ```
 
+(Substitute **4173** if the host serves the built `dist/` rather than the dev
+server. Use the full `.ts.net` name, not the bare short host name — vite's
+anti-DNS-rebinding guard only allows `.ts.net`, and rejects the short form with
+`Blocked request. This host … is not allowed.`)
+
 Vite binds every interface (`server.host: true` in `vite.config.ts`) and
 the port is pinned (`port: 5173`, `strictPort: true`) so that bookmark
 never drifts. For this to work away from home, two host-side settings
@@ -133,6 +192,10 @@ it's *not* managed by systemd — see above). You can wire it up to a
 second `.desktop` file the same way, or just run it from a terminal.
 
 ## The port is pinned (5173)
+
+This section is about the **dev server**. The preview server (`vite preview`,
+serving the built `dist/`) is configured separately and listens on **4173** —
+see "Which port the service actually uses" above.
 
 `vite.config.ts` sets `port: 5173, strictPort: true`, so the server always
 lives at 5173 — that's what keeps the phone's Tailscale bookmark stable.

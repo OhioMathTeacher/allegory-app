@@ -1341,6 +1341,18 @@ export function createRouter(deps: RouterDeps): Router {
       }
 
       // --- playlists ------------------------------------------------------
+      // What the playlist folder holds that we did *not* load. Separate from
+      // the list itself so the list's shape stays a plain array. Playlist ids
+      // are hex, so `report` can never collide with one.
+      if (
+        segs.length === 3 &&
+        segs[1] === 'playlists' &&
+        segs[2] === 'report' &&
+        method === 'GET'
+      ) {
+        sendJson(res, await playlists.report())
+        return true
+      }
       if (segs.length === 2 && segs[1] === 'playlists') {
         if (method === 'GET') {
           sendJson(res, await playlists.list())
@@ -1384,9 +1396,16 @@ export function createRouter(deps: RouterDeps): Router {
       ) {
         const playlistId = seg(2)
         if (method === 'POST') {
-          const body = (await readBody(req)) as { trackIds?: string[] }
-          await playlists.addItems(playlistId, pathsFor(body.trackIds ?? []))
-          sendJson(res, { ok: true })
+          const body = (await readBody(req)) as {
+            trackIds?: string[]
+            allowDuplicates?: boolean
+          }
+          const result = await playlists.addItems(
+            playlistId,
+            pathsFor(body.trackIds ?? []),
+            body.allowDuplicates === true,
+          )
+          sendJson(res, { ok: true, ...result })
           return true
         }
         if (method === 'DELETE') {
@@ -1452,6 +1471,18 @@ export function createRouter(deps: RouterDeps): Router {
         const body = (await readBody(req)) as { from?: number; to?: number }
         await playlists.move(seg(2), Number(body.from), Number(body.to))
         sendJson(res, { ok: true })
+        return true
+      }
+      // Strip repeated entries, keeping the first of each. Removes lines from
+      // the `.m3u` only — every track stays in the library.
+      if (
+        segs.length === 4 &&
+        segs[1] === 'playlists' &&
+        segs[3] === 'deduplicate' &&
+        method === 'POST'
+      ) {
+        const removed = await playlists.removeDuplicates(seg(2))
+        sendJson(res, { removed })
         return true
       }
       if (

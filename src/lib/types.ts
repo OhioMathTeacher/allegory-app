@@ -31,7 +31,24 @@ export interface Playlist {
   id: string
   name: string
   trackCount?: number
+  /** Entries repeating a track already listed above them, counted server-side
+   *  over every `.m3u` line — including ones with no file on disk, which the
+   *  tracks endpoint leaves out. */
+  duplicateCount?: number
   imageTag?: string
+}
+
+/** A file in the playlist folder that the server did not load, and why. */
+export interface SkippedPlaylistFile {
+  name: string
+  reason: string
+}
+
+/** What the server's playlist folder holds, including what it skipped. */
+export interface PlaylistsReport {
+  dir: string
+  skipped: SkippedPlaylistFile[]
+  error?: string
 }
 
 /** What an album-merge did, for the confirmation message. */

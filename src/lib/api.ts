@@ -10,6 +10,7 @@ import type {
   Connection,
   MergeResult,
   Playlist,
+  PlaylistsReport,
   SearchResults,
   Track,
 } from './types'
@@ -492,6 +493,15 @@ export async function getPlaylists(conn: Connection): Promise<Playlist[]> {
   return getJson<Playlist[]>(conn, '/playlists')
 }
 
+/**
+ * What the server's playlist folder holds beyond the playlists themselves —
+ * files it skipped, and why. Fetched alongside the list so the UI can say
+ * "seven files here were not loaded" instead of quietly showing three.
+ */
+export async function getPlaylistsReport(conn: Connection): Promise<PlaylistsReport> {
+  return getJson<PlaylistsReport>(conn, '/playlists/report')
+}
+
 /** The tracks of one playlist, in playlist order. */
 export async function getPlaylistTracks(
   conn: Connection,
@@ -513,13 +523,41 @@ export async function createPlaylist(
   return data?.id ?? ''
 }
 
-/** Append tracks to an existing playlist. */
+/**
+ * Append tracks to an existing playlist. Tracks already in it are skipped and
+ * counted in `skipped` rather than added a second time; pass `allowDuplicates`
+ * to add them regardless.
+ */
 export async function addToPlaylist(
   conn: Connection,
   playlistId: string,
   trackIds: string[],
-): Promise<void> {
-  await send(conn, 'POST', `/playlists/${playlistId}/items`, { trackIds })
+  allowDuplicates = false,
+): Promise<{ added: number; skipped: number }> {
+  const data = await send<{ added?: number; skipped?: number }>(
+    conn,
+    'POST',
+    `/playlists/${playlistId}/items`,
+    { trackIds, allowDuplicates },
+  )
+  return { added: data?.added ?? 0, skipped: data?.skipped ?? 0 }
+}
+
+/**
+ * Drop entries that repeat a track already listed above them, keeping the
+ * first of each. Returns how many entries were removed; the tracks themselves
+ * stay in the library.
+ */
+export async function removePlaylistDuplicates(
+  conn: Connection,
+  playlistId: string,
+): Promise<number> {
+  const data = await send<{ removed?: number }>(
+    conn,
+    'POST',
+    `/playlists/${playlistId}/deduplicate`,
+  )
+  return data?.removed ?? 0
 }
 
 /**
