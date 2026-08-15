@@ -31,6 +31,7 @@ import { NowPlaying } from './NowPlaying'
 import { usePlayer } from '../lib/player'
 import { Settings } from './Settings'
 import { useFolderDrop, DragOverlay, UploadToast } from './FolderUpload'
+import { UploadFiling } from './UploadFiling'
 import { getSettings } from '../lib/api'
 import { useConnected } from '../lib/connection'
 import type { Album, Artist, Playlist } from '../lib/types'
@@ -431,6 +432,15 @@ export function AppShell() {
         {/* corner page-turn buttons removed — navigate via the view tabs (or swipe) */}
 
         {drop.dragActive && <DragOverlay />}
+        {drop.filing && (
+          <UploadFiling
+            batches={drop.filing}
+            artists={drop.artists}
+            onChange={drop.updateBatch}
+            onCancel={drop.cancelFiling}
+            onConfirm={() => void drop.confirmFiling()}
+          />
+        )}
         {drop.upload && <UploadToast upload={drop.upload} />}
       </div>
     </div>

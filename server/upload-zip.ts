@@ -14,8 +14,11 @@
  *   2. Archive junk — Finder-made zips carry a `__MACOSX/` tree of AppleDouble
  *      resource forks (`._01 Once.mp3`) that pass the extension allow-list and
  *      would otherwise litter the library with phantom tracks.
- *   3. A destination folder for flat archives, so a bare bag of tracks doesn't
- *      scatter across the library root.
+ *   3. Re-rooting the archive under the destination the user picked, so the
+ *      library's `Artist/Album` convention holds no matter how the archive
+ *      was packed. The scanner takes ARTIST from the top-level folder name
+ *      and nothing else, so an album zip dropped in as-is would otherwise
+ *      register its album title as a new artist.
  *
  * Symlink entries need no special handling: entries are always written with
  * `writeFile`, so a stored symlink becomes an ordinary (tiny) file containing
@@ -72,9 +75,17 @@ function baseFolderFromZipName(zipName: string): string {
   return stem || 'Uploaded'
 }
 
+/**
+ * @param dest  Where the archive's contents should land, relative to the music
+ *              dir — normally `Artist/Album`, chosen by the user before the
+ *              upload starts. The archive's own top-level folder is replaced by
+ *              it; anything deeper (CD1/CD2, artwork) is kept, since the scanner
+ *              folds disc folders back into their album. Falls back to the
+ *              archive's filename when empty.
+ */
 export async function saveZipUpload(
   musicDir: string,
-  zipName: string,
+  dest: string,
   body: Buffer,
 ): Promise<ZipUploadResult> {
   // Pass 1: read the central directory only. A filter that returns false for
@@ -113,10 +124,19 @@ export async function saveZipUpload(
     throw new Error(`The archive expands to ${gb} GB; the limit is 1 GB.`)
   }
 
-  // An archive that already has one folder at its root keeps its own layout;
-  // a flat one is filed under the archive's name so the tracks stay together.
   const keepNames = keep.map((f) => f.name)
-  const prefix = commonTopLevel(keepNames) ? '' : `${baseFolderFromZipName(zipName)}/`
+  const top = commonTopLevel(keepNames)
+  // With a destination, the archive's own root folder is discarded and replaced
+  // — "Houses of the Holy/01.mp3" becomes "Led Zeppelin/Houses of the Holy/01.mp3".
+  // Without one, fall back to the old behaviour: keep a self-contained archive's
+  // layout, and file a flat one under its own filename.
+  const cleaned = (dest ?? '').replace(/^[/\\]+|[/\\]+$/g, '').trim()
+  const prefix = cleaned
+    ? `${cleaned}/`
+    : top
+      ? ''
+      : `${baseFolderFromZipName(dest)}/`
+  const strip = cleaned && top ? `${top}/` : ''
 
   // Pass 2: decompress, now that the aggregate is known to be sane.
   const wanted = new Set(keepNames)
@@ -137,7 +157,8 @@ export async function saveZipUpload(
     try {
       // saveUpload owns every path and size check; a hostile entry name is
       // rejected there, not here.
-      const r = await saveUpload(musicDir, `${prefix}${name}`, Buffer.from(bytes))
+      const rest = strip && name.startsWith(strip) ? name.slice(strip.length) : name
+      const r = await saveUpload(musicDir, `${prefix}${rest}`, Buffer.from(bytes))
       if (r.skipped) result.skipped++
       else result.written++
     } catch (err) {

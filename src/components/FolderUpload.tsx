@@ -8,11 +8,12 @@
  *   {drop.dragActive && <DragOverlay />}
  *   {drop.upload && <UploadToast upload={drop.upload} />}
  */
-import { useRef, useState } from 'react'
-import { useQueryClient } from '@tanstack/react-query'
+import { useCallback, useRef, useState } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Check, FolderPlus, Upload } from 'lucide-react'
 import { useConnected } from '../lib/connection'
-import { refreshLibrary, uploadMusicFile, uploadMusicZip } from '../lib/api'
+import { getArtists, refreshLibrary, uploadMusicFile, uploadMusicZip } from '../lib/api'
+import { foldName, type FilingBatch } from './UploadFiling'
 
 interface UploadState {
   done: number
@@ -78,9 +79,70 @@ async function walkEntry(
   }
 }
 
+/** A dropped batch plus the payload needed to actually send it. */
+interface PendingBatch extends FilingBatch {
+  /** A single archive, unpacked server-side. */
+  zipFile?: File
+  /** Loose files, each with the path below the batch root. */
+  files?: { file: File; rest: string }[]
+}
+
+/**
+ * Split "Artist - Album" style names, which is how most album folders and
+ * archives arrive. Returns nulls when the name has no such separator.
+ */
+function splitArtistAlbum(name: string): { artist: string | null; album: string } {
+  const m = name.match(/^(.+?)\s+-\s+(.+)$/)
+  if (!m) return { artist: null, album: name }
+  return { artist: m[1].trim(), album: m[2].trim() }
+}
+
+/** Strip a trailing .zip, whatever the case. */
+function zipStem(name: string): string {
+  return name.replace(/\.zip$/i, '')
+}
+
+/**
+ * Best guess at where a dropped item belongs, given the library's artists.
+ *
+ * Three shapes turn up in practice: a folder already laid out as
+ * `Artist/Album` (recognised when the top segment is an artist we know), a
+ * folder or archive named for the album alone, and the "Artist - Album"
+ * naming that rippers favour. Anything unrecognised leaves the artist blank,
+ * which the sheet requires the user to fill before uploading.
+ */
+function guessFiling(
+  rootName: string,
+  secondLevel: string | null,
+  artists: string[],
+): { artist: string; album: string; stripDepth: number } {
+  const known = artists.find((a) => foldName(a) === foldName(rootName))
+  if (known && secondLevel) {
+    return { artist: known, album: secondLevel, stripDepth: 2 }
+  }
+  if (known) return { artist: known, album: '', stripDepth: 1 }
+
+  const { artist, album } = splitArtistAlbum(rootName)
+  if (artist) {
+    const match = artists.find((a) => foldName(a) === foldName(artist))
+    return { artist: match ?? artist, album, stripDepth: 1 }
+  }
+  return { artist: '', album: rootName, stripDepth: 1 }
+}
+
 export function useFolderDrop() {
   const conn = useConnected()
   const queryClient = useQueryClient()
+  // The artist list powers the sheet's autocomplete. Same query key as the
+  // Artists page, so it's usually already cached by the time anything is
+  // dropped and the dropdown fills instantly.
+  const { data: artistList } = useQuery({
+    queryKey: ['artists', conn.serverUrl, conn.userId],
+    queryFn: () => getArtists(conn),
+    staleTime: 60_000,
+  })
+  const artists = (artistList ?? []).map((a) => a.name)
+  const [pending, setPending] = useState<PendingBatch[] | null>(null)
   // Depth counter prevents `dragleave` from firing as the cursor crosses
   // child elements inside the drop target.
   const dragDepthRef = useRef(0)
@@ -126,28 +188,107 @@ export function useFolderDrop() {
       return
     }
 
-    setUpload({ done: 0, total: filtered.length, current: filtered[0].relPath, errors: [] })
+    // Group the drop into one batch per album, because that is the unit the
+    // user files: every archive stands alone, and loose files are grouped by
+    // the folder they were dropped in.
+    const batches: PendingBatch[] = []
+    const folders = new Map<string, { file: File; relPath: string }[]>()
+    for (const c of filtered) {
+      if (isZip(c.file.name)) {
+        const stem = zipStem(c.file.name)
+        const g = guessFiling(stem, null, artists)
+        batches.push({
+          id: `zip:${c.relPath}`,
+          label: c.file.name,
+          fileCount: 1,
+          artist: g.artist,
+          album: g.album,
+          zipFile: c.file,
+        })
+        continue
+      }
+      const root = c.relPath.includes('/') ? c.relPath.split('/')[0] : ''
+      const list = folders.get(root)
+      if (list) list.push(c)
+      else folders.set(root, [c])
+    }
+
+    for (const [root, list] of folders) {
+      const segs = list[0].relPath.split('/')
+      const second = segs.length > 2 ? segs[1] : null
+      const g = root
+        ? guessFiling(root, second, artists)
+        : { artist: '', album: '', stripDepth: 0 }
+      batches.push({
+        id: `dir:${root || '(loose)'}`,
+        label: root || `${list.length} loose file${list.length === 1 ? '' : 's'}`,
+        fileCount: list.length,
+        artist: g.artist,
+        album: g.album,
+        files: list.map((c) => ({
+          file: c.file,
+          rest: c.relPath.split('/').slice(g.stripDepth).join('/') || c.file.name,
+        })),
+      })
+    }
+
+    // Nothing is written until this is confirmed — the scanner reads ARTIST
+    // from the top-level folder, so an unreviewed drop is how albums become
+    // artists.
+    setPending(batches)
+  }
+
+  const updateBatch = useCallback((id: string, patch: Partial<FilingBatch>) => {
+    setPending((prev) =>
+      prev ? prev.map((b) => (b.id === id ? { ...b, ...patch } : b)) : prev,
+    )
+  }, [])
+
+  const cancelFiling = useCallback(() => setPending(null), [])
+
+  /** Send the confirmed batches, each re-rooted under its chosen Artist/Album. */
+  async function confirmFiling() {
+    const batches = pending
+    if (!batches) return
+    setPending(null)
+
+    const totalFiles = batches.reduce((n, b) => n + (b.files?.length ?? 1), 0)
+    setUpload({ done: 0, total: totalFiles, current: batches[0]?.label, errors: [] })
     let written = 0
     let skipped = 0
+    let done = 0
     const errors: string[] = []
-    for (let i = 0; i < filtered.length; i++) {
-      const { file, relPath } = filtered[i]
-      setUpload({ done: i, total: filtered.length, current: relPath, errors })
+
+    for (const b of batches) {
+      const artist = b.artist.trim()
+      const album = b.album.trim()
+      const dest = album ? `${artist}/${album}` : artist
       try {
-        if (isZip(file.name)) {
-          // The whole archive travels as one request and is unpacked on the
-          // server, so its many tracks count as a single step of progress.
-          const r = await uploadMusicZip(conn, file.name, file)
+        if (b.zipFile) {
+          setUpload({ done, total: totalFiles, current: `${b.label} → ${dest}/`, errors })
+          // The archive travels whole and is unpacked server-side under dest.
+          const r = await uploadMusicZip(conn, dest, b.zipFile)
           written += r.written
           skipped += r.skipped
-          errors.push(...r.errors.map((e) => `${relPath}: ${e}`))
+          errors.push(...r.errors.map((e) => `${b.label}: ${e}`))
+          done++
         } else {
-          const r = await uploadMusicFile(conn, relPath, file)
-          if (r.skipped) skipped++
-          else written++
+          for (const { file, rest } of b.files ?? []) {
+            const relPath = `${dest}/${rest}`
+            setUpload({ done, total: totalFiles, current: relPath, errors })
+            try {
+              const r = await uploadMusicFile(conn, relPath, file)
+              if (r.skipped) skipped++
+              else written++
+            } catch (err) {
+              errors.push(`${relPath}: ${err instanceof Error ? err.message : 'failed'}`)
+            }
+            done++
+          }
         }
       } catch (err) {
-        errors.push(`${relPath}: ${err instanceof Error ? err.message : 'failed'}`)
+        errors.push(`${b.label}: ${err instanceof Error ? err.message : 'failed'}`)
+        done++
       }
     }
 
@@ -162,8 +303,8 @@ export function useFolderDrop() {
     }
 
     setUpload({
-      done: filtered.length,
-      total: filtered.length,
+      done: totalFiles,
+      total: totalFiles,
       finished: { written, skipped },
       errors,
     })
@@ -173,6 +314,11 @@ export function useFolderDrop() {
   return {
     dragActive,
     upload,
+    filing: pending,
+    artists,
+    updateBatch,
+    cancelFiling,
+    confirmFiling,
     dragProps: { onDragEnter, onDragOver, onDragLeave, onDrop },
   }
 }
@@ -187,7 +333,7 @@ export function DragOverlay() {
         <FolderPlus className="h-12 w-12" style={{ color: 'var(--accent)' }} />
         <div className="text-lg font-semibold text-white">Drop to add to your library</div>
         <div className="text-xs text-white/82">
-          Folders, loose files or a .zip · structure is preserved · existing files won't be overwritten
+          Folders, loose files or a .zip · you'll pick the artist and album next
         </div>
       </div>
     </div>
