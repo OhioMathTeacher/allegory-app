@@ -45,3 +45,9 @@ settings.json
 
 # Personal editor / IDE workspace files
 *.code-workspace
+
+# Library operation logs: these record every file path in the music
+# library, which does not belong in a public repo. They are written to
+# /home/todd/navidrome-trial/backups/ by the maintenance scripts and kept
+# in the private dev repo.
+tools/library-maintenance/backups/
