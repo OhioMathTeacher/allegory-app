@@ -907,6 +907,19 @@ export interface UploadResult {
   skipped?: boolean
 }
 
+/** Outcome of unpacking one uploaded archive. */
+export interface ZipUploadResult {
+  ok: true
+  /** Files newly written into the library. */
+  written: number
+  /** Entries whose destination already existed and was left intact. */
+  skipped: number
+  /** Entries that weren't audio or images (booklets, .nfo, .cue, junk). */
+  ignored: number
+  /** Per-entry failures; the rest of the archive still lands. */
+  errors: string[]
+}
+
 /**
  * Upload one file into the music library. `relPath` is preserved on disk
  * (e.g., "Pearl Jam/Ten/01 Once.mp3"). The server refuses to overwrite
@@ -924,7 +937,7 @@ export async function uploadMusicFile(
       'Content-Type': file.type || 'application/octet-stream',
       // HTTP headers are ASCII; encode so non-ASCII (curly quotes,
       // accents, etc.) survive the trip.
-      'X-Tsm-Path': encodeURIComponent(relPath),
+      'X-Allegory-Path': encodeURIComponent(relPath),
       ...authHeaders(conn.serverUrl),
     },
     body: file,
@@ -961,4 +974,41 @@ export async function browseFolders(
 ): Promise<FolderListing> {
   const q = path ? `?path=${encodeURIComponent(path)}` : ''
   return getJson<FolderListing>(conn, `/fs/browse${q}`)
+}
+
+/**
+ * Upload a zip archive of music. The server unpacks it into the library,
+ * preserving the folder structure inside the archive. `zipName` is used as
+ * the destination folder only when the archive is flat (no folder of its
+ * own inside), so a bare bag of tracks doesn't scatter across the library
+ * root.
+ */
+export async function uploadMusicZip(
+  conn: Connection,
+  zipName: string,
+  file: File,
+): Promise<ZipUploadResult> {
+  const res = await fetch(`${conn.serverUrl}/upload-zip`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: {
+      'Content-Type': 'application/zip',
+      // Reuses the same header (and therefore the same CORS allow-list)
+      // as the per-file upload; here it carries the archive's own name.
+      'X-Allegory-Path': encodeURIComponent(zipName),
+      ...authHeaders(conn.serverUrl),
+    },
+    body: file,
+  })
+  if (!res.ok) {
+    let message = `Zip upload failed (${res.status})`
+    try {
+      const data = (await res.json()) as { error?: string }
+      if (data.error) message = data.error
+    } catch {
+      // no JSON body
+    }
+    throw new Error(message)
+  }
+  return (await res.json()) as ZipUploadResult
 }

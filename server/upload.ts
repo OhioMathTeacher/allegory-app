@@ -22,6 +22,16 @@ const ALLOWED_EXTS = new Set([
 
 const MAX_FILE_BYTES = 500 * 1024 * 1024 // 500 MB per file
 
+/**
+ * Does this filename carry an extension the library accepts? Exported so the
+ * zip unpacker can *skip* booklets and .nfo files quietly rather than calling
+ * saveUpload and treating its rejection as an error — same allow-list, one
+ * definition.
+ */
+export function isAllowedUploadExt(name: string): boolean {
+  return ALLOWED_EXTS.has(extname(name).toLowerCase())
+}
+
 export interface UploadResult {
   /** Absolute path the file ended up at. */
   written: string

@@ -12,7 +12,7 @@ import { useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { Check, FolderPlus, Upload } from 'lucide-react'
 import { useConnected } from '../lib/connection'
-import { refreshLibrary, uploadMusicFile } from '../lib/api'
+import { refreshLibrary, uploadMusicFile, uploadMusicZip } from '../lib/api'
 
 interface UploadState {
   done: number
@@ -26,7 +26,13 @@ const ALLOWED_DROP_EXTS = new Set([
   '.mp3', '.flac', '.m4a', '.ogg', '.opus', '.oga', '.wav', '.aac',
   '.wma', '.aiff', '.aif', '.alac',
   '.jpg', '.jpeg', '.png', '.webp', '.gif',
+  // Archives are unpacked server-side (see server/upload-zip.ts).
+  '.zip',
 ])
+
+function isZip(name: string): boolean {
+  return name.toLowerCase().endsWith('.zip')
+}
 
 function isAllowedDropExt(name: string): boolean {
   const i = name.lastIndexOf('.')
@@ -128,9 +134,18 @@ export function useFolderDrop() {
       const { file, relPath } = filtered[i]
       setUpload({ done: i, total: filtered.length, current: relPath, errors })
       try {
-        const r = await uploadMusicFile(conn, relPath, file)
-        if (r.skipped) skipped++
-        else written++
+        if (isZip(file.name)) {
+          // The whole archive travels as one request and is unpacked on the
+          // server, so its many tracks count as a single step of progress.
+          const r = await uploadMusicZip(conn, file.name, file)
+          written += r.written
+          skipped += r.skipped
+          errors.push(...r.errors.map((e) => `${relPath}: ${e}`))
+        } else {
+          const r = await uploadMusicFile(conn, relPath, file)
+          if (r.skipped) skipped++
+          else written++
+        }
       } catch (err) {
         errors.push(`${relPath}: ${err instanceof Error ? err.message : 'failed'}`)
       }
@@ -172,7 +187,7 @@ export function DragOverlay() {
         <FolderPlus className="h-12 w-12" style={{ color: 'var(--accent)' }} />
         <div className="text-lg font-semibold text-white">Drop to add to your library</div>
         <div className="text-xs text-white/82">
-          Folder structure is preserved · audio + images only · existing files won't be overwritten
+          Folders, loose files or a .zip · structure is preserved · existing files won't be overwritten
         </div>
       </div>
     </div>

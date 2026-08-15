@@ -28,6 +28,7 @@ import {
   getRecommendations,
 } from './discover.ts'
 import { saveUpload } from './upload.ts'
+import { saveZipUpload } from './upload-zip.ts'
 import { recordPlay, getPlayHistory } from './play-history.ts'
 import {
   appendListen,
@@ -707,19 +708,48 @@ export function createRouter(deps: RouterDeps): Router {
         const headerRaw = req.headers['x-allegory-path']
         const raw = Array.isArray(headerRaw) ? headerRaw[0] : headerRaw
         if (!raw) {
-          sendJson(res, { error: 'Missing X-Tsm-Path header.' }, 400)
+          sendJson(res, { error: 'Missing X-Allegory-Path header.' }, 400)
           return true
         }
         let relPath: string
         try {
           relPath = decodeURIComponent(raw)
         } catch {
-          sendJson(res, { error: 'X-Tsm-Path is not valid URL-encoding.' }, 400)
+          sendJson(res, { error: 'X-Allegory-Path is not valid URL-encoding.' }, 400)
           return true
         }
         const body = await readRawBody(req, 500 * 1024 * 1024)
         const result = await saveUpload(library.musicDir, relPath, body)
         sendJson(res, { ok: true, ...result })
+        return true
+      }
+
+      // --- upload a zip archive -------------------------------------------
+      // Same header as above, carrying the archive's own filename: it becomes
+      // the destination folder only when the zip is flat inside.
+      if (segs.length === 2 && segs[1] === 'upload-zip' && method === 'POST') {
+        const headerRaw = req.headers['x-allegory-path']
+        const raw = Array.isArray(headerRaw) ? headerRaw[0] : headerRaw
+        if (!raw) {
+          sendJson(res, { error: 'Missing X-Allegory-Path header.' }, 400)
+          return true
+        }
+        let zipName: string
+        try {
+          zipName = decodeURIComponent(raw)
+        } catch {
+          sendJson(res, { error: 'X-Allegory-Path is not valid URL-encoding.' }, 400)
+          return true
+        }
+        const body = await readRawBody(req, 500 * 1024 * 1024)
+        try {
+          const result = await saveZipUpload(library.musicDir, zipName, body)
+          sendJson(res, { ok: true, ...result })
+        } catch (err) {
+          // A bad archive is the caller's problem, not a server fault: report
+          // it as 400 so the toast shows the reason instead of "500".
+          sendJson(res, { error: err instanceof Error ? err.message : 'Zip upload failed.' }, 400)
+        }
         return true
       }
 
