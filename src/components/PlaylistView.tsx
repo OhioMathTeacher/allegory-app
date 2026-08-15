@@ -44,9 +44,13 @@ export function PlaylistView({ playlist, onBack, onSelectArtist }: PlaylistViewP
   const fileRef = useRef<HTMLInputElement>(null)
   const [artVersion, setArtVersion] = useState(0)
   const [uploadingArt, setUploadingArt] = useState(false)
-  // Duplicate count comes from the list query, so — like `name` — the prop is
-  // stale the moment we act on it. Track it locally from that starting point.
+  // Duplicate count and listed-entry count both come from the list query, so —
+  // like `name` — the props go stale the moment we act on them. Track both
+  // locally from that starting point. Missing the second one made removing
+  // duplicates announce the survivors as missing files: the entry count still
+  // read 38 while the refetched track list had dropped to 32.
   const [dupCount, setDupCount] = useState(playlist.duplicateCount ?? 0)
+  const [listedCount, setListedCount] = useState(playlist.trackCount ?? null)
   const [deduping, setDeduping] = useState(false)
   const [dedupeResult, setDedupeResult] = useState<string | null>(null)
 
@@ -76,7 +80,6 @@ export function PlaylistView({ playlist, onBack, onSelectArtist }: PlaylistViewP
   // matched a real file. A gap means the playlist points at something the
   // library doesn't have — which otherwise renders as an unexplained empty
   // playlist, indistinguishable from one you never filled in.
-  const listedCount = playlist.trackCount ?? null
   const missingCount =
     tracks && listedCount !== null ? Math.max(0, listedCount - tracks.length) : 0
 
@@ -86,6 +89,9 @@ export function PlaylistView({ playlist, onBack, onSelectArtist }: PlaylistViewP
     try {
       const removed = await removePlaylistDuplicates(conn, playlist.id)
       setDupCount(0)
+      // Those entries are gone from the .m3u, so the listed count has to come
+      // down with them — otherwise the gap reads as tracks missing from disk.
+      setListedCount((n) => (n === null ? null : Math.max(0, n - removed)))
       setDedupeResult(
         removed === 0
           ? 'No duplicates found.'
