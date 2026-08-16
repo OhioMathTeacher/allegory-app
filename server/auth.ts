@@ -103,7 +103,28 @@ function throttleDelay(key: string): number {
   return waited >= required ? 0 : required - waited
 }
 
+/**
+ * True when the request reached us through a reverse proxy.
+ *
+ * This is the qualifier the loopback exemption cannot do without. A proxy —
+ * `tailscale serve`, nginx, Caddy — connects to the app over localhost, so
+ * every request it forwards arrives from 127.0.0.1 no matter which machine
+ * it started on. Without this check, publishing the app through such a proxy
+ * silently hands the whole library, and every write behind the gate, to
+ * anyone who can reach the proxy.
+ *
+ * Forging these headers can only ever *deny* the exemption and ask for a
+ * password, never grant it, so treating their presence as proof of a proxy
+ * fails closed.
+ */
+function isProxied(req: IncomingMessage): boolean {
+  const h = req.headers
+  return Boolean(h['x-forwarded-for'] || h['forwarded'] || h['x-real-ip'])
+}
+
 export function isLoopback(req: IncomingMessage): boolean {
+  // A proxied request's socket address describes the proxy, not the caller.
+  if (isProxied(req)) return false
   const addr = req.socket.remoteAddress ?? ''
   return addr === '127.0.0.1' || addr === '::1' || addr === '::ffff:127.0.0.1'
 }
@@ -288,9 +309,10 @@ export function createAuth(cacheDir: string) {
    */
   async function authorize(req: IncomingMessage): Promise<boolean> {
     if (!(await isEnabled())) return true
-    // Loopback is exempt, but not when the caller is a web page from another
-    // site — see isForeignOrigin. Such a request reaches us from 127.0.0.1
-    // only because the browser displaying it happens to run here.
+    // Loopback is exempt, but only for requests that are genuinely local:
+    // not a web page from another site (isForeignOrigin), and not something a
+    // reverse proxy forwarded here from the network (isProxied). Both reach us
+    // from 127.0.0.1 without being local in any sense that should matter.
     if (isLoopback(req) && !isForeignOrigin(req)) return true
     return checkToken(tokenFrom(req))
   }
