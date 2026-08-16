@@ -14,8 +14,11 @@ StartLimitBurst=5
 
 [Service]
 Type=simple
-WorkingDirectory=/home/todd/navidrome-trial
-ExecStart=/home/todd/navidrome-trial/navidrome --configfile /home/todd/navidrome-trial/navidrome.toml
+# %h is the home directory of the user this unit runs as — resolved by systemd
+# at start time. This is a user unit (WantedBy=default.target), so it installs
+# unchanged on any machine instead of naming one person's home.
+WorkingDirectory=%h/navidrome-trial
+ExecStart=%h/navidrome-trial/navidrome --configfile %h/navidrome-trial/navidrome.toml
 Restart=on-failure
 RestartSec=3
 # Navidrome only ever reads the library; enforce that at the kernel level
