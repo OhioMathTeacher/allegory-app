@@ -22,7 +22,8 @@ import sys
 
 import mutagen
 
-MUSIC = "/media/MUSIC"
+MUSIC = os.environ.get("ALLEGORY_MUSIC_DIR", "/media/MUSIC")
+
 LF = os.path.join(MUSIC, "lost+found")
 AUD = {".mp3", ".flac", ".m4a", ".ogg", ".wav", ".aiff"}
 

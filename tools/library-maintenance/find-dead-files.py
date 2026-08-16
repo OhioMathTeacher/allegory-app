@@ -13,7 +13,8 @@ import os
 import sys
 from collections import defaultdict
 
-MUSIC = "/media/MUSIC"
+MUSIC = os.environ.get("ALLEGORY_MUSIC_DIR", "/media/MUSIC")
+
 SANITY_LIMIT = 500
 CHUNK = 65536
 

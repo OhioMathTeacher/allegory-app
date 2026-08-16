@@ -7,11 +7,13 @@ Navidrome groups by album name, so a single differing character splits a record
 only one is right. So the folder name breaks the tie — whichever tag value most
 resembles the folder wins, falling back to majority when nothing resembles it.
 """
+import os
 import difflib, json, os, re, sys
 from collections import Counter
 import mutagen
 
-MUSIC = "/media/MUSIC"
+MUSIC = os.environ.get("ALLEGORY_MUSIC_DIR", "/media/MUSIC")
+
 AUD = {".mp3", ".flac", ".m4a", ".ogg", ".opus", ".wav", ".aiff"}
 CD = re.compile(r"^(?:(?:cd|dis[ck])[\s._-]*\d+|\d+)$", re.I)
 norm = lambda s: re.sub(r"[^a-z0-9]", "", (s or "").lower())

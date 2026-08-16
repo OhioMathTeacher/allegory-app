@@ -1,7 +1,12 @@
 #!/usr/bin/env python3
+import os
 import sqlite3
 
-con = sqlite3.connect("file:/home/todd/navidrome-trial/data/navidrome.db?mode=ro", uri=True)
+NAVIDROME_DB = os.environ.get(
+    "NAVIDROME_DB", os.path.expanduser("~/navidrome-trial/data/navidrome.db")
+)
+
+con = sqlite3.connect(f"file:{NAVIDROME_DB}?mode=ro", uri=True)
 q = lambda s: con.execute(s).fetchone()[0]
 
 no_art = q("SELECT COUNT(*) FROM album WHERE COALESCE(embed_art_path,'')=''")

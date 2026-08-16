@@ -18,11 +18,19 @@ import sys
 import mutagen
 from mutagen.easyid3 import EasyID3
 
+MUSIC = os.environ.get("ALLEGORY_MUSIC_DIR", "/media/MUSIC")
+
+BACKUP_DIR = os.environ.get(
+    "ALLEGORY_BACKUP_DIR", os.path.expanduser("~/navidrome-trial/backups")
+)
+
 EasyID3.RegisterTextKey("compilation", "TCMP")
 
-NWOBHM = "/media/MUSIC/V.A. - New Wave of British Heavy Metal '79 Revisited (1990)"
-METAL_EX = "/media/MUSIC/V.A. - Metal Explosion [Compilation] (1980)"
-BACKUP = "/home/todd/navidrome-trial/backups/comp-metadata.json"
+NWOBHM = os.path.join(
+    MUSIC, "V.A. - New Wave of British Heavy Metal '79 Revisited (1990)"
+)
+METAL_EX = os.path.join(MUSIC, "V.A. - Metal Explosion [Compilation] (1980)")
+BACKUP = os.path.join(BACKUP_DIR, "comp-metadata.json")
 
 # Verified against the Wikipedia track listing.
 TITLE_FIX = {"Motorcysle Man": "Motorcycle Man", "Vise versa": "Vice Versa"}

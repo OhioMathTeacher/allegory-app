@@ -14,8 +14,7 @@ import re
 import subprocess
 import sys
 
-MUSIC = "/media/MUSIC"
-
+MUSIC = os.environ.get("ALLEGORY_MUSIC_DIR", "/media/MUSIC")
 
 def norm(s):
     s = (s or "").lower()

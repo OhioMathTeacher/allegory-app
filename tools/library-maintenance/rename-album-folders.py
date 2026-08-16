@@ -19,7 +19,8 @@ from collections import Counter
 
 import mutagen
 
-MUSIC = "/media/MUSIC"
+MUSIC = os.environ.get("ALLEGORY_MUSIC_DIR", "/media/MUSIC")
+
 AUD = {".mp3", ".flac", ".m4a", ".ogg", ".wav", ".aiff"}
 CD_SUBDIR = re.compile(r"^(?:(?:cd|dis[ck])[\s._-]*\d+|\d+)$|^(?:cd|dis[ck])[\s._-]*\d+", re.I)
 

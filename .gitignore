@@ -48,6 +48,19 @@ settings.json
 
 # Library operation logs: these record every file path in the music
 # library, which does not belong in a public repo. They are written to
-# /home/todd/navidrome-trial/backups/ by the maintenance scripts and kept
+# the maintenance scripts' backup directory (ALLEGORY_BACKUP_DIR) and kept
 # in the private dev repo.
 tools/library-maintenance/backups/
+
+# Planning docs are dev-only and must never be promoted here. They name
+# machines, tailnet addresses and home directories, and they were the reason
+# this repo's history had to be rewritten once already. Keep them in the
+# private dev repo.
+HANDOFF*.md
+DESIGN-*.md
+version-2-vision.md
+tools/library-maintenance/TODO*.md
+
+# Python bytecode from the maintenance scripts
+__pycache__/
+*.pyc

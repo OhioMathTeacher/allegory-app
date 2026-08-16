@@ -23,8 +23,13 @@ import sys
 
 import mutagen
 
-MUSIC = "/media/MUSIC"
-BACKUP = "/home/todd/navidrome-trial/backups/junk-artist-albums.json"
+MUSIC = os.environ.get("ALLEGORY_MUSIC_DIR", "/media/MUSIC")
+
+BACKUP_DIR = os.environ.get(
+    "ALLEGORY_BACKUP_DIR", os.path.expanduser("~/navidrome-trial/backups")
+)
+
+BACKUP = os.path.join(BACKUP_DIR, "junk-artist-albums.json")
 AUD = {".mp3", ".flac", ".m4a", ".ogg", ".wav"}
 
 FIXES = {

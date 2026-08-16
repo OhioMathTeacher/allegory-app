@@ -17,6 +17,8 @@ import sys
 
 import mutagen
 
+MUSIC = os.environ.get("ALLEGORY_MUSIC_DIR", "/media/MUSIC")
+
 AUDIO = {".mp3", ".flac", ".m4a", ".ogg", ".opus", ".wav", ".aiff", ".aif"}
 
 
@@ -46,7 +48,7 @@ def main():
     ap.add_argument("--restore", action="store_true", help="undo using the backup")
     args = ap.parse_args()
 
-    base = os.path.join("/media/MUSIC", args.folder)
+    base = os.path.join(MUSIC, args.folder)
     if not os.path.isdir(base):
         sys.exit(f"no such folder: {base}")
 

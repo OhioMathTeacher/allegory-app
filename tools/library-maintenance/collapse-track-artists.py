@@ -30,8 +30,13 @@ from collections import Counter
 
 import mutagen
 
-MUSIC = "/media/MUSIC"
-BACKUP = "/home/todd/navidrome-trial/backups/collapse-track-artists.json"
+MUSIC = os.environ.get("ALLEGORY_MUSIC_DIR", "/media/MUSIC")
+
+BACKUP_DIR = os.environ.get(
+    "ALLEGORY_BACKUP_DIR", os.path.expanduser("~/navidrome-trial/backups")
+)
+
+BACKUP = os.path.join(BACKUP_DIR, "collapse-track-artists.json")
 AUD = {".mp3", ".flac", ".m4a", ".ogg", ".opus", ".wav", ".aiff", ".aif"}
 SKIP_TOP = {"lost+found", "Playlists", "Various Artists"}
 

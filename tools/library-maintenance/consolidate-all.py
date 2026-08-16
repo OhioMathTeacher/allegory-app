@@ -26,8 +26,13 @@ from collections import Counter, defaultdict
 
 import mutagen
 
-MUSIC = "/media/MUSIC"
-BACKUP = "/home/todd/navidrome-trial/backups/consolidate-all.json"
+MUSIC = os.environ.get("ALLEGORY_MUSIC_DIR", "/media/MUSIC")
+
+BACKUP_DIR = os.environ.get(
+    "ALLEGORY_BACKUP_DIR", os.path.expanduser("~/navidrome-trial/backups")
+)
+
+BACKUP = os.path.join(BACKUP_DIR, "consolidate-all.json")
 AUD = {".mp3", ".flac", ".m4a", ".ogg", ".opus", ".wav", ".aiff", ".aif", ".wma", ".aac"}
 
 # Not artist folders. `lost+found` is ext4's fsck recovery directory that

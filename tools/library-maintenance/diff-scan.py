@@ -11,10 +11,19 @@ import sqlite3
 import sys
 from collections import defaultdict
 
-ALLEGORY = "/home/todd/Repos/allegory-app/.allegory-cache/tags-cache.json"
-NAVI_DB = "/home/todd/navidrome-trial/data/navidrome.db"
-MUSIC = "/media/MUSIC"
-CURATION = "/home/todd/Repos/allegory-app/curation"
+MUSIC = os.environ.get("ALLEGORY_MUSIC_DIR", "/media/MUSIC")
+
+REPO = os.path.dirname(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+)
+
+NAVIDROME_DIR = os.environ.get(
+    "NAVIDROME_DIR", os.path.expanduser("~/navidrome-trial")
+)
+
+ALLEGORY = os.path.join(REPO, ".allegory-cache/tags-cache.json")
+NAVI_DB = os.path.join(NAVIDROME_DIR, "data/navidrome.db")
+CURATION = os.path.join(REPO, "curation")
 
 
 def load_allegory():

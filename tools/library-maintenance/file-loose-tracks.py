@@ -23,7 +23,8 @@ from collections import Counter
 
 import mutagen
 
-MUSIC = "/media/MUSIC"
+MUSIC = os.environ.get("ALLEGORY_MUSIC_DIR", "/media/MUSIC")
+
 AUD = {".mp3", ".flac", ".m4a", ".ogg", ".wav", ".aiff"}
 VARIOUS = "Various Artists"
 SKIP_TOP = {"lost+found", "Playlists"}

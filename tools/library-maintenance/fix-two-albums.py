@@ -22,14 +22,22 @@ import sys
 import mutagen
 from mutagen.easyid3 import EasyID3
 
+MUSIC = os.environ.get("ALLEGORY_MUSIC_DIR", "/media/MUSIC")
+
+BACKUP_DIR = os.environ.get(
+    "ALLEGORY_BACKUP_DIR", os.path.expanduser("~/navidrome-trial/backups")
+)
+
 # EasyID3 has no compilation key by default; TCMP is the de-facto ID3 frame.
 EasyID3.RegisterTextKey("compilation", "TCMP")
 
-NWOBHM_DIR = "/media/MUSIC/V.A. - New Wave of British Heavy Metal '79 Revisited (1990)"
+NWOBHM_DIR = os.path.join(
+    MUSIC, "V.A. - New Wave of British Heavy Metal '79 Revisited (1990)"
+)
 NWOBHM_ALBUM = "New Wave of British Heavy Metal '79 Revisited"
 NWOBHM_YEAR = "1990"
 
-EF_DIR = "/media/MUSIC/Elysian Fields"
+EF_DIR = os.path.join(MUSIC, "Elysian Fields")
 EF_ALBUM = "Queen Of The Meadow"
 EF_ARTIST = "Elysian Fields"
 EF_YEAR = "2000"
@@ -126,7 +134,7 @@ def plan():
 
 def main():
     write = "--write" in sys.argv
-    backup_path = "/home/todd/navidrome-trial/backups/two-albums.json"
+    backup_path = os.path.join(BACKUP_DIR, "two-albums.json")
     changes = plan()
 
     print(f"{'WRITING' if write else 'DRY RUN'} — {len(changes)} files\n")
@@ -135,7 +143,7 @@ def main():
         d = os.path.dirname(p)
         if d != cur_dir:
             cur_dir = d
-            print(f"  {os.path.relpath(d, '/media/MUSIC')}")
+            print(f"  {os.path.relpath(d, MUSIC)}")
         name = os.path.basename(p)
         bits = []
         for k in ("title", "tracknumber", "artist"):

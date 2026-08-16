@@ -26,7 +26,16 @@ from collections import Counter, defaultdict
 
 import mutagen
 
-MUSIC = "/media/MUSIC"
+MUSIC = os.environ.get("ALLEGORY_MUSIC_DIR", "/media/MUSIC")
+
+NAVIDROME_DIR = os.environ.get(
+    "NAVIDROME_DIR", os.path.expanduser("~/navidrome-trial")
+)
+
+BACKUP_DIR = os.environ.get(
+    "ALLEGORY_BACKUP_DIR", os.path.expanduser("~/navidrome-trial/backups")
+)
+
 AUDIO_EXTS = {".mp3", ".flac", ".m4a", ".ogg", ".opus", ".oga",
               ".wav", ".aac", ".wma", ".aiff", ".aif", ".alac"}
 
@@ -131,8 +140,8 @@ def read_all(cache_path):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--write", action="store_true")
-    ap.add_argument("--backup", default="/home/todd/navidrome-trial/backups/fill-tags.json")
-    ap.add_argument("--cache", default="/home/todd/navidrome-trial/tag-read.cache.json")
+    ap.add_argument("--backup", default=os.path.join(BACKUP_DIR, "fill-tags.json"))
+    ap.add_argument("--cache", default=os.path.join(NAVIDROME_DIR, "tag-read.cache.json"))
     ap.add_argument("--restore", action="store_true")
     args = ap.parse_args()
 

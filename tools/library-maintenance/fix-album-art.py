@@ -18,7 +18,8 @@ import re
 import shutil
 import sys
 
-MUSIC = "/media/MUSIC"
+MUSIC = os.environ.get("ALLEGORY_MUSIC_DIR", "/media/MUSIC")
+
 IMG = {".jpg", ".jpeg", ".png", ".webp"}
 STD = ("cover", "folder", "front", "album", "albumart")
 AUD = {".mp3", ".flac", ".m4a", ".ogg", ".opus", ".wav", ".aiff"}
