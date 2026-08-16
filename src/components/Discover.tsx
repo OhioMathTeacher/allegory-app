@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { motion } from 'motion/react'
+import { AnimatePresence, motion } from 'motion/react'
 import {
   Play,
   Shuffle,
@@ -13,6 +13,13 @@ import {
   Clock,
   Gem,
   Radio,
+  SlidersHorizontal,
+  Library,
+  Tag,
+  History,
+  Flame,
+  Layers,
+  Mic,
 } from 'lucide-react'
 import { useConnected } from '../lib/connection'
 import { usePlayer } from '../lib/player'
@@ -23,11 +30,14 @@ import {
   albumImageUrl,
   spotifySearchUrl,
   youtubeSearchUrl,
+  MAX_MIXES,
   type ListenWindow,
   type Mix,
+  type MixGroup,
 } from '../lib/api'
 import { shuffle } from '../lib/shuffle'
 import { AccordionSection } from './Accordion'
+import { MixPicker } from './MixPicker'
 import { useAccordion } from '../lib/use-accordion'
 import { Cover } from './Cover'
 import type { Artist } from '../lib/types'
@@ -57,6 +67,22 @@ function readWindow(): ListenWindow {
   return WINDOWS.some((w) => w.id === raw) ? (raw as ListenWindow) : '30d'
 }
 
+// The chosen mix types, in card order. An empty list is a real answer, not a
+// missing one: it means "you pick", which is what a first visit sends and what
+// the picker's reset button restores. Stored per device alongside the window,
+// since which mixes you want depends on where you're listening.
+const MIXES_KEY = 'allegory.discover.mixes'
+
+function readChosenMixes(): string[] {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(MIXES_KEY) ?? '[]') as unknown
+    if (!Array.isArray(parsed)) return []
+    return parsed.filter((id): id is string => typeof id === 'string').slice(0, MAX_MIXES)
+  } catch {
+    return []
+  }
+}
+
 /**
  * Discover — what to play next, and what you're missing.
  *
@@ -68,6 +94,8 @@ function readWindow(): ListenWindow {
 export function Discover({ onSelectArtist }: DiscoverProps) {
   const conn = useConnected()
   const [range, setRange] = useState<ListenWindow>(readWindow)
+  const [chosenMixes, setChosenMixes] = useState<string[]>(readChosenMixes)
+  const [pickerOpen, setPickerOpen] = useState(false)
   // Only the two long lists collapse. The playing summary is a few rows, and
   // Mixes are the point of the page — burying them behind a click would be a
   // worse page, not a shorter one.
@@ -86,13 +114,24 @@ export function Discover({ onSelectArtist }: DiscoverProps) {
     }
   }
 
+  function pickMixes(ids: string[]) {
+    setChosenMixes(ids)
+    try {
+      localStorage.setItem(MIXES_KEY, JSON.stringify(ids))
+    } catch {
+      // Non-fatal; the choice just won't survive a reload.
+    }
+  }
+
   const recs = useQuery({
     queryKey: ['discover-recs', range, conn.serverUrl],
     queryFn: () => getRecommendations(conn, range),
   })
   const mixes = useQuery({
-    queryKey: ['discover-mixes', conn.serverUrl],
-    queryFn: () => getMixes(conn),
+    // The chosen types are part of the key, so changing them in the picker
+    // swaps the cards immediately rather than waiting out the stale time.
+    queryKey: ['discover-mixes', chosenMixes.join(','), conn.serverUrl],
+    queryFn: () => getMixes(conn, chosenMixes),
     staleTime: 1000 * 60 * 30,
   })
   const missing = useQuery({
@@ -132,25 +171,49 @@ export function Discover({ onSelectArtist }: DiscoverProps) {
 
       <div className="flex flex-col gap-10 px-4 pb-10 pt-4 sm:px-8 sm:pt-0">
         {/* --- mixes --- */}
-        <Section title="Mixes" note="Made fresh each day">
+        <Section
+          title="Mixes"
+          note={chosenMixes.length > 0 ? 'Your picks, made fresh each day' : 'Made fresh each day'}
+          action={
+            <button
+              type="button"
+              onClick={() => setPickerOpen(true)}
+              className="flex items-center gap-1.5 rounded-full border border-line px-3 py-1 text-xs font-medium text-white/60 transition-colors hover:bg-white/5 hover:text-white"
+            >
+              <SlidersHorizontal className="h-3.5 w-3.5" />
+              Choose
+            </button>
+          }
+        >
           {mixes.isLoading ? (
             <CardSkeleton />
-          ) : !mixes.data || mixes.data.length === 0 ? (
-            <Empty text="Mixes appear once there's a bit of listening history to draw on." />
+          ) : !mixes.data || (mixes.data.mixes.length === 0 && mixes.data.skipped.length === 0) ? (
+            <Empty text="Nothing to mix yet — mixes appear as soon as there's music scanned in." />
           ) : (
-            /* grid-cols-1 (not bare `grid`) is load-bearing: it makes the
-               mobile column minmax(0,1fr) so cards shrink and their text
-               truncates. A bare auto track grows to the widest card and pushes
-               the whole page wider than the phone. */
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {mixes.data.map((mix, i) => (
-                <MixCard
-                  key={mix.id}
-                  mix={mix}
-                  index={i}
-                />
-              ))}
-            </div>
+            <>
+              {/* grid-cols-1 (not bare `grid`) is load-bearing: it makes the
+                  mobile column minmax(0,1fr) so cards shrink and their text
+                  truncates. A bare auto track grows to the widest card and
+                  pushes the whole page wider than the phone. */}
+              {mixes.data.mixes.length > 0 && (
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  {mixes.data.mixes.map((mix, i) => (
+                    <MixCard key={mix.id} mix={mix} index={i} />
+                  ))}
+                </div>
+              )}
+              {/* A mix you chose that can't be made says so. Silently showing
+                  two cards when you picked three reads as a bug. */}
+              {mixes.data.skipped.length > 0 && (
+                <div className="mt-3 flex flex-col gap-1.5">
+                  {mixes.data.skipped.map((s) => (
+                    <p key={s.id} className="text-xs text-white/35">
+                      <span className="text-white/55">{s.title}</span> — {s.reason}
+                    </p>
+                  ))}
+                </div>
+              )}
+            </>
           )}
         </Section>
 
@@ -266,6 +329,16 @@ export function Discover({ onSelectArtist }: DiscoverProps) {
           )}
         </AccordionSection>
       </div>
+
+      <AnimatePresence>
+        {pickerOpen && (
+          <MixPicker
+            chosen={chosenMixes}
+            onChange={pickMixes}
+            onClose={() => setPickerOpen(false)}
+          />
+        )}
+      </AnimatePresence>
     </div>
   )
 }
@@ -289,15 +362,20 @@ function GoListen({ href, label }: { href: string; label: string }) {
 interface SectionProps {
   title: string
   note?: string
+  /** A control that belongs to the section, sat at the end of its header. */
+  action?: React.ReactNode
   children: React.ReactNode
 }
 
-function Section({ title, note, children }: SectionProps) {
+function Section({ title, note, action, children }: SectionProps) {
   return (
     <section>
       <div className="mb-3 flex items-baseline justify-between gap-3">
         <h2 className="text-xl font-semibold tracking-tight">{title}</h2>
-        {note && <span className="shrink-0 text-xs text-white/35">{note}</span>}
+        {/* Note truncates before the action does — the button must stay
+            tappable on a phone even when the note is long. */}
+        {note && <span className="min-w-0 flex-1 truncate text-right text-xs text-white/35">{note}</span>}
+        {action && <span className="shrink-0 self-center">{action}</span>}
       </div>
       {children}
     </section>
@@ -309,19 +387,39 @@ interface MixCardProps {
   index: number
 }
 
-/**
- * A face per kind of mix. Four cards that all wore the same sparkle were
- * indistinguishable at a glance — you had to read them to tell a twofer from a
- * decade set. The icon and tint are keyed off the mix id the server assigns, so
- * a mix always looks like itself.
- */
-function mixFace(id: string): { icon: React.ReactNode; accent: string } {
+// A face per kind of mix. Cards that all wore the same sparkle were
+// indistinguishable at a glance — you had to read them to tell a twofer from a
+// decade set. Now that there are thirty kinds, the ones you'll see most often
+// keep their own icon and tint and the rest wear their group's, which is still
+// enough to tell three cards apart without reading them.
+type Face = { Icon: typeof Repeat2; accent: string }
+
+const FACES: Record<string, Face> = {
+  twofer: { Icon: Repeat2, accent: '#f0abfc' },
+  dormant: { Icon: Clock, accent: '#fbbf24' },
+  'deep-cuts': { Icon: Gem, accent: '#67e8f9' },
+  'on-repeat': { Icon: Flame, accent: '#fb7185' },
+  fresh: { Icon: Sparkles, accent: '#7dd3fc' },
+  stack: { Icon: Layers, accent: '#c4b5fd' },
+  live: { Icon: Mic, accent: '#fca5a5' },
+  'genre-live': { Icon: Mic, accent: '#fca5a5' },
+  shuffle: { Icon: Shuffle, accent: '#a3e635' },
+}
+
+const GROUP_FACES: Record<MixGroup, Face> = {
+  history: { Icon: History, accent: '#fbbf24' },
+  shelf: { Icon: Library, accent: '#86efac' },
+  genre: { Icon: Tag, accent: '#fdba74' },
+}
+
+function mixFace(id: string, group: MixGroup): { icon: React.ReactNode; accent: string } {
   const cls = 'h-4 w-4 shrink-0'
-  if (id === 'twofer') return { icon: <Repeat2 className={cls} />, accent: '#f0abfc' }
-  if (id === 'dormant') return { icon: <Clock className={cls} />, accent: '#fbbf24' }
-  if (id === 'deep-cuts') return { icon: <Gem className={cls} />, accent: '#67e8f9' }
-  if (id.startsWith('decade-')) return { icon: <Radio className={cls} />, accent: '#86efac' }
-  return { icon: <Sparkles className={cls} />, accent: 'var(--accent)' }
+  // Decades are their own thing rather than generic shelf mixes — you'll often
+  // have two of them side by side, and they should still read as a pair.
+  const face = id.startsWith('decade-')
+    ? { Icon: Radio, accent: '#86efac' }
+    : (FACES[id] ?? GROUP_FACES[group] ?? { Icon: Sparkles, accent: 'var(--accent)' })
+  return { icon: <face.Icon className={cls} />, accent: face.accent }
 }
 
 /**
@@ -364,7 +462,7 @@ function MixCover({ mix }: { mix: Mix }) {
 function MixCard({ mix, index }: MixCardProps) {
   const player = usePlayer()
   const [busy, setBusy] = useState(false)
-  const { icon, accent } = mixFace(mix.id)
+  const { icon, accent } = mixFace(mix.id, mix.group)
   // Name the artists rather than listing tracks: it's the flavour of the mix in
   // one line, where three "Artist — Title" rows were a wall.
   const artists = [...new Set(mix.tracks.map((t) => t.artist))]

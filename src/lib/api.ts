@@ -662,13 +662,39 @@ export async function getRecentlyPlayed(conn: Connection): Promise<RecentResult>
 /** Time windows the Discover page can reason over. */
 export type ListenWindow = 'today' | '7d' | '30d' | '90d' | 'all'
 
+/** Which shelf of the mix picker a mix sits on. */
+export type MixGroup = 'history' | 'shelf' | 'genre'
+
 export interface Mix {
   id: string
   title: string
   subtitle: string
+  group: MixGroup
   trackIds: string[]
   tracks: Track[]
 }
+
+/** One row in the mix picker's catalogue. */
+export interface MixType {
+  id: string
+  title: string
+  subtitle: string
+  group: MixGroup
+  /** False when this library can't currently produce the mix. */
+  available: boolean
+  /** Why not — shown under the greyed-out row. */
+  reason?: string
+}
+
+/** A mix you asked for that isn't there, and why. */
+export interface SkippedMix {
+  id: string
+  title: string
+  reason: string
+}
+
+/** How many mixes the Discover page shows at once. Mirrors the server. */
+export const MAX_MIXES = 3
 
 export interface Recommendation {
   artistId: string
@@ -684,10 +710,25 @@ export interface MissingAlbum {
   playcount?: number
 }
 
-/** Generated mixes. Computed locally on the server — works offline. */
-export async function getMixes(conn: Connection): Promise<Mix[]> {
-  const data = await getJson<{ mixes: Mix[] }>(conn, '/discover/mixes')
-  return data.mixes
+/**
+ * Generated mixes. Computed locally on the server — works offline.
+ *
+ * `ids` is the user's chosen types; an empty list asks the server to choose,
+ * which is what a first visit does. Only the chosen ones get built, so this
+ * costs less the fewer you ask for.
+ */
+export async function getMixes(
+  conn: Connection,
+  ids: string[] = [],
+): Promise<{ mixes: Mix[]; skipped: SkippedMix[] }> {
+  const query = ids.length > 0 ? `?types=${ids.map(encodeURIComponent).join(',')}` : ''
+  return getJson<{ mixes: Mix[]; skipped: SkippedMix[] }>(conn, `/discover/mixes${query}`)
+}
+
+/** Every mix Allegory can make, each marked available against this library. */
+export async function getMixTypes(conn: Connection): Promise<MixType[]> {
+  const data = await getJson<{ types: MixType[] }>(conn, '/discover/mix-types')
+  return data.types
 }
 
 /** More tracks in a mix's theme, so a playing mix never runs dry. `exclude` is

@@ -1,22 +1,30 @@
 /**
  * Discovery: what to play next, and what you're missing.
  *
- * Three independent things live here, sharing one idea — that the listening log
- * plus the enrichment sidecars already know enough to make good suggestions
- * without asking a model anything:
+ * Two things live here, plus the listening facts both they and mixes.ts read —
+ * all sharing one idea, that the listening log and the enrichment sidecars
+ * already know enough to make good suggestions without asking a model anything:
  *
- *   mixes            generated entirely from local data, so they work offline
+ *   listening facts  play counts and recency, folded out of the log once
  *   recommendations  library artists worth revisiting, scored from a time window
  *   missing albums   the one online piece: well-known records you don't own
  *
- * Everything degrades rather than fails. No listening history yields empty
- * mixes, not an error; no Last.fm key yields no missing-album list; a network
- * timeout yields whatever was already cached.
+ * The mixes themselves moved to mixes.ts once there were thirty of them to
+ * choose between; they still lean on playFacts below.
+ *
+ * Everything degrades rather than fails. No listening history yields no
+ * recommendations, not an error; no Last.fm key yields no missing-album list; a
+ * network timeout yields whatever was already cached.
  */
 import { readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import type { Library, TrackDTO } from './scanner.ts'
-import { getListenLog, windowStart, type ListenWindow } from './listen-log.ts'
+import type { Library } from './scanner.ts'
+import {
+  getListenLog,
+  windowStart,
+  type ListenEntry,
+  type ListenWindow,
+} from './listen-log.ts'
 import { createArtistIndex } from './artist-match.ts'
 
 const SIDECAR = '.allegory-artist.json'
@@ -88,20 +96,15 @@ function isCompilation(name: string): boolean {
   return COMPILATION.test(name)
 }
 
-// --- mixes -----------------------------------------------------------------
-
-export interface Mix {
-  id: string
-  title: string
-  /** One line explaining why this mix exists — the reason is the feature. */
-  subtitle: string
-  trackIds: string[]
-  tracks: TrackDTO[]
-}
+// --- listening facts -------------------------------------------------------
+// Shared with mixes.ts, which is the other half of "what to play next". The log
+// is small enough to keep whole in memory, so the mixes that reason about dates
+// get the raw entries rather than a summary that would need widening every time
+// a new mix asks a new question of it.
 
 /** Deterministic shuffle: same inputs give the same mix within a request, so
  *  a re-render doesn't reshuffle the deck under the user. */
-function seededPick<T>(items: T[], count: number, seed: number): T[] {
+export function seededPick<T>(items: T[], count: number, seed: number): T[] {
   const arr = [...items]
   let s = seed || 1
   for (let i = arr.length - 1; i > 0; i--) {
@@ -112,25 +115,34 @@ function seededPick<T>(items: T[], count: number, seed: number): T[] {
   return arr.slice(0, count)
 }
 
-interface PlayFacts {
+export interface PlayFacts {
   /** artistId → play count, over the whole log. */
   playsByArtist: Map<string, number>
   /** artistId → most recent play (epoch ms). */
   lastByArtist: Map<string, number>
   /** trackId → play count. */
   playsByTrack: Map<string, number>
+  /** trackId → most recent play (epoch ms). */
+  lastByTrack: Map<string, number>
+  /** trackId → play count inside the recent window. */
+  recentPlaysByTrack: Map<string, number>
   /** artistIds played inside the recent window. */
   recentArtists: Set<string>
+  /** The log itself, for the mixes that ask about particular dates. */
+  log: ListenEntry[]
 }
 
-async function playFacts(now: number): Promise<PlayFacts> {
+export async function playFacts(now: number): Promise<PlayFacts> {
   const log = await getListenLog()
   const recentCutoff = windowStart('30d', now)
   const facts: PlayFacts = {
     playsByArtist: new Map(),
     lastByArtist: new Map(),
     playsByTrack: new Map(),
+    lastByTrack: new Map(),
+    recentPlaysByTrack: new Map(),
     recentArtists: new Set(),
+    log,
   }
   for (const e of log) {
     if (e.artistId) {
@@ -143,233 +155,18 @@ async function playFacts(now: number): Promise<PlayFacts> {
       if (e.at >= recentCutoff) facts.recentArtists.add(e.artistId)
     }
     facts.playsByTrack.set(e.trackId, (facts.playsByTrack.get(e.trackId) ?? 0) + 1)
+    const lastTrack = facts.lastByTrack.get(e.trackId) ?? 0
+    if (e.at > lastTrack) facts.lastByTrack.set(e.trackId, e.at)
+    if (e.at >= recentCutoff) {
+      facts.recentPlaysByTrack.set(
+        e.trackId,
+        (facts.recentPlaysByTrack.get(e.trackId) ?? 0) + 1,
+      )
+    }
   }
   return facts
 }
 
-// A mix opens with INITIAL tracks and, once it's playing, tops itself up REFILL
-// at a time so it never runs dry — see moreMixTracks and the player's refill.
-const INITIAL = 12
-const REFILL = 12
-
-// --- theme cores -----------------------------------------------------------
-// Each core picks tracks for one theme given a seed, an exclusion set (what's
-// already in the queue), and a target count. The Mix wrappers below call them
-// with an empty set for the opening batch; moreMixTracks calls them again with a
-// fresh seed and the current queue excluded to keep the mix going.
-
-/** Twofer: two in a row from artists you keep coming back to. */
-async function twoferTracks(
-  library: Library,
-  facts: PlayFacts,
-  seed: number,
-  exclude: Set<string>,
-  count: number,
-): Promise<TrackDTO[]> {
-  const played = [...facts.playsByArtist.entries()]
-    .filter(([id]) => library.artist(id))
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 20)
-    .map(([id]) => id)
-  if (played.length < 2) return []
-  const tracks: TrackDTO[] = []
-  const taken = new Set(exclude)
-  for (const artistId of seededPick(played, played.length, seed)) {
-    const all = (await library.artistTracks(artistId)).filter((t) => !taken.has(t.id))
-    if (all.length === 0) continue
-    for (const t of seededPick(all, 2, seed + artistId.length)) {
-      tracks.push(t)
-      taken.add(t.id)
-    }
-    if (tracks.length >= count) break
-  }
-  return tracks.slice(0, count)
-}
-
-/** Dormant: favourites that have gone quiet for a month or more. */
-async function dormantTracks(
-  library: Library,
-  facts: PlayFacts,
-  seed: number,
-  exclude: Set<string>,
-  count: number,
-): Promise<TrackDTO[]> {
-  const dormant = [...facts.playsByArtist.entries()]
-    .filter(([id, plays]) => plays >= 2 && !facts.recentArtists.has(id) && library.artist(id))
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 12)
-    .map(([id]) => id)
-  if (dormant.length === 0) return []
-  const tracks: TrackDTO[] = []
-  const taken = new Set(exclude)
-  for (const artistId of seededPick(dormant, dormant.length, seed)) {
-    const all = (await library.artistTracks(artistId)).filter((t) => !taken.has(t.id))
-    if (all.length === 0) continue
-    for (const t of seededPick(all, 2, seed + 7)) {
-      tracks.push(t)
-      taken.add(t.id)
-    }
-    if (tracks.length >= count) break
-  }
-  return tracks.slice(0, count)
-}
-
-/** Deep cuts: tracks from albums you own but have never played. Finite by
- *  nature — once the unplayed shelf is exhausted this returns fewer, then none. */
-async function deepCutsTracks(
-  library: Library,
-  facts: PlayFacts,
-  seed: number,
-  exclude: Set<string>,
-  count: number,
-): Promise<TrackDTO[]> {
-  const unplayed = library
-    .allTracks()
-    .filter((t) => !facts.playsByTrack.has(t.id) && !exclude.has(t.id))
-  if (unplayed.length === 0) return []
-  // Bias toward artists you've shown any interest in, so this stays adjacent
-  // to your taste instead of dredging up the one comedy album.
-  const known = unplayed.filter((t) => facts.playsByArtist.has(t.artistId))
-  const pool = known.length >= 10 ? known : unplayed
-  const picks = seededPick(pool, count, seed)
-  return library.tracksForPaths(picks.map((t) => t.path))
-}
-
-/** Decade: one track each from albums you own from a given decade. */
-async function decadeTracks(
-  library: Library,
-  decade: number,
-  seed: number,
-  exclude: Set<string>,
-  count: number,
-): Promise<TrackDTO[]> {
-  const albums = library
-    .albums()
-    .filter((a) => a.year && Math.floor(a.year / 10) * 10 === decade)
-  if (albums.length === 0) return []
-  const tracks: TrackDTO[] = []
-  const taken = new Set(exclude)
-  for (const album of seededPick(albums, albums.length, seed)) {
-    const all = (await library.albumTracks(album.id)).filter((t) => !taken.has(t.id))
-    if (all.length === 0) continue
-    const [t] = seededPick(all, 1, seed + album.id.length)
-    tracks.push(t)
-    taken.add(t.id)
-    if (tracks.length >= count) break
-  }
-  return tracks.slice(0, count)
-}
-
-/** Which decade a well-stocked library leads with today. Shared by the wrapper
- *  and by moreMixTracks so a 'decade-1990' top-up hits the same decade. */
-function leadDecade(library: Library, seed: number): { decade: number; albumCount: number } | null {
-  const byDecade = new Map<number, number>()
-  for (const a of library.albums()) {
-    if (!a.year) continue
-    const decade = Math.floor(a.year / 10) * 10
-    byDecade.set(decade, (byDecade.get(decade) ?? 0) + 1)
-  }
-  if (byDecade.size === 0) return null
-  const ranked = [...byDecade.entries()].sort((a, b) => b[1] - a[1])
-  // Rotate through the well-stocked decades rather than always picking the
-  // biggest, so this card isn't identical every single day.
-  const [decade, albumCount] = ranked[seed % Math.min(3, ranked.length)]
-  return { decade, albumCount }
-}
-
-// --- mix wrappers (the opening batch each card shows) -----------------------
-
-async function twoferMix(library: Library, facts: PlayFacts, seed: number): Promise<Mix | null> {
-  const tracks = await twoferTracks(library, facts, seed, new Set(), INITIAL)
-  if (tracks.length < 4) return null
-  return {
-    id: 'twofer',
-    title: 'Twofer',
-    subtitle: 'Two in a row from artists you keep coming back to',
-    trackIds: tracks.map((t) => t.id),
-    tracks,
-  }
-}
-
-async function dormantMix(library: Library, facts: PlayFacts, seed: number): Promise<Mix | null> {
-  const tracks = await dormantTracks(library, facts, seed, new Set(), INITIAL)
-  if (tracks.length === 0) return null
-  return {
-    id: 'dormant',
-    title: 'Haven’t heard in a while',
-    subtitle: 'Favourites that have gone quiet for a month or more',
-    trackIds: tracks.map((t) => t.id),
-    tracks,
-  }
-}
-
-async function deepCutsMix(library: Library, facts: PlayFacts, seed: number): Promise<Mix | null> {
-  const tracks = await deepCutsTracks(library, facts, seed, new Set(), INITIAL)
-  if (tracks.length < 5) return null
-  return {
-    id: 'deep-cuts',
-    title: 'Deep cuts',
-    subtitle: 'On your shelves, never played',
-    trackIds: tracks.map((t) => t.id),
-    tracks,
-  }
-}
-
-async function decadeMix(library: Library, seed: number): Promise<Mix | null> {
-  const lead = leadDecade(library, seed)
-  if (!lead) return null
-  const tracks = await decadeTracks(library, lead.decade, seed, new Set(), INITIAL)
-  if (tracks.length < 3) return null
-  return {
-    id: `decade-${lead.decade}`,
-    title: `The ${lead.decade}s`,
-    subtitle: `One track each from ${lead.albumCount} albums you own from the decade`,
-    trackIds: tracks.map((t) => t.id),
-    tracks,
-  }
-}
-
-/** Every mix worth showing right now, in display order. */
-export async function getMixes(library: Library, now: number): Promise<Mix[]> {
-  const facts = await playFacts(now)
-  // A seed that changes daily: mixes stay stable through a session but are
-  // different tomorrow, which is what makes them worth checking.
-  const seed = Math.floor(now / (1000 * 60 * 60 * 24))
-  const mixes = await Promise.all([
-    twoferMix(library, facts, seed),
-    dormantMix(library, facts, seed),
-    deepCutsMix(library, facts, seed),
-    decadeMix(library, seed),
-  ])
-  return mixes.filter((m): m is Mix => m !== null)
-}
-
-/**
- * More tracks in the same theme, so a playing mix never runs dry. Excludes what
- * is already queued and moves the seed with each batch, so successive top-ups
- * don't repeat. Deep cuts is finite and will eventually return []; the others
- * recycle across sessions (only the current queue is excluded), so they're
- * effectively endless. Returns [] for an unknown id.
- */
-export async function moreMixTracks(
-  library: Library,
-  mixId: string,
-  now: number,
-  excludeIds: string[],
-): Promise<TrackDTO[]> {
-  const facts = await playFacts(now)
-  const exclude = new Set(excludeIds)
-  // Move the seed with the queue length so each top-up draws a different hand.
-  const seed = Math.floor(now / (1000 * 60 * 60 * 24)) + excludeIds.length * 31 + 1
-  if (mixId === 'twofer') return twoferTracks(library, facts, seed, exclude, REFILL)
-  if (mixId === 'dormant') return dormantTracks(library, facts, seed, exclude, REFILL)
-  if (mixId === 'deep-cuts') return deepCutsTracks(library, facts, seed, exclude, REFILL)
-  if (mixId.startsWith('decade-')) {
-    const decade = Number(mixId.slice('decade-'.length))
-    if (Number.isFinite(decade)) return decadeTracks(library, decade, seed, exclude, REFILL)
-  }
-  return []
-}
 
 // --- recommendations -------------------------------------------------------
 

@@ -21,12 +21,8 @@ import {
   setArtistTags,
 } from './artist-related.ts'
 import type { PortraitStore } from './artist-portrait.ts'
-import {
-  getMixes,
-  moreMixTracks,
-  getMissingAlbums,
-  getRecommendations,
-} from './discover.ts'
+import { getMissingAlbums, getRecommendations } from './discover.ts'
+import { getMixes, getMixTypes, moreMixTracks } from './mixes.ts'
 import { saveUpload } from './upload.ts'
 import { saveZipUpload } from './upload-zip.ts'
 import { recordPlay, getPlayHistory } from './play-history.ts'
@@ -1388,7 +1384,21 @@ export function createRouter(deps: RouterDeps): Router {
       // already on disk; missing-albums is the only one that may go online.
       if (segs.length === 3 && segs[1] === 'discover' && method === 'GET') {
         if (segs[2] === 'mixes') {
-          sendJson(res, { mixes: await getMixes(library, Date.now()) })
+          // `types` is the user's picked mixes, comma-separated. Absent means
+          // "you choose" — a first visit, or a client that predates the picker.
+          const types = (url.searchParams.get('types') ?? '')
+            .split(',')
+            .map((t) => t.trim())
+            .filter(Boolean)
+          // Both halves of the answer: the mixes made, and the picks that
+          // couldn't be, so the page can say why a card is missing.
+          sendJson(res, await getMixes(library, Date.now(), types))
+          return true
+        }
+        // The catalogue behind the picker: every mix Allegory can make, each
+        // marked available or not against this library right now.
+        if (segs[2] === 'mix-types') {
+          sendJson(res, { types: await getMixTypes(library, Date.now()) })
           return true
         }
         if (segs[2] === 'recommendations') {
