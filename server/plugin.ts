@@ -107,27 +107,44 @@ export function allegoryLibrary(options: TsmOptions): Plugin {
   })
 
   // Bring the library online using the persisted music dir (or the env
-  // fallback if no settings file exists yet). Done once on plugin load.
-  const booted = (async () => {
-    const s = await settings.load()
-    if (!s.musicDir) {
-      console.log('[allegory] no music dir set — open the Settings dialog to pick one')
-      return
-    }
-    library = createLibrary(s.musicDir)
-    playlists = createPlaylists(s.musicDir)
-    ready = library
-      .scan()
-      .catch((err) => console.error('[allegory] initial library scan failed:', err))
-    console.log(`[allegory] serving music from ${s.musicDir}`)
-    router.reload({ library, playlists, ready })
-    await ready
-  })()
+  // fallback if no settings file exists yet). Started by whichever server
+  // hook fires first, and only once.
+  //
+  // Deliberately NOT started in the factory body. Vite evaluates
+  // vite.config.ts — and so constructs this plugin — for every command,
+  // including `vite build`, which starts no server and never needs the
+  // library. An eager scan there walks the whole music directory for nothing,
+  // and since nothing awaits or cancels it, its in-flight fs requests keep
+  // the event loop alive: the build itself finished in under a second while
+  // the process hung on for minutes scanning a USB drive.
+  let booted: Promise<void> | null = null
+  function boot(): Promise<void> {
+    if (booted) return booted
+    booted = (async () => {
+      const s = await settings.load()
+      if (!s.musicDir) {
+        console.log('[allegory] no music dir set — open the Settings dialog to pick one')
+        return
+      }
+      library = createLibrary(s.musicDir)
+      playlists = createPlaylists(s.musicDir)
+      ready = library
+        .scan()
+        .catch((err) => console.error('[allegory] initial library scan failed:', err))
+      console.log(`[allegory] serving music from ${s.musicDir}`)
+      router.reload({ library, playlists, ready })
+      await ready
+    })()
+    return booted
+  }
 
   function mount(middlewares: Connect.Server): void {
+    // Kick the scan off as the server starts — same moment as before in
+    // practice, just not at config-evaluation time.
+    const started = boot()
     middlewares.use((req, res, next) => {
       // Settings routes are usable immediately; other reads `await ready`.
-      void booted // keep `booted` alive
+      void started // keep the boot promise alive
       router
         .handle(req, res)
         .then((handled) => {
