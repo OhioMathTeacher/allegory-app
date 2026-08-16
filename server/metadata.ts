@@ -11,6 +11,24 @@
 import { copyFile, mkdir, readdir, rename, rmdir, stat, unlink } from 'node:fs/promises'
 import { basename, dirname, join } from 'node:path'
 import type { Library } from './scanner.ts'
+
+/**
+ * Files that must never block an artist-folder merge. These are caches and OS
+ * droppings that both folders legitimately carry: refusing to merge because
+ * each side has one would make merging impossible, which is exactly what it
+ * did before this existed.
+ */
+const DISPOSABLE_ON_MERGE = new Set([
+  // Allegory's own per-artist Last.fm cache (see artist-related.ts).
+  '.allegory-artist.json',
+  '.DS_Store',
+  'Thumbs.db',
+])
+
+function isDisposableOnMerge(name: string): boolean {
+  return DISPOSABLE_ON_MERGE.has(name)
+}
+
 import { runFfmpeg } from './ffmpeg.ts'
 
 export interface AlbumEdits {
@@ -262,9 +280,14 @@ export async function renameArtist(
   if (newDir !== oldDir) {
     if (await exists(newDir)) {
       // Merge: move each child of oldDir into newDir. Reject up-front on
-      // any name collision so we don't half-merge and leave a mess.
+      // any name collision so we don't half-merge and leave a mess — but not
+      // on bookkeeping that both folders are *expected* to have. Every artist
+      // folder carries an enrichment sidecar, so without this exemption no two
+      // artists could ever be merged: the collision check would always fire on
+      // Allegory's own cache file.
       const children = await readdir(oldDir, { withFileTypes: true })
       for (const child of children) {
+        if (isDisposableOnMerge(child.name)) continue
         const target = join(newDir, child.name)
         if (await exists(target)) {
           throw new Error(
@@ -276,6 +299,12 @@ export async function renameArtist(
       for (const child of children) {
         const from = join(oldDir, child.name)
         const to = join(newDir, child.name)
+        // The surviving artist keeps its own sidecar; the source's copy is a
+        // regenerable Last.fm cache, so it's dropped rather than merged.
+        if (isDisposableOnMerge(child.name) && (await exists(to))) {
+          await unlink(from).catch(() => undefined)
+          continue
+        }
         await moveFile(from, to).catch(async () => {
           // moveFile only handles files; for directories fall back to rename
           // (or recursive copy across filesystems).
