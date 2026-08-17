@@ -143,9 +143,38 @@ open_firefox_app() {
   local url="${*: -1}"
   local firefox_cmd=("${@:1:$#-1}")
   provision_firefox_profile
-  # --class sets WM_CLASS so Cinnamon groups the window under the Allegory
-  # panel icon instead of under Firefox (X11 only; Wayland ignores it).
-  "${firefox_cmd[@]}" --profile "$FF_PROFILE" --class Allegory \
+
+  # One window, not two. If the Allegory instance is already up, raise it rather
+  # than launching a duplicate (which --no-remote would refuse as "profile in
+  # use" anyway).
+  #
+  # pgrep has to do the matching by itself. The obvious spelling —
+  #
+  #     pgrep -af firefox | grep -q -- "$FF_PROFILE"
+  #
+  # — is unconditionally true even with no Firefox running anywhere, and it
+  # takes every launch down this branch and out of the function without opening
+  # anything. The profile path ends in "firefox-app", so `pgrep -af firefox`
+  # matches the grep on the *other end of its own pipe*, whose argv is that
+  # path, and prints it for that same grep to find. Guarding pgrep against
+  # matching itself does not help; the false match is its sibling.
+  #
+  # One pgrep call has no sibling to match, and pgrep never reports itself.
+  if pgrep -f -- "--profile $FF_PROFILE" >/dev/null 2>&1; then
+    # Wayland ignores WM_CLASS, so the raise is best-effort: return 0 either way
+    # rather than letting a failed wmctrl become the function's exit status and
+    # trip `set -e`.
+    command -v wmctrl >/dev/null 2>&1 && wmctrl -x -a allegory.Allegory >/dev/null 2>&1
+    return 0
+  fi
+
+  # --no-remote is the whole fix for "launching Firefox opens Allegory": Firefox
+  # is single-instance by default, so without this the first browser to start
+  # owns the session and the second launch is absorbed into it (ignoring
+  # --profile). --no-remote makes Allegory its own isolated instance that neither
+  # attaches to, nor is attached by, the user's normal Firefox.
+  # --class sets WM_CLASS so Cinnamon groups the window under the Allegory icon.
+  "${firefox_cmd[@]}" --no-remote --profile "$FF_PROFILE" --class Allegory \
     --new-window "$url" >/dev/null 2>&1 &
 }
 
