@@ -44,11 +44,11 @@ export const AI_CLOUD_PROVIDERS: readonly CloudProvider[] = [
   },
   {
     id: 'groq',
-    title: 'Groq (Llama 3.3)',
+    title: 'Groq (GPT-OSS 120B)',
     tier: 'free',
     keyUrl: 'https://console.groq.com/keys',
     placeholder: 'gsk_…',
-    description: 'Free, fast inference on open-weight Llama models.',
+    description: 'Free, fast inference on open-weight models.',
   },
   {
     id: 'anthropic',
@@ -56,15 +56,15 @@ export const AI_CLOUD_PROVIDERS: readonly CloudProvider[] = [
     tier: 'paid',
     keyUrl: 'https://console.anthropic.com/settings/keys',
     placeholder: 'sk-ant-…',
-    description: 'Sonnet — strong instruction-following. Bring your own key.',
+    description: 'Claude Sonnet — strong instruction-following. Bring your own key.',
   },
   {
     id: 'openai',
-    title: 'OpenAI (GPT-4o)',
+    title: 'OpenAI',
     tier: 'paid',
     keyUrl: 'https://platform.openai.com/api-keys',
     placeholder: 'sk-…',
-    description: 'GPT-4o, ChatGPT’s model. Bring your own key.',
+    description: 'ChatGPT’s models. Bring your own key.',
   },
   {
     id: 'deepseek',
