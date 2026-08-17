@@ -64,10 +64,9 @@ die() {
 # display:standalone — and about thirty lines of per-browser code here, in the
 # one place that knows how the window is being opened.
 #
-# They are tried in that order and the first that works wins, so nothing here is
-# required: no Brave falls through to any other Chromium-family browser (Chrome,
-# Chromium, Edge, Vivaldi — same flag, same window), then to a Safari web app,
-# then to Firefox, then to xdg-open. Something always opens.
+# The first that works wins, so nothing here is required: a natively packaged
+# Chromium, else a Safari web app, else Firefox, else a Flatpak Chromium, else
+# xdg-open. Something always opens.
 #
 # Override the choice with ALLEGORY_BROWSER, which takes a command line:
 #
@@ -174,16 +173,21 @@ chromium_app_command() {
     if command -v "$b" >/dev/null 2>&1; then echo "$b"; return 0; fi
   done
 
-  if command -v flatpak >/dev/null 2>&1; then
-    local installed
-    installed="$(flatpak list --app --columns=application 2>/dev/null || true)"
-    for b in com.brave.Browser com.google.Chrome org.chromium.Chromium \
-             com.microsoft.Edge com.vivaldi.Vivaldi; do
-      if printf '%s\n' "$installed" | grep -qx "$b"; then
-        echo "flatpak run $b"; return 0
-      fi
-    done
-  fi
+  return 1
+}
+
+# The same list, but Flatpak. Kept separate and tried *last* — see the note in
+# open_browser about what a sandboxed Chromium does to an app window.
+flatpak_app_command() {
+  command -v flatpak >/dev/null 2>&1 || return 1
+  local b installed
+  installed="$(flatpak list --app --columns=application 2>/dev/null || true)"
+  for b in com.brave.Browser com.google.Chrome org.chromium.Chromium \
+           com.microsoft.Edge com.vivaldi.Vivaldi; do
+    if printf '%s\n' "$installed" | grep -qx "$b"; then
+      echo "flatpak run $b"; return 0
+    fi
+  done
   return 1
 }
 
@@ -200,13 +204,11 @@ open_browser() {
     return
   fi
 
-  # Brave (or whatever else in its family is installed) is the default. --app=
-  # is a supported flag doing exactly what it says, where the Firefox path below
-  # is a stylesheet reaching into someone else's UI and holds only as long as
-  # that UI keeps its element IDs. Prefer the one that cannot rot.
+  # A natively packaged Chromium first: --app= is a supported flag doing exactly
+  # what it says, where the Firefox path below is a stylesheet reaching into
+  # someone else's UI that holds only as long as that UI keeps its element IDs.
   local chromium
   if chromium="$(chromium_app_command)"; then
-    # shellcheck disable=SC2086 -- deliberate word splitting for "flatpak run ID"
     $chromium --app="$url" --class=Allegory >/dev/null 2>&1 &
     return
   fi
@@ -223,6 +225,21 @@ open_browser() {
 
   if command -v firefox >/dev/null 2>&1; then
     open_firefox_app firefox "$url"
+    return
+  fi
+
+  # Flatpak Chromium last, and only because it beats nothing.
+  #
+  # A Chromium inside the Flatpak sandbox cannot run its own updater, and it
+  # does not fail quietly: it raises "Can't update Brave — you're missing out
+  # on security fixes" as a dialog *in the window*, on a browser that Flatpak
+  # is in fact keeping current. An app window carrying its browser's update nag
+  # is not an app window, which is the whole point of this function. Native
+  # packages and Firefox both update through the system and never do this.
+  local sandboxed
+  if sandboxed="$(flatpak_app_command)"; then
+    # shellcheck disable=SC2086 -- deliberate word splitting for "flatpak run ID"
+    $sandboxed --app="$url" --class=Allegory >/dev/null 2>&1 &
     return
   fi
 
