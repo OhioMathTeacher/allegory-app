@@ -81,7 +81,17 @@ export const AI_CLOUD_PROVIDERS: readonly CloudProvider[] = [
  * automatically (so long as you also add a card to AI_CLOUD_PROVIDERS).
  */
 export const OPENAI_COMPAT_PROVIDERS: Record<string, OpenAICompatConfig> = {
-  groq:     { name: 'Groq',     endpoint: 'https://api.groq.com/openai/v1/chat/completions', model: 'llama-3.3-70b-versatile' },
+  // llama-3.3-70b-versatile stopped being served on 16 August 2026.
+  groq:     { name: 'Groq',     endpoint: 'https://api.groq.com/openai/v1/chat/completions', model: 'openai/gpt-oss-120b' },
+  // gpt-4o is ambiguous rather than dead, and is deliberately left alone.
+  // ChatGPT retired it in February 2026 and the announcement told API callers to
+  // move, but OpenAI's deprecations page still lists no shutdown date for the
+  // bare alias -- only for dated snapshots (gpt-4o-2024-05-13 ends 23 Oct 2026).
+  // The current line is gpt-5.6-sol / -terra / -luna. Not switched here because
+  // the caller below sends max_tokens, which that generation may reject in
+  // favour of max_completion_tokens, and there is no OpenAI key on hand to test
+  // with -- trading a provider that probably works for a request shape that
+  // definitely fails is the wrong way round. Verify with a key, then move it.
   openai:   { name: 'OpenAI',   endpoint: 'https://api.openai.com/v1/chat/completions',      model: 'gpt-4o' },
   deepseek: { name: 'DeepSeek', endpoint: 'https://api.deepseek.com/v1/chat/completions',    model: 'deepseek-chat' },
 }
@@ -371,8 +381,13 @@ export async function askAI(
         'anthropic-dangerous-direct-browser-access': 'true',
       },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
+        model: 'claude-sonnet-5',
         max_tokens: maxTokens ?? 1024,
+        // Sonnet 5 thinks by default, and max_tokens caps thinking and reply
+        // together -- so a budget sized for the answer alone can be spent
+        // thinking and return a truncated reply, or none. Disabled explicitly,
+        // which is what claude-sonnet-4-20250514 did here before it retired.
+        thinking: { type: 'disabled' },
         system: systemPrompt,
         messages: messages.map((m) => ({ role: m.role, content: m.content })),
       }),
@@ -382,6 +397,7 @@ export async function askAI(
         error?: { message?: string }
       }
       if (res.status === 401) throw new Error('Invalid Anthropic key. Update it in Settings → AI.')
+      if (res.status === 404) throw new Error('That Anthropic model is unavailable — it may have been retired. This needs a fix in the app, not a new key.')
       throw new Error(`Anthropic ${res.status}: ${err?.error?.message || 'error'}`)
     }
     const data = (await res.json()) as { content?: Array<{ text?: string }> }
@@ -407,8 +423,14 @@ export async function askAI(
       const err = (await res.json().catch(() => ({}))) as {
         error?: { message?: string }
       }
-      if (res.status === 400 || res.status === 403) {
+      // A retired model id also produces a 400, so reporting every 400 as a key
+      // fault sent people to replace a key that was working. Only 401/403 are
+      // key problems; the rest report what Google actually said.
+      if (res.status === 401 || res.status === 403) {
         throw new Error('Invalid Gemini key. Update it in Settings → AI.')
+      }
+      if (res.status === 404) {
+        throw new Error('That Gemini model is unavailable — it may have been retired. This needs a fix in the app, not a new key.')
       }
       throw new Error(`Gemini ${res.status}: ${err?.error?.message || 'error'}`)
     }
