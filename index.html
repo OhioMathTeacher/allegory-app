@@ -3,6 +3,13 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <!-- PNG alongside the SVG, for the window icon rather than the tab. A
+         Chromium --app= window takes its icon from the page, and on Linux it
+         will not rasterise an SVG favicon to get one — with only the SVG here
+         it falls back to the browser's own icon, so Allegory in the panel
+         wore Brave's face. Firefox has the same gap. -->
+    <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png" />
+    <link rel="icon" type="image/png" sizes="512x512" href="/icon-512.png" />
     <link rel="apple-touch-icon" href="/icon-180.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
     <meta
