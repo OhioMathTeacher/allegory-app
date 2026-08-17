@@ -98,11 +98,21 @@ login cookie, window size, zoom) lives elsewhere in that profile and
 survives.
 
 Because it is a separate profile, the first launch asks you to log in once
-if the library is password-protected. It stays logged in after that.
+if the library is password-protected. It stays logged in after that. The
+same is true the first time the app opens in Brave rather than in the
+Firefox you had been using.
 
-Firefox is preferred when present, purely because that is what this
-launcher has always opened. To use something else — a Chromium-family
-`--app=` window is the cleaner result of the two — set `ALLEGORY_BROWSER`:
+The launcher tries them in that order and stops at the first that works, so
+there is no browser it *requires*. Brave leads because `--app=` is a
+supported flag doing exactly what it says, where the Firefox path is a
+stylesheet reaching into someone else's UI and holds only as long as that UI
+keeps its element IDs. If Brave is absent it falls through to any other
+Chromium-family browser — Chrome, Chromium, **Edge**, Vivaldi, native package
+or Flatpak, all of which take the same `--app=` flag and give the same window
+— then to a Safari-made web app on macOS, then to Firefox, and finally to
+plain `xdg-open`. Something always opens.
+
+To pin a specific one, set `ALLEGORY_BROWSER`:
 
 ```bash
 ALLEGORY_BROWSER='flatpak run com.brave.Browser' bin/allegory-launch

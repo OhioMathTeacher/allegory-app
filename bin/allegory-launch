@@ -64,6 +64,11 @@ die() {
 # display:standalone — and about thirty lines of per-browser code here, in the
 # one place that knows how the window is being opened.
 #
+# They are tried in that order and the first that works wins, so nothing here is
+# required: no Brave falls through to any other Chromium-family browser (Chrome,
+# Chromium, Edge, Vivaldi — same flag, same window), then to a Safari web app,
+# then to Firefox, then to xdg-open. Something always opens.
+#
 # Override the choice with ALLEGORY_BROWSER, which takes a command line:
 #
 #     ALLEGORY_BROWSER='flatpak run com.brave.Browser' bin/allegory-launch
@@ -145,17 +150,34 @@ open_firefox_app() {
     --new-window "$url" >/dev/null 2>&1 &
 }
 
-# First Chromium-family browser we can find, native packages before Flatpak.
+# The first Chromium-family browser we can find, Brave ahead of the rest.
+#
+# Order within the family barely matters — they all take --app= and all give
+# the same window — but Brave leads because it is the one actually installed
+# here, and a list whose first entry is a browser nobody has reads as an
+# accident. Native packages before Flatpak: a native Brave is the same browser
+# without the sandbox hop.
 chromium_app_command() {
   local b
-  for b in google-chrome-stable google-chrome chromium chromium-browser \
-           brave-browser microsoft-edge-stable microsoft-edge vivaldi-stable; do
+
+  # macOS ships browsers as bundles, which `command -v` cannot see.
+  if [ "$(uname -s)" = "Darwin" ]; then
+    for b in "Brave Browser" "Google Chrome" "Chromium" "Microsoft Edge" "Vivaldi"; do
+      local bundle="/Applications/$b.app/Contents/MacOS/$b"
+      if [ -x "$bundle" ]; then echo "$bundle"; return 0; fi
+    done
+  fi
+
+  for b in brave-browser brave-browser-stable brave \
+           google-chrome-stable google-chrome chromium chromium-browser \
+           microsoft-edge-stable microsoft-edge vivaldi-stable; do
     if command -v "$b" >/dev/null 2>&1; then echo "$b"; return 0; fi
   done
+
   if command -v flatpak >/dev/null 2>&1; then
     local installed
     installed="$(flatpak list --app --columns=application 2>/dev/null || true)"
-    for b in com.google.Chrome org.chromium.Chromium com.brave.Browser \
+    for b in com.brave.Browser com.google.Chrome org.chromium.Chromium \
              com.microsoft.Edge com.vivaldi.Vivaldi; do
       if printf '%s\n' "$installed" | grep -qx "$b"; then
         echo "flatpak run $b"; return 0
@@ -178,9 +200,20 @@ open_browser() {
     return
   fi
 
-  # macOS: a web app made once with Safari's File > Add to Dock. It has its own
-  # icon, its own window and no browser chrome at all, and it honours the
-  # manifest — the best result of the three, at the cost of a manual first step.
+  # Brave (or whatever else in its family is installed) is the default. --app=
+  # is a supported flag doing exactly what it says, where the Firefox path below
+  # is a stylesheet reaching into someone else's UI and holds only as long as
+  # that UI keeps its element IDs. Prefer the one that cannot rot.
+  local chromium
+  if chromium="$(chromium_app_command)"; then
+    # shellcheck disable=SC2086 -- deliberate word splitting for "flatpak run ID"
+    $chromium --app="$url" --class=Allegory >/dev/null 2>&1 &
+    return
+  fi
+
+  # macOS: a web app made once with Safari's File > Add to Dock. Its own icon,
+  # its own window, no browser chrome at all, and it honours the manifest — the
+  # best result of the three, at the cost of a manual first step.
   if [ "$(uname -s)" = "Darwin" ]; then
     local app
     for app in "$HOME/Applications/Allegory.app" "/Applications/Allegory.app"; do
@@ -188,18 +221,8 @@ open_browser() {
     done
   fi
 
-  # Firefox stays first: it is what this machine's launcher has always opened,
-  # and switching browsers behind someone's back means a library that suddenly
-  # asks them to log in again.
   if command -v firefox >/dev/null 2>&1; then
     open_firefox_app firefox "$url"
-    return
-  fi
-
-  local chromium
-  if chromium="$(chromium_app_command)"; then
-    # shellcheck disable=SC2086 -- deliberate word splitting for "flatpak run ID"
-    $chromium --app="$url" --class=Allegory >/dev/null 2>&1 &
     return
   fi
 
