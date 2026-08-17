@@ -46,10 +46,165 @@ die() {
   exit 1
 }
 
+# --- Opening the app window --------------------------------------------------
+# A browser tab is not an app window. The tab strip, the bookmarks bar and the
+# address bar all belong to the browser, and they sit on top of an app that
+# already draws its own chrome. Every browser can drop them; none of them agree
+# on how, and only one of the three families needs anything installed:
+#
+#   Chromium family   --app=URL      a real chromeless window, nothing to set up
+#   Firefox           no such flag   Mozilla shipped a site-specific-browser
+#                                    prototype and then removed it; the working
+#                                    substitute is a dedicated profile whose
+#                                    userChrome.css collapses the toolbars
+#   Safari            no flag at all  "File > Add to Dock" makes a genuine web
+#                                    app; from then on it is an .app we open
+#
+# So: no per-browser code in the app itself — the manifest already declares
+# display:standalone — and about thirty lines of per-browser code here, in the
+# one place that knows how the window is being opened.
+#
+# Override the choice with ALLEGORY_BROWSER, which takes a command line:
+#
+#     ALLEGORY_BROWSER='flatpak run com.brave.Browser' bin/allegory-launch
+#
+# Anything whose first word contains "firefox" takes the Firefox path; anything
+# else is assumed to understand --app=.
+
+case "$(uname -s)" in
+  Darwin) APP_DATA="$HOME/Library/Application Support/Allegory" ;;
+  *)      APP_DATA="${XDG_DATA_HOME:-$HOME/.local/share}/allegory" ;;
+esac
+FF_PROFILE="$APP_DATA/firefox-app"
+
+# A Firefox profile that behaves like an application window.
+#
+# Both files are rewritten on every launch on purpose: they are ours, not the
+# user's, and a stale userChrome.css after a Firefox update is a window with a
+# half-hidden toolbar and no obvious cause. Everything the *user* accumulates —
+# the login cookie, window size, zoom level — lives elsewhere in the profile and
+# is untouched.
+provision_firefox_profile() {
+  mkdir -p "$FF_PROFILE/chrome"
+
+  cat > "$FF_PROFILE/user.js" <<'PREFS'
+// Written by bin/allegory-launch. Edits here are overwritten on next launch.
+
+// userChrome.css is ignored unless this is on.
+user_pref("toolkit.legacyUserProfileCustomizations.stylesheets", true);
+
+// Draw a real titlebar. Without this the window controls live in the tab strip,
+// and collapsing the tab strip would take the close button with it.
+user_pref("browser.tabs.inTitlebar", 0);
+user_pref("browser.tabs.drawInTitlebar", false);   // pre-113 name for the same thing
+
+// Nothing in this profile is a general-purpose browser, so skip everything that
+// assumes it is: the welcome tour, the migration wizard, the default-browser
+// nag, the bookmarks toolbar.
+user_pref("browser.aboutwelcome.enabled", false);
+user_pref("browser.startup.homepage_override.mstone", "ignore");
+user_pref("browser.migration.version", 200);
+user_pref("browser.shell.checkDefaultBrowser", false);
+user_pref("browser.toolbars.bookmarks.visibility", "never");
+user_pref("browser.newtabpage.enabled", false);
+user_pref("browser.uitour.enabled", false);
+user_pref("datareporting.policy.dataSubmissionPolicyBypassNotification", true);
+
+// Closing the window closes the app; neither prompt makes sense here.
+user_pref("browser.warnOnQuitShortcut", false);
+user_pref("browser.tabs.warnOnClose", false);
+PREFS
+
+  cat > "$FF_PROFILE/chrome/userChrome.css" <<'CSS'
+/* Written by bin/allegory-launch. Edits here are overwritten on next launch. */
+@namespace url("http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul");
+
+/* The three bars that make a window read as "browser" rather than "app".
+   visibility:collapse rather than display:none — Firefox still lays these out
+   internally, and display:none has a history of breaking the find bar and the
+   permission doorhangers that anchor to the address bar. */
+#TabsToolbar,
+#nav-bar,
+#PersonalToolbar { visibility: collapse !important; }
+
+/* Vertical tabs (Firefox 133+) are a second tab strip in a different place. */
+#sidebar-main { display: none !important; }
+
+/* Reload is Ctrl+R / F5, back is Alt+Left. Nothing here removes them. */
+CSS
+}
+
+open_firefox_app() {
+  # Called as: open_firefox_app <command> [args...] <url>
+  local url="${*: -1}"
+  local firefox_cmd=("${@:1:$#-1}")
+  provision_firefox_profile
+  # --class sets WM_CLASS so Cinnamon groups the window under the Allegory
+  # panel icon instead of under Firefox (X11 only; Wayland ignores it).
+  "${firefox_cmd[@]}" --profile "$FF_PROFILE" --class Allegory \
+    --new-window "$url" >/dev/null 2>&1 &
+}
+
+# First Chromium-family browser we can find, native packages before Flatpak.
+chromium_app_command() {
+  local b
+  for b in google-chrome-stable google-chrome chromium chromium-browser \
+           brave-browser microsoft-edge-stable microsoft-edge vivaldi-stable; do
+    if command -v "$b" >/dev/null 2>&1; then echo "$b"; return 0; fi
+  done
+  if command -v flatpak >/dev/null 2>&1; then
+    local installed
+    installed="$(flatpak list --app --columns=application 2>/dev/null || true)"
+    for b in com.google.Chrome org.chromium.Chromium com.brave.Browser \
+             com.microsoft.Edge com.vivaldi.Vivaldi; do
+      if printf '%s\n' "$installed" | grep -qx "$b"; then
+        echo "flatpak run $b"; return 0
+      fi
+    done
+  fi
+  return 1
+}
+
 open_browser() {
   local url="$1"
+
+  if [ -n "${ALLEGORY_BROWSER:-}" ]; then
+    local override
+    read -ra override <<< "$ALLEGORY_BROWSER"
+    case "${override[0]}" in
+      *firefox*) open_firefox_app "${override[@]}" "$url" ;;
+      *)         "${override[@]}" --app="$url" --class=Allegory >/dev/null 2>&1 & ;;
+    esac
+    return
+  fi
+
+  # macOS: a web app made once with Safari's File > Add to Dock. It has its own
+  # icon, its own window and no browser chrome at all, and it honours the
+  # manifest — the best result of the three, at the cost of a manual first step.
+  if [ "$(uname -s)" = "Darwin" ]; then
+    local app
+    for app in "$HOME/Applications/Allegory.app" "/Applications/Allegory.app"; do
+      if [ -d "$app" ]; then open -a "$app" >/dev/null 2>&1; return; fi
+    done
+  fi
+
+  # Firefox stays first: it is what this machine's launcher has always opened,
+  # and switching browsers behind someone's back means a library that suddenly
+  # asks them to log in again.
   if command -v firefox >/dev/null 2>&1; then
-    firefox --new-tab "$url" >/dev/null 2>&1 &
+    open_firefox_app firefox "$url"
+    return
+  fi
+
+  local chromium
+  if chromium="$(chromium_app_command)"; then
+    # shellcheck disable=SC2086 -- deliberate word splitting for "flatpak run ID"
+    $chromium --app="$url" --class=Allegory >/dev/null 2>&1 &
+    return
+  fi
+
+  if [ "$(uname -s)" = "Darwin" ]; then
+    open "$url" >/dev/null 2>&1 &
   else
     xdg-open "$url" >/dev/null 2>&1 &
   fi

@@ -66,7 +66,50 @@ On any failure (server crash, timeout), it pops a Zenity error dialog with the
 last 20-ish lines of `.allegory-cache/launcher.log`.
 
 The server keeps running after the launcher exits. Click the icon
-again and it'll reuse the same server (just opens a new browser tab).
+again and it'll reuse the same server, opening a second app window.
+
+## Why it looks like an app and not a browser tab
+
+Allegory draws its own chrome. Stacking a tab strip, a bookmarks bar and
+an address bar on top of that makes it read as a web page you happen to
+have open rather than a program you launched — and the tab strip is the
+worst of the three, because it shows every unrelated tab in the window.
+
+None of this is per-browser code *in the app*: `manifest.webmanifest`
+already declares `display: standalone`, and that is the whole of the app's
+side. What differs is how each browser is asked to open a chromeless
+window, and `open_browser()` in `bin/allegory-launch` holds all of it:
+
+| Browser | How | Setup |
+| --- | --- | --- |
+| Chrome, Chromium, Brave, Edge, Vivaldi | `--app=URL` | none |
+| Firefox | dedicated profile + `userChrome.css` | written automatically |
+| Safari | **File → Add to Dock** | one manual step, then it's an `.app` |
+
+Firefox is the odd one out. Mozilla built a site-specific-browser mode and
+then removed it, so there is no flag to ask for. The substitute is a
+profile of our own at `~/.local/share/allegory/firefox-app` (on macOS,
+`~/Library/Application Support/Allegory/firefox-app`) whose
+`chrome/userChrome.css` collapses the three bars and whose `user.js` turns
+on a real titlebar to keep the window controls. The launcher rewrites both
+files on every start — a stale `userChrome.css` after a Firefox update is a
+half-hidden toolbar with no obvious cause. Everything you accumulate (the
+login cookie, window size, zoom) lives elsewhere in that profile and
+survives.
+
+Because it is a separate profile, the first launch asks you to log in once
+if the library is password-protected. It stays logged in after that.
+
+Firefox is preferred when present, purely because that is what this
+launcher has always opened. To use something else — a Chromium-family
+`--app=` window is the cleaner result of the two — set `ALLEGORY_BROWSER`:
+
+```bash
+ALLEGORY_BROWSER='flatpak run com.brave.Browser' bin/allegory-launch
+```
+
+Put it in the `.desktop` file's `Exec=` line (as `env ALLEGORY_BROWSER=… \
+/path/to/bin/allegory-launch`) to make it stick.
 
 ## Opening a library on another machine
 
