@@ -416,7 +416,16 @@ export async function askAI(
           role: m.role === 'assistant' ? 'model' : 'user',
           parts: [{ text: m.content }],
         })),
-        generationConfig: { maxOutputTokens: maxTokens ?? 1024, temperature: 0.7 },
+        // Gemini 2.5 Flash thinks by default and maxOutputTokens caps the
+        // thinking and the reply TOGETHER, so a caller passing a small maxTokens
+        // gets a reply truncated mid-word with the budget spent on thinking.
+        // Same trap as Sonnet 5's disabled thinking below. Seen for real in
+        // journaler-284 at 200 tokens.
+        generationConfig: {
+          maxOutputTokens: maxTokens ?? 1024,
+          temperature: 0.7,
+          thinkingConfig: { thinkingBudget: 0 },
+        },
       }),
     })
     if (!res.ok) {
