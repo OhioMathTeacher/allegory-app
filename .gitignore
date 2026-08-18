@@ -64,3 +64,8 @@ tools/library-maintenance/TODO*.md
 # Python bytecode from the maintenance scripts
 __pycache__/
 *.pyc
+
+# Curator song notes. These are personal writing and were published here by
+# accident in the original snapshot. The live notes are sidecars in the music
+# library; the git mirror belongs in the private dev repo only.
+curation/
