@@ -133,10 +133,27 @@ export function UpdatePanel() {
     data?.currentVersion && data?.latestVersion && data.currentVersion !== data.latestVersion
       ? `v${data.currentVersion} → v${data.latestVersion}`
       : ''
+  // Rendered beside the status when there is nothing to install, and next to
+  // "Update & restart" when there is. Keeping it on the status row avoids a
+  // second, otherwise-empty row under "You're up to date."
+  const refreshBtn = (extra: string) => (
+    <button
+      type="button"
+      onClick={() => refetch()}
+      disabled={isFetching}
+      title="Check again"
+      aria-label="Check again"
+      className={`flex items-center justify-center rounded-md p-2 text-white/78 transition-colors hover:bg-white/14 hover:text-white disabled:opacity-40 ${extra}`}
+    >
+      <RefreshCw className={`h-4 w-4 ${isFetching ? 'animate-spin' : ''}`} />
+    </button>
+  )
+
   return (
     <Shell>
       <div className="flex flex-col gap-3">
-        <div className="min-w-0">
+        <div className="flex items-start gap-2">
+        <div className="min-w-0 flex-1">
           {available ? (
             <div className="flex items-center gap-1.5 text-sm font-semibold text-[var(--accent)]">
               <ArrowUpCircle className="h-4 w-4 shrink-0" />
@@ -152,15 +169,16 @@ export function UpdatePanel() {
           ) : (
             <div className="flex items-center gap-1.5 text-sm text-emerald-300/90">
               <Check className="h-4 w-4 shrink-0" />
-              You’re up to date{data?.currentVersion ? ` on v${data.currentVersion}` : ''}.
+              You’re up to date.
             </div>
           )}
-          <div className="mt-1 truncate text-xs text-white/74">
-            Installed {stamp(data?.currentVersion, data?.current)}
-            {data?.currentMessage ? ` · ${data.currentMessage}` : ''}
-          </div>
           {available && (
-            <div className="mt-0.5 truncate text-xs text-white/74">
+            <div className="mt-1 text-xs text-white/74">
+              Installed {stamp(data?.currentVersion, data?.current)}
+            </div>
+          )}
+          {available && (
+            <div className="mt-0.5 line-clamp-2 text-xs text-white/74">
               Latest {stamp(data?.latestVersion, data?.latest)}
               {data?.latestMessage ? ` · ${data.latestMessage}` : ''}
               {versionJump && data?.behind
@@ -178,9 +196,11 @@ export function UpdatePanel() {
             </div>
           )}
         </div>
+          {!available && refreshBtn('-mt-1 shrink-0')}
+        </div>
 
-        <div className="flex items-center gap-2">
-          {available && (
+        {available && (
+          <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={doUpdate}
@@ -190,20 +210,9 @@ export function UpdatePanel() {
               <Download className="h-3.5 w-3.5" />
               Update &amp; restart
             </button>
-          )}
-          <button
-            type="button"
-            onClick={() => refetch()}
-            disabled={isFetching}
-            title="Check again"
-            aria-label="Check again"
-            className={`flex items-center justify-center rounded-md p-2 text-white/78 transition-colors hover:bg-white/14 hover:text-white disabled:opacity-40 ${
-              available ? 'shrink-0' : 'ml-auto'
-            }`}
-          >
-            <RefreshCw className={`h-4 w-4 ${isFetching ? 'animate-spin' : ''}`} />
-          </button>
-        </div>
+            {refreshBtn('shrink-0')}
+          </div>
+        )}
       </div>
     </Shell>
   )

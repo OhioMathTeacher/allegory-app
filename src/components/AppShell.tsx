@@ -483,6 +483,31 @@ function TopButton({ onClick, label, active, prominent, children }: TopButtonPro
 
 const GITHUB_URL = 'https://github.com/OhioMathTeacher/allegory-app'
 
+// Bytes of the shipped dist/, measured by the allegory-build-info Vite plugin.
+// null in dev, where nothing is bundled and any figure would be a guess.
+function payload(bytes: number | null | undefined, stale?: boolean): string {
+  if (bytes == null) return 'dev build'
+  const size =
+    bytes < 1024 * 1024
+      ? `${(bytes / 1024).toFixed(0)} KB`
+      : `${(bytes / 1024 / 1024).toFixed(1)} MB`
+  return stale ? `${size} (last build)` : size
+}
+
+// Same wording as clique-app and marginalia-app. Naming an ever-larger medium
+// is a bad flex -- "1.7 MB fits on a 100 MB Zip disk" says nothing -- so past
+// one floppy, count them.
+const FLOPPY = 1474560
+const WORDS = ['', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten']
+function capacity(bytes: number | null | undefined): string | null {
+  if (bytes == null) return null
+  if (bytes <= 368640) return 'a 360 KB 5¼-inch floppy disk'
+  if (bytes <= 737280) return 'a 720 KB 3½-inch floppy disk'
+  if (bytes <= FLOPPY) return 'a 1.44 MB 3½-inch floppy disk'
+  const n = Math.ceil(bytes / FLOPPY)
+  return `${WORDS[n] ?? n} 1.44 MB floppy disks`
+}
+
 // "About Allegory" splash — opened by tapping the brand mark. A portrait of
 // Socrates (drop your own at public/socrates.jpg; falls back to the logo),
 // the tagline, and a link to the repo. Click anywhere outside to dismiss.
@@ -536,15 +561,6 @@ function Splash({ onClose }: { onClose: () => void }) {
           <p className="mt-2 text-lg font-medium tracking-wide text-white/75">
             Music Powered by Philosophy
           </p>
-          <a
-            href={GITHUB_URL}
-            target="_blank"
-            rel="noreferrer"
-            onClick={(e) => e.stopPropagation()}
-            className="mt-5 inline-flex items-center gap-2 rounded-full border border-line px-5 py-2 text-sm font-medium text-white/80 transition-colors hover:bg-white/14"
-          >
-            View on GitHub
-          </a>
 
           {/* In-app updater — pull + rebuild + restart from the phone, no
               terminal. Left-aligned in the otherwise-centred splash. */}
@@ -554,9 +570,26 @@ function Splash({ onClose }: { onClose: () => void }) {
           {/* Build stamp — confirms which build is loaded (handy on the phone,
               through caching). The short SHA changes every commit. Injected into
               index.html by vite.config's allegory-build-info plugin. */}
-          <p className="mt-4 text-xs tracking-wide text-white/70">
-            Version {build.version} · {build.sha} · {build.date}
+          <div
+            className="mt-5 flex flex-wrap items-center justify-center gap-x-4 gap-y-1 border-t border-line pt-4 text-xs"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <a href={`${GITHUB_URL}#readme`} target="_blank" rel="noreferrer" className="text-white/75 underline underline-offset-2 hover:text-white">
+              Source code &amp; README ↗
+            </a>
+            <a href={`${GITHUB_URL}/blob/main/LICENSE`} target="_blank" rel="noreferrer" className="text-white/75 underline underline-offset-2 hover:text-white">
+              License ↗
+            </a>
+            <a href={`${GITHUB_URL}/issues`} target="_blank" rel="noreferrer" className="text-white/75 underline underline-offset-2 hover:text-white">
+              Report a problem ↗
+            </a>
+          </div>
+          <p className="mt-3 text-xs tracking-wide text-white/60">
+            Version {build.version} · {build.sha} · {build.date} · {payload(build.bytes, build.stale)}
           </p>
+          {capacity(build.bytes) && (
+            <p className="mt-1 text-xs text-white/45">fits on {capacity(build.bytes)}</p>
+          )}
         </div>
       </motion.div>
     </motion.div>

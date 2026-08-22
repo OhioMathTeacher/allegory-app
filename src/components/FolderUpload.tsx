@@ -13,7 +13,8 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Check, FolderPlus, Upload } from 'lucide-react'
 import { useConnected } from '../lib/connection'
 import { getArtists, refreshLibrary, uploadMusicFile, uploadMusicZip } from '../lib/api'
-import { foldName, type FilingBatch } from './UploadFiling'
+import { type FilingBatch } from './UploadFiling'
+import { foldName } from '../lib/filing'
 
 interface UploadState {
   done: number

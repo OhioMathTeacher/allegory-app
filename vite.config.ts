@@ -1,5 +1,5 @@
 import { defineConfig, loadEnv } from 'vite'
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { execSync } from 'node:child_process'
 import { resolve } from 'node:path'
 import react from '@vitejs/plugin-react'
@@ -30,11 +30,23 @@ export default defineConfig(({ mode }) => {
     // not a git checkout — leave 'unknown'
   }
   const buildDate = new Date().toISOString().slice(0, 10)
-  const buildInfo = JSON.stringify({
+  const baseBuild = {
     version: pkg.version ?? '0.0.0',
     sha: gitSha,
     date: buildDate,
-  })
+  }
+
+  // Everything under public/ is copied into dist/ verbatim, so it is part of
+  // what ships even though Rollup never sees it.
+  function dirBytes(dir: string): number {
+    let n = 0
+    if (!existsSync(dir)) return 0
+    for (const e of readdirSync(dir, { withFileTypes: true })) {
+      const p = resolve(dir, e.name)
+      n += e.isDirectory() ? dirBytes(p) : statSync(p).size
+    }
+    return n
+  }
 
   // Serve HTTPS when a cert is present in `.allegory-cache/` (gitignored).
   // Generate one with mkcert (locally trusted, no browser warnings):
@@ -64,13 +76,40 @@ export default defineConfig(({ mode }) => {
       // load, so the phone always sees the running build.
       {
         name: 'allegory-build-info',
-        transformIndexHtml: () => [
-          {
-            tag: 'script',
-            injectTo: 'head',
-            children: `window.__ALLEGORY_BUILD__=${buildInfo};`,
-          },
-        ],
+        // In a build, ctx.bundle holds every emitted chunk and asset, so the
+        // shipped payload can be summed honestly. In dev there is no bundle,
+        // so bytes stays null and the splash says "dev" rather than quoting a
+        // source-tree figure that is not what ships.
+        transformIndexHtml: (_html: string, ctx: { bundle?: Record<string, unknown> }) => {
+          let bytes: number | null = null
+          let stale = false
+          if (ctx?.bundle) {
+            let n = 0
+            for (const f of Object.values(ctx.bundle) as Array<Record<string, unknown>>) {
+              if (f.type === 'chunk') n += Buffer.byteLength(f.code as string)
+              else if (typeof f.source === 'string') n += Buffer.byteLength(f.source)
+              else if (f.source) n += (f.source as Uint8Array).byteLength
+            }
+            bytes = n + dirBytes(resolve(process.cwd(), 'public'))
+          } else {
+            // Dev: nothing is bundled. Rather than show no figure at all -- which
+            // makes the size impossible to check in the one place Todd actually
+            // runs the app -- fall back to the last build on disk, marked stale
+            // so the splash can say where the number came from.
+            const dist = resolve(process.cwd(), 'dist')
+            if (existsSync(dist)) {
+              bytes = dirBytes(dist)
+              stale = true
+            }
+          }
+          return [
+            {
+              tag: 'script',
+              injectTo: 'head' as const,
+              children: `window.__ALLEGORY_BUILD__=${JSON.stringify({ ...baseBuild, bytes, stale })};`,
+            },
+          ]
+        },
       },
     ],
     server: {

@@ -352,7 +352,7 @@ export async function askAI(
       // caller can stay quiet. Anything else is a real connection failure
       // (refused / CORS / HTTPS→http blocked): explain the likely cause.
       if (e instanceof DOMException && e.name === 'AbortError') throw e
-      throw new Error(localFailureHint(local.endpoint))
+      throw new Error(localFailureHint(local.endpoint), { cause: e })
     }
     if (!res.ok) {
       const body = await res.text().catch(() => '')

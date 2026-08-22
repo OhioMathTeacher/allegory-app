@@ -58,7 +58,7 @@ export function createSettings(cacheDir: string, fallbackMusicDir: string) {
       return { ok: false, error: 'Path does not exist.' }
     }
     if (!st.isDirectory()) return { ok: false, error: 'Path is not a directory.' }
-    let artistCount = 0
+    let artistCount: number
     try {
       const entries = await readdir(path, { withFileTypes: true })
       artistCount = entries.filter((e) => e.isDirectory() && !e.name.startsWith('.')).length

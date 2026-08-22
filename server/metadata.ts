@@ -47,6 +47,8 @@ export interface AlbumEditResult {
 
 /** Strip filesystem-unsafe characters and trim. Empty strings become null. */
 function safeFsName(s: string): string | null {
+  // The C0 control range is the point: these bytes are illegal in filenames.
+  // eslint-disable-next-line no-control-regex
   const cleaned = s.replace(/[/\\:*?"<>|\x00-\x1f]/g, ' ').replace(/\s+/g, ' ').trim()
   return cleaned.length === 0 ? null : cleaned
 }
