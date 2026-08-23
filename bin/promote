@@ -1,0 +1,82 @@
+#!/usr/bin/env bash
+# Promote dev -> prod. Encodes the rules from CLAUDE.md so they cannot be
+# retyped wrong at 1am:
+#   - file copy, never merge (the repos share no history)
+#   - never --delete (it would wipe dev's planning docs)
+#   - planning docs never reach prod (they name machines and tailnet addresses,
+#     and are why prod's history had to be rewritten once already)
+#   - prod's .gitignore is STRICTER than dev's and must survive untouched
+#
+# Refuses to run without an explicit reason argument, because "Todd said so in
+# this session" is the actual gate and a script should not paper over it.
+set -euo pipefail
+
+DEV="$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)"
+PROD="${PROD_REPO:-$HOME/Repos/allegory-app}"
+
+if [ $# -eq 0 ]; then
+  echo "usage: bin/promote \"what this ships\"" >&2
+  echo "  (prod is live and served from the iMac; this is not a routine sync)" >&2
+  exit 2
+fi
+SUMMARY="$1"
+
+[ -d "$PROD/.git" ] || { echo "promote: $PROD is not a git repo" >&2; exit 1; }
+
+echo "== dev  $(git -C "$DEV" log --oneline -1)"
+echo "== prod $(git -C "$PROD" log --oneline -1)"
+
+if [ -n "$(git -C "$PROD" status --porcelain)" ]; then
+  echo "promote: prod has uncommitted changes -- resolve them first" >&2
+  git -C "$PROD" status --short >&2
+  exit 1
+fi
+
+EXCLUDES=(
+  --exclude='.git/' --exclude='node_modules/' --exclude='dist/'
+  --exclude='.allegory-cache/' --exclude='.gitignore'
+  --exclude='CLAUDE.md' --exclude='REFERENCE.md' --exclude='ROADMAP.md'
+  --exclude='HANDOFF*.md' --exclude='DESIGN-*.md' --exclude='version-2-vision.md'
+  --exclude='tools/library-maintenance/'
+  # .env can hold keys. Prod's .gitignore already refuses to commit one, but a
+  # gitignore is one edit away from not doing that, and prod is the public repo.
+  # Belt and suspenders: do not copy it at all. The committed .env.example is
+  # the documented template and must still travel, so it is matched first.
+  --include='.env.example' --exclude='.env' --exclude='.env.*'
+)
+
+GITIGNORE_BEFORE="$(md5sum "$PROD/.gitignore" | cut -d' ' -f1)"
+# Prod may legitimately carry its own .env for serving. What must never happen
+# is dev's overwriting it, so compare rather than merely assert absence.
+ENV_BEFORE="$( [ -e "$PROD/.env" ] && md5sum "$PROD/.env" | cut -d' ' -f1 || echo absent )"
+
+echo "== copying (no --delete)"
+rsync -a "${EXCLUDES[@]}" "$DEV/" "$PROD/"
+
+# --- assertions: these are the actual point of the script ---
+fail=0
+for f in CLAUDE.md REFERENCE.md ROADMAP.md version-2-vision.md; do
+  [ -e "$PROD/$f" ] && { echo "promote: LEAK -- $f reached prod" >&2; fail=1; }
+done
+ls "$PROD"/HANDOFF*.md "$PROD"/DESIGN-*.md >/dev/null 2>&1 && {
+  echo "promote: LEAK -- planning docs reached prod" >&2; fail=1; }
+[ -d "$PROD/tools/library-maintenance/backups" ] && {
+  echo "promote: LEAK -- library backups reached prod" >&2; fail=1; }
+[ "$(md5sum "$PROD/.gitignore" | cut -d' ' -f1)" = "$GITIGNORE_BEFORE" ] || {
+  echo "promote: prod .gitignore was modified -- it is the stricter one" >&2; fail=1; }
+ENV_AFTER="$( [ -e "$PROD/.env" ] && md5sum "$PROD/.env" | cut -d' ' -f1 || echo absent )"
+[ "$ENV_AFTER" = "$ENV_BEFORE" ] || {
+  echo "promote: LEAK -- dev's .env reached prod" >&2; fail=1; }
+[ "$fail" -eq 0 ] || { echo "promote: ABORTED, prod left dirty for inspection" >&2; exit 1; }
+
+echo "== verifying in prod"
+( cd "$PROD" && npx tsc -b && npm run build >/dev/null && npx eslint . >/dev/null )
+
+echo "== committing"
+git -C "$PROD" add -A
+git -C "$PROD" commit -q -m "Promote from dev: $SUMMARY"
+echo "== $(git -C "$PROD" log --oneline -1)"
+echo
+echo "Not live yet: the iMac serves prod from its own checkout."
+echo "  git -C ~/Repos/allegory-app pull && systemctl --user restart allegory"
+echo "Push when ready:  git -C $PROD push origin main"

@@ -114,12 +114,20 @@ export default defineConfig(({ mode }) => {
     ],
     server: {
       https,
-      // Bind every interface (incl. the Tailscale one) so the phone can
-      // reach it from the car over cellular, and pin the port so that
-      // bookmark — http://<tailscale-ip>:5173 — never drifts. strictPort
-      // makes Vite fail loudly if 5173 is taken rather than silently
+      // Loopback by DEFAULT. `host: true` binds 0.0.0.0 -- every interface,
+      // including the campus LAN -- not just the Tailscale one, which is what
+      // the old comment here assumed. On ToddGPT that put the dev server in
+      // front of anyone who could route to the machine, and that box holds
+      // FERPA-protected coursework.
+      //
+      // Opt in where reaching it from the phone is actually wanted (the iMac,
+      // a car demo):  ALLEGORY_DEV_EXPOSE=1 npm run dev
+      // Prefer `tailscale serve 5173` over this -- it keeps the socket on
+      // loopback and exposes it to the tailnet only, not to the whole LAN.
+      //
+      // strictPort makes Vite fail loudly if 5173 is taken rather than silently
       // moving to 5174 and breaking the bookmark.
-      host: true,
+      host: process.env.ALLEGORY_DEV_EXPOSE === '1' ? true : '127.0.0.1',
       port: 5173,
       strictPort: true,
     },

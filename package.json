@@ -4,10 +4,10 @@
   "version": "1.8.6",
   "type": "module",
   "scripts": {
-    "dev": "vite --host",
+    "dev": "vite",
     "build": "tsc -b && vite build",
-    "lint": "eslint .",
-    "preview": "vite preview"
+    "lint": "eslint . --max-warnings 24",
+    "preview": "node bin/serve-guard.mjs && vite preview"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.100.11",

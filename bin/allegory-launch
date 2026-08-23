@@ -138,6 +138,33 @@ PREFS
 CSS
 }
 
+# Is an Allegory app window already on screen?
+#
+# Clicking the menu entry with Allegory already open should raise that window,
+# not start a second one. open_firefox_app has always done this — its profile
+# lock made a duplicate impossible anyway — but every Chromium path launched
+# unconditionally, so each click stacked another --app= window on the same
+# library, each with its own <audio> element and its own idea of what is
+# playing. Closing "the" window then left the others still holding the sound.
+#
+# Match on WM_CLASS, the one thing both families agree on: Chromium takes
+# --class=Allegory and Firefox --class Allegory, and both land in the *class*
+# half of the pair. The *name* half is not ours and not stable — Chromium fills
+# it from the URL host, so the identical window is "localhost.Allegory" against
+# a local server and "100.95.103.93.Allegory" against the iMac. Matching the
+# pair in full breaks the moment the library moves; match the class alone.
+#
+# Best-effort by design. No wmctrl, or a Wayland session that never exposes
+# WM_CLASS, returns non-zero and the caller opens a window exactly as before.
+raise_existing_window() {
+  command -v wmctrl >/dev/null 2>&1 || return 1
+  wmctrl -lx 2>/dev/null | awk '{print $3}' | grep -qi '\.allegory$' || return 1
+  # A window is there, so this call must not open a second one even if the
+  # raise itself fails — report success either way, as the Firefox path does.
+  wmctrl -x -a Allegory >/dev/null 2>&1 || true
+  return 0
+}
+
 open_firefox_app() {
   # Called as: open_firefox_app <command> [args...] <url>
   local url="${*: -1}"
@@ -222,6 +249,15 @@ flatpak_app_command() {
 
 open_browser() {
   local url="$1"
+
+  # One window, not two. This runs ahead of everything below, the
+  # ALLEGORY_BROWSER override included: if a window is already open, the answer
+  # is always "raise that one", whichever browser drew it. A window pointed at
+  # a different library than this launch would have chosen still counts — "take
+  # me to the open one" is the request, and two Allegorys is the failure.
+  if raise_existing_window; then
+    return
+  fi
 
   if [ -n "${ALLEGORY_BROWSER:-}" ]; then
     local override
