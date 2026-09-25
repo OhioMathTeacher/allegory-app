@@ -104,11 +104,13 @@ if command -v systemctl >/dev/null 2>&1 && systemctl --user is-active --quiet al
     systemctl --user restart allegory.service >>"$LOG_FILE" 2>&1
   fi
 else
-  log "restarting dev server manually"
-  pkill -f "$REPO.*vite" 2>/dev/null || true
+  # No service here, so there is nothing this machine should be restarting. This
+  # used to `npm run dev` detached instead -- the same fallback removed from
+  # bin/allegory-launch on 2026-09-09, with the same outcome: a machine that was
+  # only ever a client quietly becomes a second Allegory, serving a build it has
+  # just pulled. Updating a checkout is not a reason to start serving from it.
+  log "no allegory.service here; not starting a server (this machine is a client)"
   rm -f "$CACHE_DIR/url"
-  sleep 1
-  setsid nohup npm run dev </dev/null >>"$CACHE_DIR/launcher.log" 2>&1 &
 fi
 
 log "update complete"

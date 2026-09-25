@@ -4,7 +4,13 @@ A click-to-launch entry for the Cinnamon menu (works the same on Fedora
 and Debian-based distros — the `.desktop` format is freedesktop, not
 distro-specific).
 
-## Install
+On macOS the same launcher is wrapped in an `.app` bundle you can keep in the
+Dock — see [macOS: a Dock icon](#macos-a-dock-icon) below. Both platforms run
+the *same* `bin/allegory-launch`; only the thing that clicks it differs, so
+everything in "What clicking it does", "Why it looks like an app", and "Opening
+a library on another machine" applies to both.
+
+## Install (Linux / Cinnamon)
 
 From the repo root:
 
@@ -45,6 +51,111 @@ If you're on a different desktop (or the auto-pin couldn't find a
 hand: open the menu → **Sound & Video** → right-click **Allegory** →
 *Add to panel*.
 
+## macOS: a Dock icon
+
+macOS has no `.desktop` files and no menu to install into. The equivalent unit
+is an application bundle — a directory named `Allegory.app` whose `Contents/`
+holds an `Info.plist`, an icon, and an executable. Build one with:
+
+```sh
+./packaging/install-launcher-macos.sh
+```
+
+It writes `~/Applications/Allegory.app` and opens Finder on it. **Drag it to the
+Dock once and it stays there** — clicking it runs exactly the same
+`bin/allegory-launch` the Cinnamon icon runs. The script is idempotent: re-run
+it after moving the repo, upgrading node, or changing the icon.
+
+The bundle is three small pieces:
+
+| Piece | Why |
+| --- | --- |
+| `Info.plist` | Names the app, points at the icon. No `LSUIElement` — the stub exits once the browser is open, but the Dock only accepts a normal foreground app as a permanent item. |
+| `Contents/MacOS/Allegory` | A stub that sets `PATH` and `exec`s `bin/allegory-launch`. |
+| `allegory.icns` | Built from `public/icon-512.png` with `sips` + `iconutil`. |
+
+Two macOS details the stub exists to handle:
+
+- **An app launched from the Dock has almost no `PATH`** — `/usr/bin:/bin:
+  /usr/sbin:/sbin`, and nothing else, because no shell profile is ever read.
+  Homebrew, MacPorts and nvm all live outside that list, so `npm` is simply not
+  found. The installer resolves the node directory *at install time* and writes
+  it into the stub, which is why you re-run it after upgrading node.
+  (The removed `install-launchagent-macos.sh` baked in `__NODE_BIN__` for the
+  same reason.)
+- **Naming it `Allegory.app` collides with Safari.** "Add to Dock" writes its
+  web apps to the same `~/Applications` under the same name, and
+  `open_browser()` in `bin/allegory-launch` looks there. Left alone, the
+  launcher would open *itself* and re-enter. The bundle therefore carries a
+  marker file at `Contents/Resources/.allegory-launcher`: `open_browser()` skips
+  any bundle that has it, and the installer refuses to overwrite any bundle that
+  doesn't (so it can never clobber a Safari web app you were using).
+
+### Which browser to pick on macOS
+
+`open_browser()` tries the same order it does on Linux, and all three families
+work. If you have a preference, set `ALLEGORY_BROWSER` — there is a commented-out
+line in the stub for exactly this:
+
+```sh
+export ALLEGORY_BROWSER="/Applications/Firefox.app/Contents/MacOS/firefox"
+```
+
+- **Brave / Chrome / Chromium / Edge / Vivaldi — the default, and the one to
+  want.** `--app=URL` is a supported flag that gives a real chromeless window
+  with nothing to install. `chromium_app_command()` looks inside
+  `/Applications/*.app/Contents/MacOS/` because macOS ships browsers as bundles,
+  which `command -v` cannot see.
+- **Firefox works**, via the dedicated profile and `userChrome.css` described
+  below; on macOS that profile lives in `~/Library/Application Support/Allegory/
+  firefox-app`. It is a stylesheet reaching into Mozilla's own UI, so it holds
+  only as long as those element IDs do — fine, but more fragile than a flag.
+- **Safari can't be scripted into an app window at all** — no `--app`
+  equivalent, no profile hook. The supported route is the manual one: open
+  `http://localhost:5173/` in Safari, then **File → Add to Dock**. That makes a
+  genuine web app that honours `manifest.webmanifest`, which is the *nicest*
+  window of the three. Note the one real functional cost: **Safari does not
+  implement `HTMLMediaElement.setSinkId`, so the output-device picker
+  disappears.** It degrades rather than breaks — `OUTPUT_SUPPORTED` in
+  `src/lib/player.tsx` feature-detects it and hides the control — but if you
+  send audio to specific speakers, use a Chromium.
+
+If you do take the Safari route, remember it is still only a window: something
+must be serving `localhost:5173`. Keep the Dock launcher (or the LaunchAgent)
+for that.
+
+### Signing
+
+Not needed to run this on the machine that built it. Gatekeeper keys off the
+`com.apple.quarantine` attribute, and a locally built bundle never gets one —
+only downloads, AirDrops and mail attachments do.
+
+It matters only if the `.app` travels to another Mac by one of those routes. If
+you have a Developer ID:
+
+```sh
+ALLEGORY_SIGN_ID="Developer ID Application: Your Name (TEAMID)" \
+  ./packaging/install-launcher-macos.sh
+```
+
+Signing happens last, after the icon and marker are written — `codesign` seals
+the bundle, so anything added afterwards invalidates it. Signed-but-not-notarized
+still needs a right-click → Open on the receiving Mac; notarization is a further
+step this script doesn't do.
+
+### Always-on, and stopping it
+
+**There is no always-on server on macOS, and that is deliberate.** A LaunchAgent
+running `npm run dev` at login used to live here; it was removed on 2026-09-09
+after one had been serving `*:5173` on MacGuffey for fifteen days unnoticed.
+Nothing needed it — the app is served by `allegory.service` on the iMac, and a
+Mac is a place you look at Allegory from, not a place that serves it.
+
+To develop, type `npm run dev`. To use the app, open the Dock launcher, which
+points at the iMac.
+
+`bin/allegory-quit` stops a dev server the launcher started, on either platform.
+
 ## What clicking it does
 
 `allegory.desktop` runs `bin/allegory-launch`, which tries these in order and
@@ -58,14 +169,17 @@ stops at the first that works:
    end up looking at the wrong one.
 3. **A previous launch's URL file**, if the server it names still answers —
    opens that URL in Firefox and exits (instant re-launch).
-4. Otherwise: checks `node_modules/` exists (offering `npm install` in a
-   Zenity dialog if not), starts `npm run dev` detached, waits for the Vite
-   plugin to publish the live URL to `.allegory-cache/url`, and opens it.
+4. Otherwise: explains that nothing is answering and where the library
+   actually lives. **It does not start a server** — that fallback was removed on
+   2026-09-09, because opening a launcher on a machine where nothing was up is
+   how that machine quietly became a second Allegory.
 
-On any failure (server crash, timeout), it pops a Zenity error dialog with the
-last 20-ish lines of `.allegory-cache/launcher.log`.
 
-The server keeps running after the launcher exits. Click the icon
+The message names the iMac's URL, how to check the service is up, how to point
+the launcher elsewhere via `.allegory-cache/remote`, and how to run `npm run
+dev` if you actually meant to develop.
+
+The iMac's server keeps running regardless of the launcher. Click the icon
 again and it'll reuse the same server, opening a second app window.
 
 ## Why it looks like an app and not a browser tab
@@ -263,3 +377,18 @@ keeps working regardless.
 ```sh
 rm ~/.local/share/applications/allegory.desktop
 ```
+
+On macOS:
+
+```sh
+rm -rf ~/Applications/Allegory.app                        # the Dock launcher
+
+# If an old LaunchAgent from before 2026-09-09 is still installed, it will keep
+# starting a dev server at every login until it is unloaded:
+launchctl unload ~/Library/LaunchAgents/com.allegory.dev.plist 2>/dev/null
+rm -f ~/Library/LaunchAgents/com.allegory.dev.plist
+```
+
+Remove the Dock item itself by dragging it off. A Safari-made web app (if you
+made one) is a separate `~/Applications/Allegory.app` and is not touched by the
+installer — delete it the same way.

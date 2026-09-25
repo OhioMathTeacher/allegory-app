@@ -33,6 +33,12 @@ import { createAuth } from './auth.ts'
 export interface TsmOptions {
   /** Fallback music dir if no settings file exists yet (from ALLEGORY_MUSIC_DIR). */
   defaultMusicDir: string
+  /**
+   * Local-only build: skip the iPhone/Tailscale remote-control WebSocket
+   * entirely. Set from ALLEGORY_LOCAL_ONLY in vite.config. The matching
+   * client flag is the `__LOCAL_ONLY__` define.
+   */
+  localOnly?: boolean
 }
 
 export function allegoryLibrary(options: TsmOptions): Plugin {
@@ -159,12 +165,12 @@ export function allegoryLibrary(options: TsmOptions): Plugin {
     configureServer(server) {
       mount(server.middlewares)
       publishUrl(server.httpServer, !!server.config.server.https)
-      if (server.httpServer) attachRemote(server.httpServer, auth)
+      if (server.httpServer && !options.localOnly) attachRemote(server.httpServer, auth)
     },
     configurePreviewServer(server) {
       mount(server.middlewares)
       publishUrl(server.httpServer, !!server.config.preview.https)
-      if (server.httpServer) attachRemote(server.httpServer, auth)
+      if (server.httpServer && !options.localOnly) attachRemote(server.httpServer, auth)
     },
   }
 }

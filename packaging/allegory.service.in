@@ -1,5 +1,5 @@
 [Unit]
-Description=Allegory music server (Vite dev server)
+Description=Allegory music server (built app, vite preview)
 Documentation=file://__REPO__/packaging/README.md
 # Wait for the network so the LAN URLs (phone access) come up cleanly.
 After=network-online.target
@@ -13,7 +13,16 @@ Type=simple
 WorkingDirectory=__REPO__
 # systemd user services start with a minimal PATH; pin node/npm in.
 Environment=PATH=__NODE_BIN__:/usr/local/bin:/usr/bin:/bin
-ExecStart=__NPM__ run dev
+# Serve the BUILT app, which is what the iMac has actually run since prod split
+# off. This template said `run dev` until 2026-09-09 while the installed unit on
+# imac-fedora said `run preview -- --host --port 4173`: the live unit was edited
+# by hand and the template never caught up. A template that disagrees with the
+# thing it is supposed to install is worse than no template, and this one ships
+# in the PUBLIC repo, where it told a stranger to start a dev server.
+#
+# 4173 means "Allegory, the app". 5173 means "someone is developing" and is
+# never a daemon. `preview` needs a build present -- bin/allegory-update runs it.
+ExecStart=__NPM__ run preview -- --host --port 4173
 # Auto-restart on crash; cgroup kill cleans up the child vite process.
 Restart=on-failure
 RestartSec=3

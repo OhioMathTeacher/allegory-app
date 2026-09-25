@@ -89,7 +89,10 @@ function PlayerHost() {
     void queryClient.invalidateQueries()
   }, [target, queryClient])
 
-  if (mode === 'remote') {
+  // Local-only builds never control another machine, so they always use the
+  // local audio player. The `__LOCAL_ONLY__ &&` guard lets the bundler drop the
+  // remote branch (and RemotePlayerProvider) from the distributable build.
+  if (!__LOCAL_ONLY__ && mode === 'remote') {
     return (
       <RemotePlayerProvider>
         <AppShell />

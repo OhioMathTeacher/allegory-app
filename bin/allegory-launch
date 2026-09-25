@@ -1,30 +1,55 @@
 #!/usr/bin/env bash
-# Launch Allegory: start the Vite dev server (if not already running)
-# and open the live URL in the browser. Designed to be invoked from a
-# Cinnamon .desktop file — all user-visible errors are surfaced through
-# zenity (with a notify-send fallback).
+# Open Allegory. This opens a WINDOW; it does not start a server -- the server
+# is allegory.service on the Fedora iMac and every other machine points at it.
+# Until 2026-09-09 this spawned `npm run dev` when nothing answered, which is
+# how a machine quietly became a second Allegory. Designed to be invoked from a
+# Cinnamon .desktop file on Linux and from an Allegory.app bundle on macOS —
+# user-visible errors go to zenity, notify-send, or osascript, whichever the
+# machine has.
 set -euo pipefail
 
 REPO="$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)"
 CACHE_DIR="$REPO/.allegory-cache"
 URL_FILE="$CACHE_DIR/url"
 REMOTE_FILE="$CACHE_DIR/remote"
-LOG_FILE="$CACHE_DIR/launcher.log"
 
 mkdir -p "$CACHE_DIR"
 cd "$REPO"
 
 # Cinnamon (and many DEs) launch .desktop files with a stripped-down PATH that
-# does not include user-installed node. Prepend common locations so `npm` is
-# reachable even when this script is invoked from the menu/panel.
+# does not include user-installed node; a macOS .app launched from the Dock gets
+# a worse one still (/usr/bin:/bin:/usr/sbin:/sbin, and nothing else). Prepend
+# common locations so `npm` is reachable however this script was invoked.
+# install-launcher-macos.sh also bakes the resolved node bin dir into the app
+# stub, so on macOS this is the second line of defence rather than the first.
 if ! command -v npm >/dev/null 2>&1; then
-  for d in "$HOME/.local/node/bin" "/usr/local/bin" "/opt/homebrew/bin"; do
+  for d in "$HOME/.local/node/bin" "/usr/local/bin" "/opt/homebrew/bin" "/opt/local/bin"; do
     if [ -x "$d/npm" ]; then
       export PATH="$d:$PATH"
       break
     fi
   done
 fi
+
+# A macOS dialog. The text is passed through argv rather than interpolated into
+# the AppleScript source: these bodies carry tails of the npm log, and a stray
+# quote or backslash in a stack trace would otherwise be a syntax error in the
+# script instead of a character in the message.
+#
+# `buttons` is what makes this both the notifier and the prompter — one button
+# is an alert, two is a question, and osascript exits nonzero when the user
+# picks Cancel, which is exactly the convention `zenity --question` uses.
+macos_dialog() {
+  local body="$1" icon="$2" buttons="$3"
+  # zenity leaves "\n" literal, so the call sites write it and Linux has always
+  # shown it raw. Expand it here rather than fixing every string, which would
+  # regress those call sites on Linux.
+  osascript \
+    -e 'on run argv' \
+    -e "display dialog (item 1 of argv) with title \"Allegory\" buttons $buttons default button 1 with icon $icon" \
+    -e 'end run' \
+    -- "$(printf '%b' "$body")" >/dev/null 2>&1
+}
 
 notify() {
   local title="$1" body="$2" kind="${3:-info}"
@@ -36,10 +61,93 @@ notify() {
     esac
   elif command -v notify-send >/dev/null 2>&1; then
     notify-send -u "$( [ "$kind" = error ] && echo critical || echo normal )" "$title" "$body"
+  elif [ "$(uname -s)" = "Darwin" ]; then
+    macos_dialog "$body" "$( [ "$kind" = error ] && echo stop || echo note )" '{"OK"}' || true
   else
     echo "[$title] $body" >&2
   fi
 }
+
+# A yes/no the user can decline. Returns 0 for yes, 1 for no — and 1 when there
+# is no way to ask at all, because every caller is about to do something slow or
+# surprising (a five-minute npm install, opening the wrong library) and silence
+# is not consent.
+ask() {
+  local body="$1"
+  if command -v zenity >/dev/null 2>&1; then
+    zenity --question --width=560 --title="Allegory" --text="$body"
+  elif [ "$(uname -s)" = "Darwin" ]; then
+    macos_dialog "$body" caution '{"OK", "Cancel"}'
+  else
+    echo "[Allegory] $body" >&2
+    return 1
+  fi
+}
+
+# Which curl to trust.
+#
+# macOS ships one at /usr/bin/curl linked against SecureTransport, and it is
+# named explicitly here rather than left to PATH. A MacPorts or Homebrew curl
+# earlier on PATH brings its own TLS stack and CA store, and the MacPorts build
+# on the MacBook fails *every* HTTPS request to a tailscale-served host —
+# "connect ... Bad file descriptor", before any handshake, while nc and python
+# reach the same IP and port without complaint.
+#
+# It matters here for the same reason it matters in catsup-launch: a failed
+# probe reads as "that library is unreachable", and the launcher then offers
+# this machine's local library instead — which on a laptop is the partial one.
+if [ "$(uname -s)" = "Darwin" ] && [ -x /usr/bin/curl ]; then
+  CURL=/usr/bin/curl
+else
+  CURL=curl
+fi
+
+# Run something with a deadline, because macOS has no timeout(1) and this
+# launcher must never outlive a dialog.
+#
+# The first time a script asks a browser what it has open, macOS puts up an
+# "allow control" prompt and osascript blocks until it is answered — forever, if
+# nobody is looking at that screen. An unbounded raise turned every click into a
+# hung process, and repeated clicks stacked modal dialogs on top of each other.
+# Losing the raise costs one duplicate window; losing the launcher costs the app.
+run_bounded() {
+  local secs="$1"; shift
+  "$@" >/dev/null 2>&1 &
+  local pid=$! waited=0
+  while [ "$waited" -lt $((secs * 10)) ]; do
+    if ! kill -0 "$pid" 2>/dev/null; then
+      wait "$pid" 2>/dev/null && return 0 || return 1
+    fi
+    sleep 0.1
+    waited=$((waited + 1))
+  done
+  kill -9 "$pid" 2>/dev/null || true
+  wait "$pid" 2>/dev/null || true
+  return 1
+}
+
+read -r -d '' RAISE_SCRIPT <<'RAISE' || true
+on run argv
+  set target to item 1 of argv
+  -- One browser, named by the caller. An earlier version looped over five and
+  -- asked macOS about each: every name costs its own Automation prompt, whether
+  -- or not that browser is installed, so clicking the icon raised a queue of
+  -- dialogs for Brave and Vivaldi on a machine that has neither.
+  set appName to item 2 of argv
+  tell application appName
+    repeat with w in windows
+      repeat with t in tabs of w
+        if (URL of t as text) starts with target then
+          set index of w to 1
+          activate
+          return "raised"
+        end if
+      end repeat
+    end repeat
+  end tell
+  error "no Allegory window"
+end run
+RAISE
 
 die() {
   notify "Allegory" "$1" error
@@ -156,7 +264,44 @@ CSS
 #
 # Best-effort by design. No wmctrl, or a Wayland session that never exposes
 # WM_CLASS, returns non-zero and the caller opens a window exactly as before.
+#
+# macOS needs its own answer, because none of the above exists there: no
+# WM_CLASS, no wmctrl, so this returned non-zero on every launch and each Dock
+# click stacked another window — the same bug this function was written to fix,
+# surviving on the one platform it never ran on.
+#
+# What makes the window findable is that --class is discarded by macOS as a
+# *window hint* but survives in the process's argv. pgrep matches it there,
+# independent of which library the window is pointed at — the same property the
+# WM_CLASS comment above wants, arrived at by a different route.
+#
+# A web-app bundle needs none of this: `open -a` activates a running instance
+# rather than starting a second, so only the Chromium --app= case is left.
 raise_existing_window() {
+  if [ "$(uname -s)" = "Darwin" ]; then
+    # Off unless asked for. Raising a Chromium --app= window means asking
+    # Chromium what it has open, and macOS gates that behind an Automation
+    # prompt the user must answer before it ever works. Paying that on a plain
+    # first launch is the wrong default: the cost of *not* raising is one
+    # duplicate window, and the cost of asking is a permission dialog in front
+    # of an app the user just clicked.
+    #
+    # The route that actually fixes this asks for nothing. A web app made with
+    # Safari's "Add to Dock" or Chromium's "Install page as app" is a real
+    # bundle, and `open -a` on a running app activates it — the raise comes free
+    # and this whole branch is skipped. Prefer that; set ALLEGORY_RAISE=1 only
+    # if you want the same behaviour without making one.
+    [ "${ALLEGORY_RAISE:-0}" = "1" ] || return 1
+
+    local b bundle target="${1%/}"
+    for b in "Chromium" "Brave Browser" "Google Chrome" "Microsoft Edge" "Vivaldi"; do
+      bundle="/Applications/$b.app"
+      [ -d "$bundle" ] || continue
+      run_bounded 3 osascript -e "$RAISE_SCRIPT" "$target" "$b" && return 0
+    done
+    return 1
+  fi
+
   command -v wmctrl >/dev/null 2>&1 || return 1
   wmctrl -lx 2>/dev/null | awk '{print $3}' | grep -qi '\.allegory$' || return 1
   # A window is there, so this call must not open a second one even if the
@@ -247,6 +392,24 @@ flatpak_app_command() {
   return 1
 }
 
+# Chromium built from source has no Google API keys — only Google's own Chrome
+# ships them — so it raises "Google API keys are missing. Some functionality of
+# Chromium will be disabled." as an infobar *inside* the window. Nothing it
+# names is anything this app uses: Sync, Safe Browsing lookups, Google
+# geolocation and Translate. Audio, setSinkId, Media Session and fetch are
+# untouched.
+#
+# It is still worth suppressing, because an app window carrying its browser's
+# warning bar is no longer an app window — the same objection this file already
+# makes to the Flatpak updater nag. Chromium checks these three variables and
+# stays quiet when they are set, whatever they are set to.
+chromium_env() {
+  env GOOGLE_API_KEY=no \
+      GOOGLE_DEFAULT_CLIENT_ID=no \
+      GOOGLE_DEFAULT_CLIENT_SECRET=no \
+      "$@"
+}
+
 open_browser() {
   local url="$1"
 
@@ -255,7 +418,9 @@ open_browser() {
   # is always "raise that one", whichever browser drew it. A window pointed at
   # a different library than this launch would have chosen still counts — "take
   # me to the open one" is the request, and two Allegorys is the failure.
-  if raise_existing_window; then
+  # The URL matters on macOS, where the window is found by asking the browser
+  # what it has open; the Linux path matches WM_CLASS and ignores the argument.
+  if raise_existing_window "$url"; then
     return
   fi
 
@@ -264,28 +429,48 @@ open_browser() {
     read -ra override <<< "$ALLEGORY_BROWSER"
     case "${override[0]}" in
       *firefox*) open_firefox_app "${override[@]}" "$url" ;;
-      *)         "${override[@]}" --app="$url" --class=Allegory >/dev/null 2>&1 & ;;
+      *)         chromium_env "${override[@]}" --app="$url" --class=Allegory >/dev/null 2>&1 & ;;
     esac
     return
   fi
 
-  # A natively packaged Chromium first: --app= is a supported flag doing exactly
+  # macOS: a web app made once with Safari's File > Add to Dock. Its own icon,
+  # its own window, no browser chrome at all, and it honours the manifest.
+  #
+  # This sits ahead of Chromium, which is the reverse of the Linux order, and the
+  # reason is what "app" means on each platform. On Linux --class=Allegory is a
+  # real answer: WM_CLASS is what the taskbar groups by, so a Chromium --app=
+  # window genuinely appears as Allegory. macOS has no WM_CLASS. It attributes
+  # every window to the bundle that owns the process, so --class is silently
+  # discarded and the window is Chromium's — Chromium's icon in the Dock,
+  # "Chromium" in Cmd+Tab, Chromium in the menu bar. A web app is the only way
+  # macOS gives an Allegory window an Allegory identity, so if one exists it is
+  # not a fallback, it is the answer.
+  #
+  # It also raises rather than duplicates for free: `open -a` on a running app
+  # activates it, which is what raise_existing_window does for Linux via wmctrl.
+  #
+  # The marker check is not paranoia. install-launcher-macos.sh can install a
+  # bundle by the same name, in the same folder Safari uses, whose whole job is
+  # to run *this script* — opening it here would re-enter the launcher and reach
+  # this same line again. The launcher bundle carries a marker file; a web app
+  # made by Safari never does.
+  if [ "$(uname -s)" = "Darwin" ]; then
+    local app
+    for app in "$HOME/Applications/Allegory.app" "/Applications/Allegory.app"; do
+      if [ -d "$app" ] && [ ! -e "$app/Contents/Resources/.allegory-launcher" ]; then
+        open -a "$app" >/dev/null 2>&1; return
+      fi
+    done
+  fi
+
+  # A natively packaged Chromium next: --app= is a supported flag doing exactly
   # what it says, where the Firefox path below is a stylesheet reaching into
   # someone else's UI that holds only as long as that UI keeps its element IDs.
   local chromium
   if chromium="$(chromium_app_command)"; then
-    $chromium --app="$url" --class=Allegory >/dev/null 2>&1 &
+    chromium_env $chromium --app="$url" --class=Allegory >/dev/null 2>&1 &
     return
-  fi
-
-  # macOS: a web app made once with Safari's File > Add to Dock. Its own icon,
-  # its own window, no browser chrome at all, and it honours the manifest — the
-  # best result of the three, at the cost of a manual first step.
-  if [ "$(uname -s)" = "Darwin" ]; then
-    local app
-    for app in "$HOME/Applications/Allegory.app" "/Applications/Allegory.app"; do
-      if [ -d "$app" ]; then open -a "$app" >/dev/null 2>&1; return; fi
-    done
   fi
 
   if command -v firefox >/dev/null 2>&1; then
@@ -304,7 +489,7 @@ open_browser() {
   local sandboxed
   if sandboxed="$(flatpak_app_command)"; then
     # shellcheck disable=SC2086 -- deliberate word splitting for "flatpak run ID"
-    $sandboxed --app="$url" --class=Allegory >/dev/null 2>&1 &
+    chromium_env $sandboxed --app="$url" --class=Allegory >/dev/null 2>&1 &
     return
   fi
 
@@ -343,16 +528,15 @@ elif [ -f "$REMOTE_FILE" ]; then
 fi
 
 if [ -n "$remote" ]; then
-  if curl -ks --max-time 5 -o /dev/null "$remote"; then
+  if "$CURL" -ks --max-time 5 -o /dev/null "$remote"; then
     open_browser "$remote"
     exit 0
   fi
   # Unreachable. Offer the local library rather than opening it unasked, so a
   # dropped tunnel can never be mistaken for a library that lost most of its
   # tracks.
-  if command -v zenity >/dev/null 2>&1; then
-    zenity --question --width=560 --title="Allegory" \
-      --text="The library at\n\n<tt>$remote</tt>\n\nis not answering. Tailscale may be disconnected, or that machine may be off.\n\nOpen this machine's local library instead? It holds only part of the collection." \
+  if command -v zenity >/dev/null 2>&1 || [ "$(uname -s)" = "Darwin" ]; then
+    ask "The library at\n\n<tt>$remote</tt>\n\nis not answering. Tailscale may be disconnected, or that machine may be off.\n\nOpen this machine's local library instead? It holds only part of the collection." \
       || exit 0
   else
     notify "Allegory" "$remote is not answering — starting the local library instead." error
@@ -364,20 +548,32 @@ fi
 # that IS the app — just open it. Checked first because it outlives any dev
 # server this script might have left behind, and because starting a second
 # server when one is already running is how you end up looking at the wrong one.
-if systemctl --user is-active --quiet allegory.service 2>/dev/null; then
+#
+# The uname guard is not defensive style, it is a real bug that was firing: this
+# ran on macOS too, where `2>/dev/null` hides systemctl's *output* but not the
+# shell's own "Abort trap: 6" job message, so every launch printed a crash. And
+# `set -e` makes anything unguarded here one bad exit status away from a
+# launcher that dies before opening the browser.
+if [ "$(uname -s)" != "Darwin" ] &&
+   systemctl --user is-active --quiet allegory.service 2>/dev/null; then
   for url in "http://localhost:4173/" "https://localhost:4173/"; do
-    if curl -ks --max-time 2 "$url" >/dev/null; then
+    if "$CURL" -ks --max-time 2 "$url" >/dev/null; then
       open_browser "$url"
       exit 0
     fi
   done
 fi
 
+# There is no macOS counterpart any more. A LaunchAgent used to start `npm run
+# dev` at login and this probed 5173 to find it; both were removed on 2026-09-09
+# after one had been serving *:5173 on MacGuffey for fifteen days unnoticed.
+# A Mac is somewhere you look at Allegory from, not somewhere that serves it.
+
 # If a previous launch left a URL file behind, reuse it when the server
 # is still responsive — otherwise treat it as stale and start fresh.
 if [ -f "$URL_FILE" ]; then
   existing="$(head -n1 "$URL_FILE" 2>/dev/null || true)"
-  if [ -n "$existing" ] && curl -ks --max-time 2 "$existing" >/dev/null; then
+  if [ -n "$existing" ] && "$CURL" -ks --max-time 2 "$existing" >/dev/null; then
     open_browser "$existing"
     exit 0
   fi
@@ -390,14 +586,37 @@ fi
 # open a different checkout's app — which is exactly what happened when this
 # repo became the canonical one. Compare the listener's working directory to
 # this repo before reusing it.
+#
+# The two facts this needs — who is listening, and where they are running from —
+# come from different tools on each platform. macOS has neither `ss` nor /proc,
+# and the failure was silent rather than loud: `ss` simply isn't found, the
+# pid list comes back empty, and every launch concluded the port was free.
+port_pids() {
+  if [ "$(uname -s)" = "Darwin" ]; then
+    lsof -nP -iTCP:5173 -sTCP:LISTEN -t 2>/dev/null | sort -u
+  else
+    ss -ltnpH "sport = :5173" 2>/dev/null |
+      grep -o 'pid=[0-9]*' | cut -d= -f2 | sort -u
+  fi
+}
+
+# A process's working directory. lsof's `cwd` file descriptor is the BSD
+# equivalent of /proc/PID/cwd; -Fn asks for it as a bare `n`-prefixed line
+# instead of a column layout that would need parsing.
+pid_cwd() {
+  if [ "$(uname -s)" = "Darwin" ]; then
+    lsof -a -p "$1" -d cwd -Fn 2>/dev/null | sed -n 's/^n//p' | head -n1
+  else
+    readlink -f "/proc/$1/cwd" 2>/dev/null
+  fi
+}
+
 port_is_ours() {
-  local pids
-  pids="$(ss -ltnpH "sport = :5173" 2>/dev/null |
-    grep -o 'pid=[0-9]*' | cut -d= -f2 | sort -u)"
+  local pids pid
+  pids="$(port_pids)"
   [ -n "$pids" ] || return 1
-  local pid
   for pid in $pids; do
-    if [ "$(readlink -f "/proc/$pid/cwd" 2>/dev/null)" = "$REPO" ]; then
+    if [ "$(pid_cwd "$pid")" = "$REPO" ]; then
       return 0
     fi
   done
@@ -409,7 +628,7 @@ port_is_ours() {
 # only reuse it when it's this checkout doing the serving.
 if port_is_ours; then
   for url in "http://localhost:5173/" "https://localhost:5173/"; do
-    if curl -ks --max-time 2 "$url" >/dev/null; then
+    if "$CURL" -ks --max-time 2 "$url" >/dev/null; then
       open_browser "$url"
       exit 0
     fi
@@ -418,44 +637,35 @@ fi
 
 # Port taken by a different checkout: say so plainly rather than starting a
 # server that will fail on strictPort, or opening the wrong app.
-if ! port_is_ours && ss -ltnH "sport = :5173" 2>/dev/null | grep -q .; then
+if ! port_is_ours && [ -n "$(port_pids)" ]; then
   die "Port 5173 is being used by a different Allegory checkout.\n\nQuit that one first (its bin/allegory-quit), then launch again.\n\nThis app: $REPO"
 fi
 
-# First-run install. Offer to run `npm install` interactively.
-if [ ! -d node_modules ]; then
-  if command -v zenity >/dev/null 2>&1; then
-    zenity --question --width=520 --title="Allegory" \
-      --text="Dependencies aren't installed yet.\n\nRun <tt>npm install</tt> now? (one-time, takes a minute or two)" \
-      || exit 0
-  fi
-  : > "$LOG_FILE"
-  if ! npm install >>"$LOG_FILE" 2>&1; then
-    die "npm install failed.\n\nLast log lines:\n\n$(tail -n 20 "$LOG_FILE")"
-  fi
-fi
+# Nothing is serving, and this launcher does not start a server.
+#
+# It used to: it ran `npm run dev` detached and waited for a URL. That fallback
+# is how second Allegories came into existence -- open the launcher on a machine
+# where nothing was up, and that machine quietly became a server. The one-copy
+# rule then lived in prose and in serve-guard, both of which are asked politely
+# after the fact. A launcher that cannot spawn one makes the rule structural.
+#
+# What this is now: a window opener. The server is allegory.service on the
+# Fedora iMac, and every other machine points at it.
+die "Allegory is not running.
 
-# Spawn the dev server detached so the launcher can exit cleanly once
-# the browser tab is open. setsid + nohup keeps it alive after this
-# script returns; stdout/stderr go to the log file.
-: > "$LOG_FILE"
-setsid nohup npm run dev </dev/null >>"$LOG_FILE" 2>&1 &
-server_pid=$!
+The library is served by allegory.service on the Fedora iMac:
 
-# Wait for the plugin to publish the live URL (or for the server to die).
-# 30 s is generous — first-run cold start dominates the time.
-for _ in $(seq 1 60); do
-  if [ -f "$URL_FILE" ]; then
-    url="$(head -n1 "$URL_FILE" 2>/dev/null || true)"
-    if [ -n "$url" ]; then
-      open_browser "$url"
-      exit 0
-    fi
-  fi
-  if ! kill -0 "$server_pid" 2>/dev/null; then
-    die "Allegory failed to start.\n\nLast log lines:\n\n$(tail -n 25 "$LOG_FILE")"
-  fi
-  sleep 0.5
-done
+    http://100.95.103.93:4173/
 
-die "Allegory took too long to start.\n\nLast log lines:\n\n$(tail -n 25 "$LOG_FILE")"
+Nothing here is answering, so either that service is down or this machine
+cannot reach it. To check:
+
+    ssh todd@100.95.103.93 'systemctl --user is-active allegory.service'
+
+To point this launcher somewhere else:
+
+    echo 'http://host:4173/' > .allegory-cache/remote
+
+To develop against your own copy (this machine only, port 5173):
+
+    npm run dev"

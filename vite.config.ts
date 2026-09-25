@@ -7,6 +7,48 @@ import tailwindcss from '@tailwindcss/vite'
 import { allegoryLibrary } from './server/plugin.ts'
 
 // https://vite.dev/config/
+// Refuse to bind anything but loopback on a machine that has not opted in.
+//
+// `server.host` below is only a default: `npm run dev -- --host` overrides it,
+// and nothing noticed. A dev server ran on MacGuffey for fifteen days bound to
+// *:5173 that way -- past the ALLEGORY_DEV_EXPOSE gate, and past serve-guard,
+// which only runs on `preview`. The hazard is not dev; it is exposure, and the
+// one machine where exposure is genuinely dangerous is ToddGPT, which holds
+// FERPA-protected coursework.
+//
+// This reads the RESOLVED config, so it sees the flag rather than the default,
+// which is the only place the CLI cannot get past. Opting in is unchanged:
+//   ALLEGORY_DEV_EXPOSE=1   for dev
+//   .allegory-cache/serving for the machine that serves (the iMac)
+function exposureGuard() {
+  return {
+    name: 'allegory-exposure-guard',
+    configResolved(cfg: { command: string; server?: { host?: unknown }; preview?: { host?: unknown } }) {
+      const isPreview = process.argv.includes('preview')
+      const host = isPreview ? cfg.preview?.host : cfg.server?.host
+      const loopback =
+        host === undefined || host === false ||
+        host === '127.0.0.1' || host === 'localhost' || host === '::1'
+      if (loopback) return
+      if (process.env.ALLEGORY_DEV_EXPOSE === '1') return
+      if (process.env.ALLEGORY_ALLOW_SERVE === '1') return
+      if (existsSync(resolve(process.cwd(), '.allegory-cache', 'serving'))) return
+      const where = isPreview ? 'preview' : 'dev'
+      console.error(
+        `\n[exposure-guard] refusing to expose the ${where} server on this machine.\n` +
+        `  Asked to bind ${String(host)} -- every interface, not just the tailnet.\n` +
+        `  This machine has not opted in, and one machine that could run this\n` +
+        `  holds FERPA-protected coursework.\n\n` +
+        `  Loopback (the usual thing):  npm run ${where}\n` +
+        `  Reach it from the phone:     tailscale serve 5173   (tailnet only)\n` +
+        `  Really expose it here:       ALLEGORY_DEV_EXPOSE=1 npm run ${where}\n` +
+        `  If this IS the serving machine:  touch .allegory-cache/serving\n`,
+      )
+      process.exit(1)
+    },
+  }
+}
+
 export default defineConfig(({ mode }) => {
   // Initial music dir comes from `.allegory-cache/settings.json` (set via the
   // in-app Settings UI). ALLEGORY_MUSIC_DIR seeds the default on first run.
@@ -48,6 +90,12 @@ export default defineConfig(({ mode }) => {
     return n
   }
 
+  // Local-only build: strip the iPhone/Tailscale remote-control feature so the
+  // app ships as a self-contained, single-machine desktop app. Set
+  // ALLEGORY_LOCAL_ONLY=1 to build the distributable variant. The server reads
+  // `localOnly` below; the client reads the `__LOCAL_ONLY__` define.
+  const localOnly = env.ALLEGORY_LOCAL_ONLY === '1' || env.ALLEGORY_LOCAL_ONLY === 'true'
+
   // Serve HTTPS when a cert is present in `.allegory-cache/` (gitignored).
   // Generate one with mkcert (locally trusted, no browser warnings):
   //   mkcert -install   # once, ever
@@ -65,10 +113,15 @@ export default defineConfig(({ mode }) => {
       : undefined
 
   return {
+    define: {
+      // Compile-time flag the client reads to drop all remote-control UI.
+      __LOCAL_ONLY__: JSON.stringify(localOnly),
+    },
     plugins: [
+      exposureGuard(),
       react(),
       tailwindcss(),
-      allegoryLibrary({ defaultMusicDir }),
+      allegoryLibrary({ defaultMusicDir, localOnly }),
       // Expose the build stamp to the client as `window.__ALLEGORY_BUILD__`,
       // read by the About splash. Injected via transformIndexHtml rather than
       // Vite `define` because `define` is NOT applied to app modules in dev
@@ -114,6 +167,10 @@ export default defineConfig(({ mode }) => {
     ],
     server: {
       https,
+      // NOTE: the value below is a DEFAULT, and a CLI `--host` overrides it.
+      // `exposureGuard` in plugins[] is what actually holds the line, because it
+      // reads the resolved config after the flag has been applied.
+      //
       // Loopback by DEFAULT. `host: true` binds 0.0.0.0 -- every interface,
       // including the campus LAN -- not just the Tailscale one, which is what
       // the old comment here assumed. On ToddGPT that put the dev server in

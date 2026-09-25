@@ -229,13 +229,15 @@ export function AppShell() {
             >
               <SearchIcon className="h-7 w-7" />
             </TopButton>
-            <TopButton
-              onClick={() => setRemoteSheetOpen(true)}
-              label={playerMode === 'remote' ? 'Controlling another computer' : 'Control a computer'}
-              active={playerMode === 'remote'}
-            >
-              <Cast className="h-7 w-7" />
-            </TopButton>
+            {!__LOCAL_ONLY__ && (
+              <TopButton
+                onClick={() => setRemoteSheetOpen(true)}
+                label={playerMode === 'remote' ? 'Controlling another computer' : 'Control a computer'}
+                active={playerMode === 'remote'}
+              >
+                <Cast className="h-7 w-7" />
+              </TopButton>
+            )}
             <TopButton
               onClick={() => setView({ type: 'playlists' })}
               label="Playlists"
@@ -419,7 +421,7 @@ export function AppShell() {
         </AnimatePresence>
 
         <AnimatePresence>
-          {remoteSheetOpen && (
+          {!__LOCAL_ONLY__ && remoteSheetOpen && (
             <RemoteControlSheet onClose={() => setRemoteSheetOpen(false)} />
           )}
         </AnimatePresence>
