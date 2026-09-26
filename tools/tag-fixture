@@ -1,0 +1,248 @@
+#!/usr/bin/env bash
+# Build a throwaway music library and point Allegory at it, so the tag tree can
+# be exercised without touching a real collection.
+#
+# The fixture is small but not arbitrary: its genre frames reproduce the mess a
+# real library has — three spellings of "Alternative" that ought to be one tag,
+# and two blues subgenres that want a parent — because merging and reparenting
+# are the two operations worth actually clicking.
+#
+# Reversible first (see docs/LESSONS.md): the real settings.json and tags.json
+# are snapshotted before anything is written, and `--restore` puts them back and
+# deletes the fixture. Setting up twice is refused rather than allowed to
+# overwrite the snapshot with fixture state — which would make restore a no-op
+# and quietly lose the real config.
+set -euo pipefail
+
+REPO="$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)"
+CACHE="$REPO/.allegory-cache"
+FIXTURE="${ALLEGORY_FIXTURE_DIR:-/tmp/allegory-tag-fixture}"
+SETTINGS="$CACHE/settings.json"
+TAGS="$CACHE/tags.json"
+BAK_SETTINGS="$CACHE/settings.json.tag-fixture-bak"
+BAK_TAGS="$CACHE/tags.json.tag-fixture-bak"
+PORT="${ALLEGORY_FIXTURE_PORT:-5199}"
+SERVER_LOG="$FIXTURE/.server.log"
+PID_FILE="$CACHE/tag-fixture.pid"
+
+die() { printf '\n  ✗ %s\n\n' "$*" >&2; exit 1; }
+say() { printf '  %s\n' "$*"; }
+head2() { printf '\n\033[1m%s\033[0m\n' "$*"; }
+
+# --- restore -----------------------------------------------------------------
+
+restore() {
+  head2 "Restoring"
+  if [ -f "$PID_FILE" ]; then
+    local pid; pid="$(cat "$PID_FILE")"
+    # Negative pid signals the whole process group, so the vite child goes too.
+    kill -- "-$pid" 2>/dev/null || kill "$pid" 2>/dev/null || true
+    sleep 1
+    kill -9 -- "-$pid" 2>/dev/null || true
+    rm -f "$PID_FILE"
+    say "stopped the fixture server (process group $pid)"
+  fi
+  # Verify rather than assume: a server left holding the port is how this was
+  # broken before, and it is silent until the next run fails on --strictPort.
+  if command -v ss >/dev/null 2>&1 && ss -ltn 2>/dev/null | grep -q ":$PORT "; then
+    pkill -f "vite --port $PORT" 2>/dev/null || true
+    sleep 1
+    if ss -ltn 2>/dev/null | grep -q ":$PORT "; then
+      say "WARNING: something is still listening on $PORT -- check 'ss -ltnp | grep $PORT'"
+    else
+      say "cleared a leftover listener on $PORT"
+    fi
+  fi
+
+  if [ -f "$BAK_SETTINGS" ]; then
+    mv "$BAK_SETTINGS" "$SETTINGS"
+    say "settings.json restored"
+  else
+    say "no settings snapshot — nothing to restore (was the fixture ever set up?)"
+  fi
+
+  # The fixture's genres get folded into the tag tree on boot, so the tree is
+  # put back as it was rather than left carrying invented tags.
+  if [ -f "$BAK_TAGS" ]; then
+    mv "$BAK_TAGS" "$TAGS"
+    say "tags.json restored"
+  elif [ -f "$TAGS" ]; then
+    # There was no tree before the fixture ran, so the only one that exists now
+    # is the fixture's.
+    rm -f "$TAGS"
+    say "tags.json removed (there was none before the fixture)"
+  fi
+
+  if [ -d "$FIXTURE" ]; then
+    rm -rf "$FIXTURE"
+    say "fixture library deleted ($FIXTURE)"
+  fi
+  printf '\n  Done. Allegory is back on your own library.\n\n'
+}
+
+if [ "${1:-}" = "--restore" ] || [ "${1:-}" = "--stop" ]; then
+  restore
+  exit 0
+fi
+
+if [ "${1:-}" = "--help" ] || [ "${1:-}" = "-h" ]; then
+  sed -n '2,13p' "$(readlink -f "$0")" | sed 's/^# \{0,1\}//'
+  printf '\nUsage: tools/tag-fixture [--restore]\n\n'
+  exit 0
+fi
+
+# --- preflight ---------------------------------------------------------------
+
+command -v ffmpeg >/dev/null 2>&1 || die "ffmpeg is needed to write genre frames. Install it, or set PATH."
+command -v node   >/dev/null 2>&1 || die "node is not on PATH."
+[ -f "$REPO/package.json" ] || die "cannot find the repo root (looked in $REPO)."
+[ -e "$BAK_SETTINGS" ] && die "a fixture is already set up. Run 'tools/tag-fixture --restore' first."
+
+mkdir -p "$CACHE"
+
+# --- build the library -------------------------------------------------------
+#
+# artist|album|genre|track1|track2
+# Album names are never purely numeric: the scanner folds "1984" and the like
+# into the parent folder as if it were a disc subdirectory.
+ALBUMS=(
+  "Muddy Waters|Folk Singer|Delta Blues|My Home Is In The Delta|You Gonna Need My Help"
+  "Howlin Wolf|Moanin in the Moonlight|Chicago Blues|Smokestack Lightnin|Evil"
+  "Radiohead|OK Computer|Alternative Rock|Airbag|Let Down"
+  "Pixies|Doolittle|Alt. Rock|Debaser|Monkey Gone to Heaven"
+  "Nirvana|Nevermind|Alternative|In Bloom|Lithium"
+  "Van Halen|Fair Warning|Hard Rock|Mean Street|Unchained"
+  "Miles Davis|Kind of Blue|Jazz|So What|Blue in Green"
+)
+
+head2 "Building the fixture library"
+rm -rf "$FIXTURE"
+mkdir -p "$FIXTURE"
+made=0
+for row in "${ALBUMS[@]}"; do
+  IFS='|' read -r artist album genre t1 t2 <<<"$row"
+  dir="$FIXTURE/$artist/$album"
+  mkdir -p "$dir"
+  n=1
+  for title in "$t1" "$t2"; do
+    ffmpeg -loglevel error -y \
+      -f lavfi -i "sine=frequency=$((200 + n * 60)):duration=1" \
+      -metadata genre="$genre" \
+      -metadata title="$title" \
+      -metadata artist="$artist" \
+      -metadata album="$album" \
+      "$dir/$(printf '%02d' "$n") $title.flac"
+    n=$((n + 1))
+    made=$((made + 1))
+  done
+  say "$artist — $album  [$genre]"
+done
+say "$made tracks in ${#ALBUMS[@]} albums"
+
+# --- point Allegory at it (snapshotting first) -------------------------------
+
+head2 "Pointing Allegory at the fixture"
+cp "$SETTINGS" "$BAK_SETTINGS" 2>/dev/null && say "snapshot: $(basename "$BAK_SETTINGS")" \
+  || die "could not read $SETTINGS — is Allegory configured on this machine?"
+[ -f "$TAGS" ] && cp "$TAGS" "$BAK_TAGS" && say "snapshot: $(basename "$BAK_TAGS")"
+
+# Keep every other setting (the Last.fm key especially) and change only the dir.
+node -e '
+const fs = require("fs")
+const [file, dir] = process.argv.slice(1)
+const s = JSON.parse(fs.readFileSync(file, "utf8"))
+if (typeof s.musicDir !== "string") throw new Error("settings.json has no musicDir")
+s.musicDir = dir
+fs.writeFileSync(file, JSON.stringify(s, null, 2) + "\n")
+' "$SETTINGS" "$FIXTURE"
+say "musicDir → $FIXTURE"
+
+# --- start the server --------------------------------------------------------
+
+head2 "Starting Allegory on port $PORT"
+# setsid, so the server becomes its own process group leader and the whole tree
+# can be signalled. Killing npx alone leaves the vite process it spawned holding
+# the port -- which is exactly what happened the first time this was tested.
+setsid bash -c 'cd "$1" && exec npx vite --port "$2" --strictPort' _ "$REPO" "$PORT" \
+  >"$SERVER_LOG" 2>&1 &
+echo $! >"$PID_FILE"
+trap 'echo' EXIT
+
+api="http://localhost:$PORT/api"
+for _ in $(seq 1 60); do
+  if curl -fsS --max-time 2 "$api/tags" >/dev/null 2>&1; then break; fi
+  sleep 1
+done
+curl -fsS --max-time 5 "$api/tags" >/dev/null 2>&1 \
+  || { tail -20 "$SERVER_LOG" >&2; die "the server did not come up. Log: $SERVER_LOG"; }
+say "up (log: $SERVER_LOG)"
+
+# --- verify ------------------------------------------------------------------
+#
+# Asserted, not printed for eyeballing: a fixture that quietly half-works is
+# worse than none, because the UI would then be tested against nothing.
+
+head2 "Verifying"
+node -e '
+const base = process.argv[1]
+const get = async (p) => {
+  const r = await fetch(base + p)
+  if (!r.ok) throw new Error(p + " → " + r.status)
+  return r.json()
+}
+let failed = 0
+const check = (label, ok, extra = "") => {
+  console.log(`  ${ok ? "ok  " : "FAIL"} ${label}${ok ? "" : "  " + extra}`)
+  if (!ok) failed++
+}
+const tree = await get("/tags")
+const names = tree.tags.map((t) => t.name).sort()
+check(`${tree.tags.length} tags read from the files’ own genre frames`, tree.tags.length === 7,
+  JSON.stringify(names))
+for (const want of ["Delta Blues", "Chicago Blues", "Alternative Rock", "Alt. Rock",
+                    "Alternative", "Hard Rock", "Jazz"]) {
+  check(`“${want}” present`, names.includes(want))
+}
+const total = Object.values(tree.counts).reduce((a, b) => a + b, 0)
+check(`14 track assignments`, total === 14, `got ${total}`)
+const delta = tree.tags.find((t) => t.name === "Delta Blues")
+if (delta) {
+  const tracks = await get(`/tags/${delta.id}/tracks`)
+  check("Delta Blues resolves to 2 tracks", tracks.length === 2, `got ${tracks.length}`)
+}
+if (failed > 0) { console.log(`\n  ${failed} check(s) failed.`); process.exit(1) }
+' "$api"
+
+# --- hand over ---------------------------------------------------------------
+
+cat <<EOF
+
+$(printf '\033[1mReady — open http://localhost:%s/\033[0m' "$PORT")
+
+  Settings → Library tags. Seven flat genres, straight out of the files.
+  What is worth clicking, in order:
+
+  1. Make a tag "Blues" (kind: genre, top level), then select "Delta Blues"
+     and set its Parent to Blues. Do the same for "Chicago Blues".
+     → Blues should now show a count of 4, from its children.
+
+  2. Select "Alt. Rock" and Merge into "Alternative Rock". Then do the same
+     with "Alternative". Three spellings become one tag, and the count adds up.
+     (This is the mess your own library has — you had all three.)
+
+  3. Try to set Blues' parent to Delta Blues. It should not be offered:
+     the dropdown excludes anything that would make a cycle.
+
+  4. Open any album, hit the ⋮ menu → "Tag all 2 tracks", and pick a tag.
+     Then a single song's ⋯ menu → "Tag this song".
+
+  5. Rename a tag to the name of one of its siblings. It should refuse.
+
+$(printf '\033[1mWhen you are done:\033[0m')
+
+  tools/tag-fixture --restore
+
+  That stops the server, puts settings.json and tags.json back as they were,
+  and deletes the fixture. Your own library is never touched by any of this.
+
+EOF
