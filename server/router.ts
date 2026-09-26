@@ -12,6 +12,13 @@ import sharp from 'sharp'
 import type { Library } from './scanner.ts'
 import type { Playlists } from './playlists.ts'
 import { TAG_KINDS, TAG_SOURCES, type TagKind, type TagSource, type Tags } from './tags.ts'
+import {
+  evaluate,
+  type FilterRule,
+  type FilterTrack,
+  type Filters,
+  type SavedFilter,
+} from './filters.ts'
 import { findDuplicates, quarantineFiles } from './duplicates.ts'
 import type { SettingsStore } from './settings.ts'
 import { isLoopback, type Auth } from './auth.ts'
@@ -22,7 +29,7 @@ import {
   setArtistTags,
 } from './artist-related.ts'
 import type { PortraitStore } from './artist-portrait.ts'
-import { getMissingAlbums, getRecommendations } from './discover.ts'
+import { getMissingAlbums, getRecommendations, playFacts } from './discover.ts'
 import { getMixes, getMixTypes, moreMixTracks } from './mixes.ts'
 import { saveUpload } from './upload.ts'
 import { saveZipUpload } from './upload-zip.ts'
@@ -125,9 +132,17 @@ interface RouterDeps {
   auth: Auth
   /** Hierarchical tags: the tree, and per-track assignments to it. */
   tags: Tags
+  /** Saved filters, and the smart playlists they materialise. */
+  filters: Filters
 }
 
 export interface Router {
+  /**
+   * Rewrite one saved filter's playlist, returning the track count — or null if
+   * the filter is gone. Exposed so the plugin can refresh smart playlists at
+   * startup without going through HTTP to talk to itself.
+   */
+  materializeFilter: (filterId: string) => Promise<number | null>
   handle: (req: IncomingMessage, res: ServerResponse) => Promise<boolean>
   /** Hot-swap in a freshly-built library + playlists after a music-dir change. */
   reload: (next: { library: Library; playlists: Playlists; ready: Promise<void> }) => void
@@ -447,6 +462,7 @@ export function createRouter(deps: RouterDeps): Router {
     portraits,
     auth,
     tags,
+    filters,
   } = deps
 
   /** Map track ids to their absolute file paths. */
@@ -464,6 +480,56 @@ export function createRouter(deps: RouterDeps): Router {
    */
   function tagDirs(): string[] {
     return [...new Set(library.allTracks().map((t) => dirname(t.path)))]
+  }
+
+  /**
+   * Assemble the flat facts the filter matcher wants, for every track.
+   *
+   * Built here rather than inside `filters.ts` because it is the only part that
+   * needs the library, the tag sidecars and the listen log all at once — and
+   * keeping the matcher free of those three is what makes it testable.
+   */
+  async function filterTracks(): Promise<FilterTrack[]> {
+    const dirs = tagDirs()
+    const facts = await playFacts(Date.now())
+    // One sweep for every track's tags, rather than a sidecar read per track.
+    const tagsByPath = new Map<string, string[]>()
+    const tree = await tags.tree()
+    for (const tag of tree.all()) {
+      for (const path of await tags.tracksWithTag(tag.id, dirs, { includeDescendants: false })) {
+        const list = tagsByPath.get(path) ?? []
+        list.push(tag.id)
+        tagsByPath.set(path, list)
+      }
+    }
+    return library.allTracks().map((t) => ({
+      id: t.id,
+      path: t.path,
+      title: t.tagTitle || t.fileTitle,
+      artist: library.artist(t.artistId)?.name ?? t.tagArtist ?? '',
+      album: library.album(t.albumId)?.name ?? t.tagAlbum ?? '',
+      artistId: t.artistId,
+      year: library.album(t.albumId)?.year,
+      addedAt: t.mtimeMs,
+      playCount: facts.playsByTrack.get(t.id) ?? 0,
+      tagIds: tagsByPath.get(t.path) ?? [],
+    }))
+  }
+
+  /**
+   * Write a filter's current answer into its `.m3u`, creating it the first time
+   * and rewriting it in place afterwards so the playlist keeps its identity.
+   */
+  async function materialize(f: SavedFilter): Promise<{ count: number; playlistId: string }> {
+    const matched = evaluate(await filterTracks(), f.rule, await tags.tree())
+    const paths = matched.map((t) => t.path)
+    let playlistId = f.playlistId
+    // Refresh in place when the playlist is still there; recreate if someone
+    // deleted it out from under us, rather than failing.
+    const refreshed = playlistId ? await playlists.replaceTracks(playlistId, paths) : false
+    if (!refreshed) playlistId = await playlists.create(f.name, paths)
+    await filters.noteRun(f.id, paths.length, playlistId!)
+    return { count: paths.length, playlistId: playlistId! }
   }
 
   async function serveArt(
@@ -541,6 +607,7 @@ export function createRouter(deps: RouterDeps): Router {
     // The sidecar cache is keyed by folder, and those folders belonged to the
     // music dir we just left.
     tags.forget()
+    filters.forget()
   }
 
   async function handle(
@@ -1891,6 +1958,98 @@ export function createRouter(deps: RouterDeps): Router {
         return true
       }
 
+      // --- saved filters ----------------------------------------------------
+      if (segs.length === 2 && segs[1] === 'filters' && method === 'GET') {
+        sendJson(res, await filters.list())
+        return true
+      }
+
+      if (segs.length === 2 && segs[1] === 'filters' && method === 'POST') {
+        const body = (await readBody(req)) as { name?: string; rule?: FilterRule }
+        try {
+          sendJson(res, await filters.create(body.name ?? '', body.rule ?? {}))
+        } catch (err) {
+          sendJson(res, { error: err instanceof Error ? err.message : 'Could not save that.' }, 400)
+        }
+        return true
+      }
+
+      // Try an unsaved rule. This is what the builder calls on every keystroke,
+      // so it answers with a count and a capped sample rather than the whole
+      // library — a wide-open filter matches everything, and shipping 17,000
+      // tracks to redraw a preview would make the UI feel broken.
+      if (
+        segs.length === 3 &&
+        segs[1] === 'filters' &&
+        segs[2] === 'preview' &&
+        method === 'POST'
+      ) {
+        await ready
+        const body = (await readBody(req)) as { rule?: FilterRule; sample?: number }
+        const rule = body.rule ?? {}
+        const matched = evaluate(await filterTracks(), rule, await tags.tree())
+        const sample = Math.min(200, Math.max(1, body.sample ?? 40))
+        sendJson(res, {
+          count: matched.length,
+          tracks: await library.tracksForPaths(matched.slice(0, sample).map((t) => t.path)),
+        })
+        return true
+      }
+
+      if (segs.length === 3 && segs[1] === 'filters' && method === 'PATCH') {
+        const body = (await readBody(req)) as {
+          name?: string
+          rule?: FilterRule
+          autoRefresh?: boolean
+        }
+        try {
+          sendJson(res, await filters.update(seg(2), body))
+        } catch (err) {
+          sendJson(res, { error: err instanceof Error ? err.message : 'Could not save that.' }, 400)
+        }
+        return true
+      }
+
+      if (segs.length === 3 && segs[1] === 'filters' && method === 'DELETE') {
+        await filters.remove(seg(2))
+        sendJson(res, { ok: true })
+        return true
+      }
+
+      if (
+        segs.length === 4 &&
+        segs[1] === 'filters' &&
+        segs[3] === 'tracks' &&
+        method === 'GET'
+      ) {
+        await ready
+        const f = await filters.get(seg(2))
+        if (!f) {
+          sendJson(res, { error: 'That filter no longer exists.' }, 404)
+          return true
+        }
+        const matched = evaluate(await filterTracks(), f.rule, await tags.tree())
+        sendJson(res, await library.tracksForPaths(matched.map((t) => t.path)))
+        return true
+      }
+
+      // Write the filter's answer into its playlist, so Amperfy can see it.
+      if (
+        segs.length === 4 &&
+        segs[1] === 'filters' &&
+        segs[3] === 'materialize' &&
+        method === 'POST'
+      ) {
+        await ready
+        const f = await filters.get(seg(2))
+        if (!f) {
+          sendJson(res, { error: 'That filter no longer exists.' }, 404)
+          return true
+        }
+        sendJson(res, await materialize(f))
+        return true
+      }
+
       // --- cover art ------------------------------------------------------
       // A portrait for an artist we don't own, by name. Served from the local
       // cache after the first fetch, so the browser never contacts Deezer and
@@ -1932,5 +2091,11 @@ export function createRouter(deps: RouterDeps): Router {
     }
   }
 
-  return { handle, reload }
+  async function materializeFilter(filterId: string): Promise<number | null> {
+    const f = await filters.get(filterId)
+    if (!f) return null
+    return (await materialize(f)).count
+  }
+
+  return { handle, reload, materializeFilter }
 }

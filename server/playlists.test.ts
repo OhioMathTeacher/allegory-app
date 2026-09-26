@@ -166,3 +166,37 @@ test('migrateLegacy() leaves a hand-made playlist byte-identical', async (t) => 
   assert.ok(entry)
   assert.deepEqual(await f.playlists.paths(entry.id), [f.trackA])
 })
+
+test('replaceTracks keeps the id and file, and leaves an unchanged list alone', async (t) => {
+  const f = await fixture()
+  t.after(f.cleanup)
+
+  const id = await f.playlists.create('Smart Set', [f.trackA])
+  const file = join(f.plDir, 'Smart Set.m3u')
+  const before = await stat(file)
+
+  // Swapping contents must not mint a new id or a new file: a smart playlist is
+  // refreshed in place, and every client holding a reference — Navidrome's
+  // imported row, a queue in Amperfy — would otherwise see it vanish.
+  assert.equal(await f.playlists.replaceTracks(id, [f.trackB, f.trackA]), true)
+  const after = (await f.playlists.list()).find((p) => p.name === 'Smart Set')
+  assert.ok(after)
+  assert.equal(after.id, id, 'the playlist id changed')
+  assert.deepEqual(await f.playlists.paths(id), [f.trackB, f.trackA])
+  assert.deepEqual(await trackLines(file), [
+    '../Van Halen/1984/02 Panama.flac',
+    '../Van Halen/1984/01 Jump.flac',
+  ])
+
+  // An unchanged answer must not churn the mtime, or every refresh sends
+  // Navidrome off to rescan for nothing.
+  await new Promise((r) => setTimeout(r, 15))
+  await f.playlists.replaceTracks(id, [f.trackB, f.trackA])
+  assert.equal((await stat(file)).mtimeMs, (await stat(file)).mtimeMs)
+  const unchanged = await stat(file)
+  await f.playlists.replaceTracks(id, [f.trackB, f.trackA])
+  assert.equal((await stat(file)).mtimeMs, unchanged.mtimeMs, 'an unchanged refresh rewrote the file')
+
+  assert.equal(await f.playlists.replaceTracks('nope-not-a-playlist', []), false)
+  assert.ok(before.mtimeMs > 0)
+})

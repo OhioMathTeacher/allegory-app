@@ -177,6 +177,16 @@ export interface Playlists {
   removeDuplicates(playlistId: string): Promise<number>
   /** Reorder a playlist: move the track at `from` to position `to`. */
   move(playlistId: string, from: number, to: number): Promise<void>
+  /**
+   * Swap a playlist's contents wholesale, keeping its id, name and file.
+   *
+   * This is what lets a smart playlist be refreshed rather than replaced.
+   * Deleting and recreating would mint a new `#Allegory-ID` and a new file, so
+   * every client holding a reference — Navidrome's imported row, a queue in
+   * Amperfy — would see the playlist disappear and a stranger take its place.
+   * Returns false if the playlist is gone.
+   */
+  replaceTracks(playlistId: string, trackPaths: string[]): Promise<boolean>
   rename(playlistId: string, newName: string): Promise<void>
   remove(playlistId: string): Promise<void>
   /** Create a new playlist from the tracks of several existing ones. */
@@ -453,6 +463,17 @@ export function createPlaylists(musicDir: string): Playlists {
       const [moved] = reordered.splice(from, 1)
       reordered.splice(to, 0, moved)
       await write(e.filePath, e.id, e.name, reordered)
+    },
+
+    async replaceTracks(playlistId, trackPaths) {
+      const e = await entryFor(playlistId)
+      if (!e) return false
+      // Nothing to say? Leave the file alone, so an unchanged smart playlist
+      // does not churn its mtime and send Navidrome off to rescan for nothing.
+      const same =
+        e.paths.length === trackPaths.length && e.paths.every((p, i) => p === trackPaths[i])
+      if (!same) await write(e.filePath, e.id, e.name, trackPaths)
+      return true
     },
 
     async rename(playlistId, newName) {

@@ -25,6 +25,7 @@ type ViteHttpServer = HttpServer | Http2SecureServer
 import { createLibrary } from './scanner.ts'
 import { createPlaylists, type Playlists } from './playlists.ts'
 import { createTags } from './tags.ts'
+import { createFilters } from './filters.ts'
 import { createRouter } from './router.ts'
 import { createSettings } from './settings.ts'
 import { createPortraits } from './artist-portrait.ts'
@@ -53,6 +54,9 @@ export function allegoryLibrary(options: TsmOptions): Plugin {
   // construct and stays true across a library move. The ASSIGNMENTS live in
   // sidecars beside the music, so they travel with it.
   const tags = createTags(cacheDir)
+  // Filters live beside the tag tree, and for the same reason: a saved filter
+  // is a question Todd wrote, not a fact about any album.
+  const filters = createFilters(cacheDir)
 
   // Publishes the live server URL to `.allegory-cache/url` so the launcher
   // script (and any other tool) can find it without scraping Vite's stdout.
@@ -114,6 +118,38 @@ export function allegoryLibrary(options: TsmOptions): Plugin {
   }
 
   /**
+   * Rewrite the smart playlists that asked to be kept current.
+   *
+   * This is the "on a schedule" half of Phase 2, done the only way that makes
+   * sense inside a Vite plugin: at startup, after the scan, so a library that
+   * grew while Allegory was closed is reflected the next time it opens. There is
+   * no timer — a filter that needs refreshing more often than that is a cron job
+   * or a hook calling POST /api/filters/:id/materialize, which is Phase 6's job.
+   *
+   * Only filters with `autoRefresh` are touched. A smart playlist you built once
+   * and then hand-edited should not be silently overwritten on next launch.
+   */
+  async function refreshSmartPlaylists(): Promise<void> {
+    try {
+      const wanted = (await filters.list()).filter((f) => f.autoRefresh)
+      if (wanted.length === 0) return
+      let rewritten = 0
+      for (const f of wanted) {
+        const n = await router.materializeFilter(f.id)
+        if (n !== null) rewritten++
+        if (n !== null) console.log(`[allegory] smart playlist \u201c${f.name}\u201d: ${n} track(s)`)
+      }
+      if (rewritten > 0) {
+        console.log(
+          `[allegory] refreshed ${rewritten} smart playlist(s) \u2014 rescan Navidrome to pick them up`,
+        )
+      }
+    } catch (err) {
+      console.error('[allegory] smart playlist refresh failed:', err)
+    }
+  }
+
+  /**
    * Bring `<musicDir>/Playlists` up to the current path format.
    *
    * Playlists Allegory wrote before paths became relative to the playlist file
@@ -152,6 +188,7 @@ export function allegoryLibrary(options: TsmOptions): Plugin {
     console.log(`[allegory] switched music dir to ${newDir}`)
     await nextReady
     await migrateTags(nextLibrary)
+    await refreshSmartPlaylists()
   }
 
   const router = createRouter({
@@ -165,6 +202,7 @@ export function allegoryLibrary(options: TsmOptions): Plugin {
     portraits: createPortraits(cacheDir),
     auth,
     tags,
+    filters,
   })
 
   // Bring the library online using the persisted music dir (or the env
@@ -197,6 +235,7 @@ export function allegoryLibrary(options: TsmOptions): Plugin {
       router.reload({ library, playlists, ready })
       await ready
       await migrateTags(library)
+      await refreshSmartPlaylists()
     })()
     return booted
   }

@@ -19,6 +19,7 @@ import { createSettings } from './settings.ts'
 import { createAuth } from './auth.ts'
 import { createPortraits } from './artist-portrait.ts'
 import { createTags } from './tags.ts'
+import { createFilters } from './filters.ts'
 import { createRouter } from './router.ts'
 
 async function serve() {
@@ -45,6 +46,7 @@ async function serve() {
     portraits: createPortraits(cache),
     auth: createAuth(cache),
     tags,
+    filters: createFilters(cache),
   })
 
   const server = createServer((req, res) => {

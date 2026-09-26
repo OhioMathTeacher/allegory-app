@@ -1200,3 +1200,84 @@ export async function migrateGenreTags(
 ): Promise<{ tagsCreated: number; filesTagged: number }> {
   return send(conn, 'POST', '/tags/migrate')
 }
+
+// --- saved filters and smart playlists --------------------------------------
+
+export type FilterSort = 'artist' | 'album' | 'added' | 'plays' | 'random'
+
+export interface FilterRule {
+  includeTagIds?: string[]
+  excludeTagIds?: string[]
+  tagMatch?: 'any' | 'all'
+  includeDescendants?: boolean
+  artistIds?: string[]
+  text?: string
+  yearMin?: number
+  yearMax?: number
+  /** The "nothing too obvious" lever: drop anything played more than this. */
+  playCountMax?: number
+  playCountMin?: number
+  addedAfter?: number
+  addedBefore?: number
+  sort?: FilterSort
+  seed?: number
+  limit?: number
+}
+
+export interface SavedFilter {
+  id: string
+  name: string
+  rule: FilterRule
+  createdAt: number
+  updatedAt: number
+  /** The `.m3u` this filter owns, once materialised. */
+  playlistId?: string
+  autoRefresh?: boolean
+  lastRunAt?: number
+  lastCount?: number
+}
+
+export async function getFilters(conn: Connection): Promise<SavedFilter[]> {
+  return getJson<SavedFilter[]>(conn, '/filters')
+}
+
+export async function createFilter(
+  conn: Connection,
+  name: string,
+  rule: FilterRule,
+): Promise<SavedFilter> {
+  return send<SavedFilter>(conn, 'POST', '/filters', { name, rule })
+}
+
+export async function updateFilter(
+  conn: Connection,
+  id: string,
+  patch: { name?: string; rule?: FilterRule; autoRefresh?: boolean },
+): Promise<SavedFilter> {
+  return send<SavedFilter>(conn, 'PATCH', `/filters/${id}`, patch)
+}
+
+export async function deleteFilter(conn: Connection, id: string): Promise<void> {
+  await send<{ ok: true }>(conn, 'DELETE', `/filters/${id}`)
+}
+
+/** Try an unsaved rule. Returns the full count plus a capped sample. */
+export async function previewFilter(
+  conn: Connection,
+  rule: FilterRule,
+  sample = 40,
+): Promise<{ count: number; tracks: Track[] }> {
+  return send(conn, 'POST', '/filters/preview', { rule, sample })
+}
+
+export async function getFilterTracks(conn: Connection, id: string): Promise<Track[]> {
+  return getJson<Track[]>(conn, `/filters/${id}/tracks`)
+}
+
+/** Write the filter's answer into its playlist, so Subsonic clients see it. */
+export async function materializeFilter(
+  conn: Connection,
+  id: string,
+): Promise<{ count: number; playlistId: string }> {
+  return send(conn, 'POST', `/filters/${id}/materialize`)
+}

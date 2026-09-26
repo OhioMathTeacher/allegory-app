@@ -138,6 +138,31 @@ reset the parent of one you have since filed somewhere.
 Tag a single song from its `⋯` menu, or a whole album from the album's `⋮` menu.
 The tree itself is managed in **Settings**.
 
+### Smart playlists
+
+A **saved filter** is a question about the library — "Blues, nothing I've played
+more than three times, added this year". Rules cover tags (include and exclude,
+both expanding to everything filed underneath), artist, a text match on
+title/artist/album, a year range, a play-count range, a date-added range, plus
+ordering and a cap. Every rule is ANDed; an absent rule constrains nothing.
+
+Materialising a filter writes its current answer to an ordinary `.m3u`. That is
+the whole point: Amperfy knows nothing about filters and never will, so a smart
+playlist has to be a real file. Refreshing rewrites that same file, keeping its
+id, so Navidrome's imported row and any queue holding a reference stay valid —
+and an unchanged answer doesn't rewrite the file at all, so Navidrome isn't sent
+off to rescan for nothing.
+
+Refresh on demand from Settings, or tick **auto** to have it rewritten whenever
+Allegory starts. There is no timer: anything needing it more often is a cron job
+or a hook calling `POST /api/filters/:id/materialize`.
+
+Two deliberate omissions. There is **no rating rule**, because Allegory records
+no ratings — "played at most N times" stands in for what ratings usually get
+used for here. And play count is **not a tag**: how often you play a song is a
+fact about your listening, not a claim about the music, so it gets its own rule
+with its own threshold.
+
 ### Tests
 
 ```bash

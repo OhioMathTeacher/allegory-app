@@ -16,6 +16,7 @@ import { DiagnosticsPanel } from './DiagnosticsPanel'
 import { FolderPicker } from './FolderPicker'
 import { DuplicateFinder } from './DuplicateFinder'
 import { TagTreePanel } from './TagTreePanel'
+import { SmartPlaylists } from './SmartPlaylists'
 import { PasswordSettings } from './PasswordSettings'
 
 type Section = 'library' | 'ai' | 'diagnostics'
@@ -375,6 +376,7 @@ export function Settings({ firstRun, initialSection, onClose }: SettingsProps) {
                 You can also drag a folder anywhere in the app to add it to your library.
               </p>
               <TagTreePanel />
+              <SmartPlaylists />
               <DuplicateFinder />
             </div>
           )}
