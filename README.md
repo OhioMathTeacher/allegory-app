@@ -105,6 +105,22 @@ It starts on login and restarts itself on crash. See
 linger trick that keeps it serving even when you're logged out (useful for
 reaching it from your phone over Tailscale).
 
+### Tests
+
+```bash
+npm test
+```
+
+Node's built-in runner (`node --test`), no test framework and no extra
+dependencies — Node runs the TypeScript directly, which is why the server
+tsconfig sets `erasableSyntaxOnly`. Tests live beside the code they cover as
+`server/*.test.ts`, so `tsc -b` and `eslint` check them too.
+
+A test here is expected to fail for the right reason. The playlist-path tests
+resolve each written `.m3u` line the way an outside player does — against the
+folder holding the playlist file — and require a real file to be there, because
+the bug they cover was one Allegory's own parser read back perfectly.
+
 ### Playlists
 
 Playlists are plain `.m3u` files in `<ALLEGORY_MUSIC_DIR>/Playlists`, with paths
