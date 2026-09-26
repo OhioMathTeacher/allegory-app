@@ -11,6 +11,7 @@ import { basename, dirname, extname, isAbsolute, join, relative } from 'node:pat
 import sharp from 'sharp'
 import type { Library } from './scanner.ts'
 import type { Playlists } from './playlists.ts'
+import { TAG_KINDS, TAG_SOURCES, type TagKind, type TagSource, type Tags } from './tags.ts'
 import { findDuplicates, quarantineFiles } from './duplicates.ts'
 import type { SettingsStore } from './settings.ts'
 import { isLoopback, type Auth } from './auth.ts'
@@ -122,6 +123,8 @@ interface RouterDeps {
   portraits: PortraitStore
   /** Shared-password gate. Open until a password is set. */
   auth: Auth
+  /** Hierarchical tags: the tree, and per-track assignments to it. */
+  tags: Tags
 }
 
 export interface Router {
@@ -436,14 +439,31 @@ export function createRouter(deps: RouterDeps): Router {
   let library = deps.library
   let playlists = deps.playlists
   let ready = deps.ready
-  const { artCacheDir, transcodeCacheDir, settings, onMusicDirChange, portraits, auth } =
-    deps
+  const {
+    artCacheDir,
+    transcodeCacheDir,
+    settings,
+    onMusicDirChange,
+    portraits,
+    auth,
+    tags,
+  } = deps
 
   /** Map track ids to their absolute file paths. */
   function pathsFor(trackIds: string[]): string[] {
     return trackIds
       .map((id) => library.track(id)?.path)
       .filter((p): p is string => !!p)
+  }
+
+  /**
+   * Every folder that holds at least one track — the complete set of places a
+   * `.allegory-tags.json` can be. Derived from the tracks rather than from
+   * `album.dir` on purpose: a multi-disc album keeps its files in `CD1/`,
+   * `CD2/` subfolders, and those carry their own sidecars.
+   */
+  function tagDirs(): string[] {
+    return [...new Set(library.allTracks().map((t) => dirname(t.path)))]
   }
 
   async function serveArt(
@@ -518,6 +538,9 @@ export function createRouter(deps: RouterDeps): Router {
     library = next.library
     playlists = next.playlists
     ready = next.ready
+    // The sidecar cache is keyed by folder, and those folders belonged to the
+    // music dir we just left.
+    tags.forget()
   }
 
   async function handle(
@@ -1700,6 +1723,171 @@ export function createRouter(deps: RouterDeps): Router {
           }
         }
         await streamFile(req, res, path)
+        return true
+      }
+
+      // --- tags -------------------------------------------------------------
+      // The tree itself, with a per-tag assignment count for the UI.
+      if (segs.length === 2 && segs[1] === 'tags' && method === 'GET') {
+        await ready
+        const tree = await tags.tree()
+        sendJson(res, {
+          tags: tree.all(),
+          counts: await tags.counts(tagDirs()),
+          kinds: TAG_KINDS,
+        })
+        return true
+      }
+
+      if (segs.length === 2 && segs[1] === 'tags' && method === 'POST') {
+        const body = (await readBody(req)) as {
+          name?: string
+          kind?: string
+          parentId?: string | null
+        }
+        const kind = (body.kind ?? 'other') as TagKind
+        if (!TAG_KINDS.includes(kind)) {
+          sendJson(res, { error: `Unknown tag kind \u201c${body.kind}\u201d.` }, 400)
+          return true
+        }
+        sendJson(res, await tags.createTag(body.name ?? '', kind, body.parentId ?? null))
+        return true
+      }
+
+      // `pending` and `migrate` are matched before the `:id` routes below, or
+      // they are read as tag ids.
+      if (segs.length === 3 && segs[1] === 'tags' && segs[2] === 'pending' && method === 'GET') {
+        await ready
+        const items = await tags.pending(tagDirs())
+        // Each suggestion carries the track it is about, so a review screen is
+        // one request rather than one per row.
+        const byPath = new Map(library.allTracks().map((t) => [t.path, t.id]))
+        sendJson(
+          res,
+          items.map((i) => ({ ...i, trackId: byPath.get(i.path) ?? null })),
+        )
+        return true
+      }
+
+      if (segs.length === 3 && segs[1] === 'tags' && segs[2] === 'migrate' && method === 'POST') {
+        await ready
+        sendJson(res, await tags.migrateGenres(library.allTracks()))
+        return true
+      }
+
+      if (segs.length === 3 && segs[1] === 'tags' && method === 'PATCH') {
+        const body = (await readBody(req)) as { name?: string; parentId?: string | null }
+        let tag = (await tags.tree()).get(seg(2))
+        if (!tag) {
+          sendJson(res, { error: 'That tag no longer exists.' }, 404)
+          return true
+        }
+        // A name clash or a move into your own subtree is the caller being
+        // wrong, not the server failing — the catch-all below would report both
+        // as a 500, which is what a client retries rather than shows.
+        try {
+          if (typeof body.name === 'string') tag = await tags.renameTag(seg(2), body.name)
+          if ('parentId' in body) tag = await tags.reparentTag(seg(2), body.parentId ?? null)
+        } catch (err) {
+          sendJson(res, { error: err instanceof Error ? err.message : 'That tag edit failed.' }, 400)
+          return true
+        }
+        sendJson(res, tag)
+        return true
+      }
+
+      if (segs.length === 3 && segs[1] === 'tags' && method === 'DELETE') {
+        await ready
+        await tags.removeTag(seg(2), tagDirs())
+        sendJson(res, { ok: true })
+        return true
+      }
+
+      if (segs.length === 4 && segs[1] === 'tags' && segs[3] === 'merge' && method === 'POST') {
+        await ready
+        const body = (await readBody(req)) as { targetId?: string }
+        if (!body.targetId) {
+          sendJson(res, { error: 'A target tag is required.' }, 400)
+          return true
+        }
+        await tags.mergeTags(seg(2), body.targetId, tagDirs())
+        sendJson(res, { ok: true })
+        return true
+      }
+
+      // Tracks carrying a tag. Descendants are included unless asked otherwise,
+      // which is the default the tree exists for.
+      if (segs.length === 4 && segs[1] === 'tags' && segs[3] === 'tracks' && method === 'GET') {
+        await ready
+        const paths = await tags.tracksWithTag(seg(2), tagDirs(), {
+          includeDescendants: url.searchParams.get('descendants') !== '0',
+        })
+        sendJson(res, await library.tracksForPaths(paths))
+        return true
+      }
+
+      // Bulk add / remove one tag across many tracks.
+      if (
+        segs.length === 4 &&
+        segs[1] === 'tags' &&
+        segs[3] === 'tracks' &&
+        (method === 'POST' || method === 'DELETE')
+      ) {
+        await ready
+        const body = (await readBody(req)) as {
+          trackIds?: string[]
+          source?: string
+          confidence?: number | null
+        }
+        const paths = pathsFor(body.trackIds ?? [])
+        if (method === 'DELETE') {
+          sendJson(res, { changed: await tags.removeFromTracks(paths, seg(2)) })
+          return true
+        }
+        const source = (body.source ?? 'user') as TagSource
+        if (!TAG_SOURCES.includes(source)) {
+          sendJson(res, { error: `Unknown tag source \u201c${body.source}\u201d.` }, 400)
+          return true
+        }
+        sendJson(res, {
+          changed: await tags.addToTracks(paths, seg(2), source, body.confidence ?? null),
+        })
+        return true
+      }
+
+      // A single track's assignments.
+      if (segs.length === 4 && segs[1] === 'tracks' && segs[3] === 'tags' && method === 'GET') {
+        await ready
+        const track = library.track(seg(2))
+        if (!track) {
+          sendJson(res, { error: 'That track could not be found.' }, 404)
+          return true
+        }
+        sendJson(res, await tags.tagsForTrack(track.path))
+        return true
+      }
+
+      // Approving or rejecting one AI suggestion on one track.
+      if (
+        segs.length === 5 &&
+        segs[1] === 'tracks' &&
+        segs[3] === 'tags' &&
+        method === 'POST'
+      ) {
+        await ready
+        const verdict = url.searchParams.get('verdict')
+        if (verdict !== 'approve' && verdict !== 'reject') {
+          sendJson(res, { error: 'A verdict of approve or reject is required.' }, 400)
+          return true
+        }
+        const track = library.track(seg(2))
+        if (!track) {
+          sendJson(res, { error: 'That track could not be found.' }, 404)
+          return true
+        }
+        if (verdict === 'approve') await tags.approve(track.path, seg(4))
+        else await tags.reject(track.path, seg(4))
+        sendJson(res, { ok: true })
         return true
       }
 

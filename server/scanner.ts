@@ -290,7 +290,20 @@ export interface Library {
   /** Save a JPEG as the album's cover image; returns the path written. */
   setAlbumArt(albumId: string, jpeg: Buffer): Promise<string | null>
   /** Move every track from the source albums into the target's folder. */
-  combineAlbums(targetId: string, sourceIds: string[]): Promise<MergeResult>
+  /**
+   * Move every track from the source albums into the target's folder.
+   *
+   * `onMove` is called for each file as it lands, with its old and new paths.
+   * This is the one library operation that moves individual files BETWEEN
+   * folders (and renames them on collision), so anything keyed on a file's
+   * location — the tag sidecars — needs to be told. A whole-folder rename
+   * needs no hook: the sidecar moves with the folder.
+   */
+  combineAlbums(
+    targetId: string,
+    sourceIds: string[],
+    onMove?: (from: string, to: string) => void,
+  ): Promise<MergeResult>
   /** Analyse the artist list for duplicates/variants and junk entries. */
   cleanupReport(): CleanupReport
 }
@@ -895,7 +908,7 @@ export function createLibrary(musicDir: string): Library {
       album.artPath = dest
       return dest
     },
-    combineAlbums: async (targetId, sourceIds) => {
+    combineAlbums: async (targetId, sourceIds, onMove) => {
       const target = albums.get(targetId)
       if (!target) throw new Error('That album could not be found.')
       const taken = new Set(await readdir(target.dir).catch(() => []))
@@ -915,7 +928,9 @@ export function createLibrary(musicDir: string): Library {
           const original = basename(file)
           const name = freeName(original, taken)
           taken.add(name)
-          await moveFile(file, join(target.dir, name))
+          const dest = join(target.dir, name)
+          await moveFile(file, dest)
+          onMove?.(file, dest)
           if (AUDIO_EXTS.has(ext)) moved++
           if (name !== original) renamed++
         }

@@ -10,6 +10,7 @@ import {
   useCollectionStatus,
 } from '../lib/downloads'
 import type { Album } from '../lib/types'
+import { TagPicker } from './TagPicker'
 
 interface AlbumMenuProps {
   album: Album
@@ -138,6 +139,15 @@ export function AlbumMenu({ album, onEdit, className }: AlbumMenuProps) {
                   )}
                   {downloadLabel}
                 </button>
+                {/* Tagging the whole album is what bulk-tagging amounts to
+                    here: the track list has no multi-select, and an album is
+                    the unit people actually think in. */}
+                {tracks && tracks.length > 0 && (
+                  <TagPicker
+                    trackIds={tracks.map((t) => t.id)}
+                    label={`Tag all ${tracks.length} track${tracks.length === 1 ? '' : 's'}`}
+                  />
+                )}
                 {onEdit && (
                   <>
                     <div className="my-1 h-px bg-line" />

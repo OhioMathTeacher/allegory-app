@@ -11,6 +11,7 @@ import {
 } from '../lib/api'
 import type { Playlist, Track } from '../lib/types'
 import { bumpPlaylist, sortByRecency } from '../lib/playlist-recency'
+import { TagPicker } from './TagPicker'
 import { downloadTrack, removeDownload, useDownloadStatus } from '../lib/downloads'
 
 interface TrackMenuProps {
@@ -261,6 +262,7 @@ export function TrackMenu({ track, excludePlaylistId }: TrackMenuProps) {
                       ? 'Remove download'
                       : 'Download'}
                 </button>
+                <TagPicker trackIds={[track.id]} label="Tag this song" />
                 <div className="my-1 h-px bg-line" />
                 {canRemove && (
                   <>

@@ -1053,3 +1053,150 @@ export async function uploadMusicZip(
   }
   return (await res.json()) as ZipUploadResult
 }
+
+// --- library tags (the hierarchical tree, not ID3 frames) -------------------
+//
+// Named `LibraryTag` rather than `Tag` because this module already deals in
+// "tags" meaning the frames inside an audio file (see `CommonTags`). These are
+// the other kind: Todd's own tree, stored beside the music.
+
+export type TagKind = 'genre' | 'mood' | 'era' | 'instrument' | 'context' | 'other'
+export type TagSource = 'user' | 'file' | 'scraped' | 'ai'
+
+export interface LibraryTag {
+  id: string
+  name: string
+  parentId: string | null
+  kind: TagKind
+  createdAt: number
+}
+
+export interface TagAssignment {
+  tagId: string
+  source: TagSource
+  confidence?: number | null
+  createdAt: number
+  approvedAt?: number
+}
+
+export interface TagTreeResponse {
+  tags: LibraryTag[]
+  /** Assignment count per tag id — approved only. */
+  counts: Record<string, number>
+  kinds: TagKind[]
+}
+
+/** One unapproved `ai` suggestion, with the track it is about. */
+export interface PendingTagSuggestion {
+  path: string
+  tagId: string
+  confidence?: number | null
+  createdAt: number
+  trackId: string | null
+}
+
+export async function getTagTree(conn: Connection): Promise<TagTreeResponse> {
+  return getJson<TagTreeResponse>(conn, '/tags')
+}
+
+export async function createTag(
+  conn: Connection,
+  name: string,
+  kind: TagKind,
+  parentId: string | null,
+): Promise<LibraryTag> {
+  return send<LibraryTag>(conn, 'POST', '/tags', { name, kind, parentId })
+}
+
+export async function renameTag(
+  conn: Connection,
+  tagId: string,
+  name: string,
+): Promise<LibraryTag> {
+  return send<LibraryTag>(conn, 'PATCH', `/tags/${tagId}`, { name })
+}
+
+export async function reparentTag(
+  conn: Connection,
+  tagId: string,
+  parentId: string | null,
+): Promise<LibraryTag> {
+  return send<LibraryTag>(conn, 'PATCH', `/tags/${tagId}`, { parentId })
+}
+
+export async function deleteTag(conn: Connection, tagId: string): Promise<void> {
+  await send<{ ok: true }>(conn, 'DELETE', `/tags/${tagId}`)
+}
+
+/** Fold `tagId` into `targetId`: assignments move, children rise. */
+export async function mergeTags(
+  conn: Connection,
+  tagId: string,
+  targetId: string,
+): Promise<void> {
+  await send<{ ok: true }>(conn, 'POST', `/tags/${tagId}/merge`, { targetId })
+}
+
+/** Tracks carrying a tag. Descendants are included unless `descendants` is false. */
+export async function getTracksWithTag(
+  conn: Connection,
+  tagId: string,
+  descendants = true,
+): Promise<Track[]> {
+  return getJson<Track[]>(conn, `/tags/${tagId}/tracks${descendants ? '' : '?descendants=0'}`)
+}
+
+/** Add one tag to many tracks. Returns how many files changed. */
+export async function addTagToTracks(
+  conn: Connection,
+  tagId: string,
+  trackIds: string[],
+  source: TagSource = 'user',
+  confidence: number | null = null,
+): Promise<number> {
+  const data = await send<{ changed: number }>(conn, 'POST', `/tags/${tagId}/tracks`, {
+    trackIds,
+    source,
+    confidence,
+  })
+  return data.changed
+}
+
+export async function removeTagFromTracks(
+  conn: Connection,
+  tagId: string,
+  trackIds: string[],
+): Promise<number> {
+  const data = await send<{ changed: number }>(conn, 'DELETE', `/tags/${tagId}/tracks`, {
+    trackIds,
+  })
+  return data.changed
+}
+
+export async function getTrackTagAssignments(
+  conn: Connection,
+  trackId: string,
+): Promise<{ path: string; tags: TagAssignment[]; rejected: string[] }> {
+  return getJson(conn, `/tracks/${trackId}/tags`)
+}
+
+export async function getPendingTags(conn: Connection): Promise<PendingTagSuggestion[]> {
+  return getJson<PendingTagSuggestion[]>(conn, '/tags/pending')
+}
+
+/** Accept or dismiss one AI suggestion. A dismissal is remembered. */
+export async function judgeTagSuggestion(
+  conn: Connection,
+  trackId: string,
+  tagId: string,
+  verdict: 'approve' | 'reject',
+): Promise<void> {
+  await send<{ ok: true }>(conn, 'POST', `/tracks/${trackId}/tags/${tagId}?verdict=${verdict}`)
+}
+
+/** Re-read the genre frames on disk into the tree. Idempotent. */
+export async function migrateGenreTags(
+  conn: Connection,
+): Promise<{ tagsCreated: number; filesTagged: number }> {
+  return send(conn, 'POST', '/tags/migrate')
+}

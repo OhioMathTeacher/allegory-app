@@ -24,6 +24,7 @@ import type { Connect, Plugin } from 'vite'
 type ViteHttpServer = HttpServer | Http2SecureServer
 import { createLibrary } from './scanner.ts'
 import { createPlaylists, type Playlists } from './playlists.ts'
+import { createTags } from './tags.ts'
 import { createRouter } from './router.ts'
 import { createSettings } from './settings.ts'
 import { createPortraits } from './artist-portrait.ts'
@@ -48,6 +49,10 @@ export function allegoryLibrary(options: TsmOptions): Plugin {
   const urlFile = join(cacheDir, 'url')
   const settings = createSettings(cacheDir, options.defaultMusicDir)
   const auth = createAuth(cacheDir)
+  // The tag TREE is keyed to the cache dir, not the music dir: it is Todd's own
+  // construct and stays true across a library move. The ASSIGNMENTS live in
+  // sidecars beside the music, so they travel with it.
+  const tags = createTags(cacheDir)
 
   // Publishes the live server URL to `.allegory-cache/url` so the launcher
   // script (and any other tool) can find it without scraping Vite's stdout.
@@ -87,6 +92,28 @@ export function allegoryLibrary(options: TsmOptions): Plugin {
   let ready: Promise<void> = Promise.resolve()
 
   /**
+   * Fold the genre frames already in the files into the tag tree.
+   *
+   * Runs after the scan, because it needs the genres the scan read. Idempotent
+   * by design, so it is safe on every boot — a library with nothing new to say
+   * creates nothing and writes nothing. Best-effort for the same reason the
+   * playlist migration is: a read-only music dir should cost you tagging, not
+   * the server.
+   */
+  async function migrateTags(lib: ReturnType<typeof createLibrary>): Promise<void> {
+    try {
+      const { tagsCreated, filesTagged } = await tags.migrateGenres(lib.allTracks())
+      if (tagsCreated > 0 || filesTagged > 0) {
+        console.log(
+          `[allegory] tags: ${tagsCreated} new genre tag(s), ${filesTagged} file(s) tagged from their own genre frames`,
+        )
+      }
+    } catch (err) {
+      console.error('[allegory] tag migration failed:', err)
+    }
+  }
+
+  /**
    * Bring `<musicDir>/Playlists` up to the current path format.
    *
    * Playlists Allegory wrote before paths became relative to the playlist file
@@ -124,6 +151,7 @@ export function allegoryLibrary(options: TsmOptions): Plugin {
     router.reload({ library, playlists, ready })
     console.log(`[allegory] switched music dir to ${newDir}`)
     await nextReady
+    await migrateTags(nextLibrary)
   }
 
   const router = createRouter({
@@ -136,6 +164,7 @@ export function allegoryLibrary(options: TsmOptions): Plugin {
     onMusicDirChange,
     portraits: createPortraits(cacheDir),
     auth,
+    tags,
   })
 
   // Bring the library online using the persisted music dir (or the env
@@ -167,6 +196,7 @@ export function allegoryLibrary(options: TsmOptions): Plugin {
       console.log(`[allegory] serving music from ${s.musicDir}`)
       router.reload({ library, playlists, ready })
       await ready
+      await migrateTags(library)
     })()
     return booted
   }

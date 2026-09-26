@@ -105,6 +105,39 @@ It starts on login and restarts itself on crash. See
 linger trick that keeps it serving even when you're logged out (useful for
 reaching it from your phone over Tailscale).
 
+### Tags
+
+Allegory keeps a **tag tree** — your own hierarchy, not a flat list. File
+`Delta blues` under `Blues` under `Roots`, and a filter for Blues finds
+everything beneath it. A tag has a kind (genre, mood, era, instrument, context,
+other), and a tag cannot be moved inside itself.
+
+The two halves are stored in different places on purpose:
+
+- **The tree** is in `.allegory-cache/tags.json`. It is your construct — "Delta
+  blues is a kind of Blues" is true whatever happens to be on the drive.
+- **The assignments** are in a `.allegory-tags.json` sidecar inside each album
+  folder, keyed by filename, the same way `.allegory-artist.json` works. They
+  travel with the music: move an album, rename it, or move the whole drive, and
+  the tagging comes too.
+
+They are deliberately *not* keyed on a track id, because a track id is a hash of
+the file's path. Renaming one folder would otherwise throw the tagging away
+without saying so.
+
+Each assignment records **who said so** — `user`, `file` (a genre frame in the
+audio file), `scraped`, or `ai`. An `ai` tag is a *suggestion*: it is invisible
+to filtering until you accept it in Settings, and dismissing one is remembered
+so it cannot be proposed again.
+
+Genres already written into your files are folded in automatically on startup,
+as root-level tags you can then arrange. That pass is idempotent, so it costs
+nothing on later boots, and it will not re-add a genre you have dismissed or
+reset the parent of one you have since filed somewhere.
+
+Tag a single song from its `⋯` menu, or a whole album from the album's `⋮` menu.
+The tree itself is managed in **Settings**.
+
 ### Tests
 
 ```bash

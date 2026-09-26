@@ -15,6 +15,7 @@ import { AISettingsPanel } from './AISettingsPanel'
 import { DiagnosticsPanel } from './DiagnosticsPanel'
 import { FolderPicker } from './FolderPicker'
 import { DuplicateFinder } from './DuplicateFinder'
+import { TagTreePanel } from './TagTreePanel'
 import { PasswordSettings } from './PasswordSettings'
 
 type Section = 'library' | 'ai' | 'diagnostics'
@@ -373,6 +374,7 @@ export function Settings({ firstRun, initialSection, onClose }: SettingsProps) {
               <p className="mt-3 text-[11px] text-white/66">
                 You can also drag a folder anywhere in the app to add it to your library.
               </p>
+              <TagTreePanel />
               <DuplicateFinder />
             </div>
           )}
