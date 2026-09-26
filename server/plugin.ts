@@ -23,7 +23,7 @@ import type { Connect, Plugin } from 'vite'
 // and the events we hook into below.
 type ViteHttpServer = HttpServer | Http2SecureServer
 import { createLibrary } from './scanner.ts'
-import { createPlaylists } from './playlists.ts'
+import { createPlaylists, type Playlists } from './playlists.ts'
 import { createRouter } from './router.ts'
 import { createSettings } from './settings.ts'
 import { createPortraits } from './artist-portrait.ts'
@@ -86,9 +86,35 @@ export function allegoryLibrary(options: TsmOptions): Plugin {
   let playlists = createPlaylists(options.defaultMusicDir)
   let ready: Promise<void> = Promise.resolve()
 
+  /**
+   * Bring `<musicDir>/Playlists` up to the current path format.
+   *
+   * Playlists Allegory wrote before paths became relative to the playlist file
+   * import into Navidrome with zero songs, and nothing on either side says so
+   * — the file is valid, Allegory still reads it, and the playlist simply
+   * arrives empty in Amperfy. Rewriting on startup means the fix reaches
+   * existing libraries without anyone having to know that is why.
+   *
+   * Best-effort: a read-only or unmounted music dir must not stop the server
+   * from coming up, so a failure is logged and the old files keep working.
+   */
+  async function migratePlaylists(p: Playlists): Promise<void> {
+    try {
+      const n = await p.migrateLegacy()
+      if (n > 0) {
+        console.log(
+          `[allegory] rewrote ${n} playlist(s) with paths relative to the playlist file — rescan Navidrome to pick them up`,
+        )
+      }
+    } catch (err) {
+      console.error('[allegory] playlist path migration failed:', err)
+    }
+  }
+
   async function onMusicDirChange(newDir: string): Promise<void> {
     const nextLibrary = createLibrary(newDir)
     const nextPlaylists = createPlaylists(newDir)
+    await migratePlaylists(nextPlaylists)
     const nextReady = nextLibrary
       .scan()
       .catch((err) => console.error('[allegory] rescan after dir change failed:', err))
@@ -134,6 +160,7 @@ export function allegoryLibrary(options: TsmOptions): Plugin {
       }
       library = createLibrary(s.musicDir)
       playlists = createPlaylists(s.musicDir)
+      await migratePlaylists(playlists)
       ready = library
         .scan()
         .catch((err) => console.error('[allegory] initial library scan failed:', err))

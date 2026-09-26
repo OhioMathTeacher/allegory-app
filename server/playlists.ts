@@ -3,13 +3,31 @@
  *
  * A plain path-per-line `.m3u` is readable by Plex, VLC and most players,
  * and every edit Allegory offers — create, append, remove, reorder, rename,
- * combine — is just a line operation on the file. Paths are written relative
- * to the music directory (POSIX slashes) so playlists survive the drive
- * being moved.
+ * combine — is just a line operation on the file.
+ *
+ * Paths are written **relative to the playlist file** (POSIX slashes), so a
+ * track in `<musicDir>/Artist/Album` is written `../Artist/Album/01 Track.flac`.
+ * That is the rule every other player already applies, and getting it wrong
+ * stayed invisible for as long as Allegory was the only reader: paths used to
+ * be written relative to the *music directory*, which this file also resolved
+ * them against, so the playlists looked correct in Allegory. Navidrome
+ * resolved the same lines against `<musicDir>/Playlists/`, found nothing, and
+ * imported every playlist with zero songs — which is how they turned up empty
+ * in Amperfy. Relative-to-the-file keeps the point of writing relative paths
+ * at all (the drive can move) and is readable by Navidrome and the Subsonic
+ * clients on top of it.
+ *
+ * Tracks outside the music directory are written absolute: no relative path
+ * would survive the drive moving anyway.
+ *
+ * Files written by older versions are still read — a bare relative line can
+ * only have come from the old writer, so it is resolved against the music
+ * directory and flagged — and `migrateLegacy` rewrites the ones Allegory owns.
  *
  * Each Allegory playlist carries a stable `#Allegory-ID` so renaming the file never
  * breaks a reference. Files without one (e.g. hand-made `.m3u`s) fall back
- * to an id derived from the filename.
+ * to an id derived from the filename, and are left alone by the migration:
+ * rewriting one would throw away its `#EXTINF` lines.
  */
 import { createHash, randomBytes } from 'node:crypto'
 import {
@@ -132,6 +150,10 @@ interface ParsedPlaylist {
   id: string
   name: string
   paths: string[]
+  /** The file carried an `#Allegory-ID` line — i.e. Allegory wrote it. */
+  ownedByAllegory: boolean
+  /** At least one entry used the old music-dir-relative form. */
+  legacyPaths: boolean
 }
 
 export interface Playlists {
@@ -163,6 +185,12 @@ export interface Playlists {
   customArtPath(playlistId: string): Promise<string | null>
   /** Store a custom cover image (JPEG bytes) for a playlist. */
   setArt(playlistId: string, jpeg: Buffer): Promise<boolean>
+  /**
+   * Rewrite Allegory's own playlists that still hold music-dir-relative paths,
+   * so that Navidrome and other players resolve them. Returns how many files
+   * were rewritten. Hand-made `.m3u`s are left untouched.
+   */
+  migrateLegacy(): Promise<number>
 }
 
 export function createPlaylists(musicDir: string): Playlists {
@@ -213,6 +241,23 @@ export function createPlaylists(musicDir: string): Playlists {
     return (await scanFolder()).files
   }
 
+  /**
+   * Turn one `.m3u` line into an absolute path.
+   *
+   * The prefix is the whole signal. An explicit `./` or `../` is what Allegory
+   * writes now, and by the `.m3u` convention resolves against the folder
+   * holding the playlist. A bare relative line can only have come from the
+   * old writer, which resolved against the music directory — so it is read
+   * that way and reported as legacy, which is what lets `migrateLegacy` find
+   * it.
+   */
+  function resolveLine(line: string): { path: string; legacy: boolean } {
+    const p = fromPosix(line)
+    if (isAbsolute(p)) return { path: p, legacy: false }
+    if (/^\.\.?[/\\]/.test(line)) return { path: resolve(dir, p), legacy: false }
+    return { path: resolve(musicDir, p), legacy: true }
+  }
+
   async function parse(file: string): Promise<ParsedPlaylist> {
     const filePath = join(dir, file)
     let text = ''
@@ -223,6 +268,7 @@ export function createPlaylists(musicDir: string): Playlists {
     }
     let id = ''
     let name = ''
+    let legacyPaths = false
     const paths: string[] = []
     for (const raw of text.split(/\r?\n/)) {
       const line = raw.trim()
@@ -236,8 +282,9 @@ export function createPlaylists(musicDir: string): Playlists {
         continue
       }
       if (line.startsWith('#')) continue
-      const p = fromPosix(line)
-      paths.push(isAbsolute(p) ? p : resolve(musicDir, p))
+      const { path, legacy } = resolveLine(line)
+      paths.push(path)
+      if (legacy) legacyPaths = true
     }
     return {
       file,
@@ -245,6 +292,8 @@ export function createPlaylists(musicDir: string): Playlists {
       id: id || fallbackId(file),
       name: name || baseName(file),
       paths,
+      ownedByAllegory: id !== '',
+      legacyPaths,
     }
   }
 
@@ -268,8 +317,19 @@ export function createPlaylists(musicDir: string): Playlists {
     await mkdir(dir, { recursive: true })
     const lines = ['#EXTM3U', `#PLAYLIST:${name}`, `#Allegory-ID:${id}`]
     for (const p of paths) {
-      const rel = relative(musicDir, p)
-      lines.push(rel.startsWith('..') ? p : toPosix(rel))
+      const fromMusicDir = relative(musicDir, p)
+      const outside =
+        fromMusicDir === '' || fromMusicDir.startsWith('..') || isAbsolute(fromMusicDir)
+      if (outside) {
+        lines.push(p)
+        continue
+      }
+      // Relative to this file's own folder: `../Artist/Album/01 Track.flac`.
+      // The `./` on a path that somehow sits *inside* the Playlists folder is
+      // not cosmetic — a bare relative line is how `resolveLine` recognises
+      // the old format, so every line written here carries an explicit prefix.
+      const rel = toPosix(relative(dir, p))
+      lines.push(rel.startsWith('../') ? rel : './' + rel)
     }
     await writeFile(filePath, lines.join('\n') + '\n', 'utf8')
   }
@@ -423,6 +483,20 @@ export function createPlaylists(musicDir: string): Playlists {
       // playlist that named each shared track twice.
       await write(join(dir, file), id, file.slice(0, -4), dedupePaths(paths))
       return id
+    },
+
+    async migrateLegacy() {
+      let rewritten = 0
+      for (const e of await listEntries()) {
+        // Only Allegory's own files, and only the ones that need it. A
+        // hand-made `.m3u` is left exactly as it is: `write` emits our three
+        // headers and plain paths, so rewriting one would drop its `#EXTINF`
+        // lines — the durations and titles its author put there.
+        if (!e.ownedByAllegory || !e.legacyPaths) continue
+        await write(e.filePath, e.id, e.name, e.paths)
+        rewritten++
+      }
+      return rewritten
     },
 
     customArtPath,

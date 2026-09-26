@@ -108,9 +108,19 @@ reaching it from your phone over Tailscale).
 ### Playlists
 
 Playlists are plain `.m3u` files in `<ALLEGORY_MUSIC_DIR>/Playlists`, with paths
-written relative to the music directory. They're portable and readable by
-Plex, VLC and other players, and every edit Allegory makes is a line operation on
-the file.
+written relative to the playlist file itself — a track in `Artist/Album`
+appears as `../Artist/Album/01 Track.flac`. That is the rule other players
+apply, so the same files are readable by Plex, VLC, **Navidrome** and the
+Subsonic clients on top of it (Amperfy and friends), not just by Allegory.
+Tracks outside the music directory are written as absolute paths. Every edit
+Allegory makes is a line operation on the file.
+
+Playlists written by older versions used paths relative to the music
+directory. Those are still read, and the ones Allegory owns are rewritten to
+the new form on startup — if that happens you'll see a
+`rewrote N playlist(s)` line in the log, and Navidrome needs a rescan to pick
+them up. Hand-made `.m3u` files are left alone, since rewriting them would
+discard their `#EXTINF` lines.
 
 ## Local AI for the Socrates sidebar
 
