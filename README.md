@@ -163,6 +163,36 @@ used for here. And play count is **not a tag**: how often you play a song is a
 fact about your listening, not a claim about the music, so it gets its own rule
 with its own threshold.
 
+### Building a playlist with Socrates
+
+In the Playlists window, **New → "or work on it together, round by round"**.
+Socrates drafts, you keep and throw out, he revises knowing what you did.
+
+Two things make this different from the one-shot "describe it" flow beside it.
+
+**He chooses rather than recalls.** The shortlist is fetched from the server
+first — real tracks, with their tags and play counts — and he answers with
+numbers from it. The older flow sent artist and album names only and let him
+guess which songs were on a record, so a misremembered tracklist quietly cost you
+a song. Nothing can go missing in a match now.
+
+**Rejection is information.** Throwing a track out does not merely remove it. The
+server turns the pattern of rejections into tag weights:
+
+- Rejections concentrated in one tag down-weight *that tag*.
+- Rejections spread across sibling tags down-weight their *parent* — turning
+  down one Delta blues track says something about that track; turning down a
+  Delta blues and a Chicago blues says something about Blues.
+
+Weights are multiplicative and floored rather than allowed to reach zero, so a
+tag you have pushed away becomes unlikely without becoming impossible. The panel
+shows what it is leaning away from. Pinned tracks survive every revision.
+
+Start from a tag, or from a **saved filter** — which is where Phase 2 joins
+Phase 3. "Played at most N times" is a separate control rather than a tag,
+because how often you play something is a fact about your listening, not a claim
+about the music.
+
 ### Tests
 
 ```bash

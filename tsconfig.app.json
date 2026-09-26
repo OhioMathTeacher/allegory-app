@@ -21,5 +21,8 @@
     "erasableSyntaxOnly": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["src"]
+  "include": ["src"],
+  // Tests run under `node --test`, not in the browser: they need node types
+  // and no DOM, so they belong to the node project instead.
+  "exclude": ["src/**/*.test.ts", "src/**/*.test.tsx"]
 }

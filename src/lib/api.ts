@@ -1281,3 +1281,50 @@ export async function materializeFilter(
 ): Promise<{ count: number; playlistId: string }> {
   return send(conn, 'POST', `/filters/${id}/materialize`)
 }
+
+// --- Socrates: draft and revise ---------------------------------------------
+
+export interface SocratesCandidate {
+  trackId: string
+  path: string
+  title: string
+  artist: string
+  album: string
+  year?: number
+  playCount: number
+  /** Tag names, not ids. */
+  tags: string[]
+  score: number
+}
+
+export interface CandidatesResponse {
+  candidates: SocratesCandidate[]
+  /** The relevant branch of the tag tree, rendered as indented lines. */
+  tagTree: string
+  tagIds: string[]
+  poolSize: number
+  /** What the rejections came to, keyed by tag NAME. Below 1 means avoided. */
+  weights: Record<string, number>
+}
+
+/**
+ * Fetch the shortlist Socrates chooses from.
+ *
+ * `rejectedTrackIds` is every track thrown out this session, not just the last
+ * round: the server recomputes the tag weights from the whole list, so the
+ * browser holds no weighting state and no copy of the rules.
+ */
+export async function getSocratesCandidates(
+  conn: Connection,
+  body: {
+    tagIds?: string[]
+    filterId?: string
+    rejectedTrackIds?: string[]
+    excludeTrackIds?: string[]
+    playCountMax?: number
+    limit?: number
+    seed?: number
+  },
+): Promise<CandidatesResponse> {
+  return send<CandidatesResponse>(conn, 'POST', '/socrates/candidates', body)
+}

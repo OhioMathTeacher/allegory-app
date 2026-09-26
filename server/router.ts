@@ -19,6 +19,12 @@ import {
   type Filters,
   type SavedFilter,
 } from './filters.ts'
+import {
+  adjustWeights,
+  compactSubtree,
+  renderSubtree,
+  selectCandidates,
+} from './socrates-session.ts'
 import { findDuplicates, quarantineFiles } from './duplicates.ts'
 import type { SettingsStore } from './settings.ts'
 import { isLoopback, type Auth } from './auth.ts'
@@ -2047,6 +2053,117 @@ export function createRouter(deps: RouterDeps): Router {
           return true
         }
         sendJson(res, await materialize(f))
+        return true
+      }
+
+      // --- Socrates: candidates for a draft, and for each revision ----------
+      //
+      // The browser calls this BEFORE it calls the model, then hands the model
+      // real tracks to choose from. The old prompt shipped artist and album
+      // names only, so Socrates had to guess which songs were on a record and an
+      // unlucky guess vanished in the resolver. Retrieval has to happen here:
+      // it needs the library, the tag sidecars and the listen log, and the model
+      // call itself is made from the browser with the user's own key.
+      if (
+        segs.length === 3 &&
+        segs[1] === 'socrates' &&
+        segs[2] === 'candidates' &&
+        method === 'POST'
+      ) {
+        await ready
+        const body = (await readBody(req)) as {
+          tagIds?: string[]
+          /** Seed from a saved filter instead — Phase 2's join point. */
+          filterId?: string
+          /**
+           * Every track rejected in this session, not just the last round. The
+           * weighting is recomputed from the whole list each time, which is
+           * equivalent to accumulating round by round and leaves the client
+           * with no state to get wrong — and no copy of the weighting rules.
+           */
+          rejectedTrackIds?: string[]
+          /** Pinned, rejected, and whatever is already in the draft. */
+          excludeTrackIds?: string[]
+          playCountMax?: number
+          limit?: number
+          seed?: number
+        }
+
+        let tracks = await filterTracks()
+        let tagIds = body.tagIds ?? []
+        const tree = await tags.tree()
+
+        // "Start from this filter": the filter narrows the pool, and its own
+        // include-tags become the seed if the caller named none.
+        if (body.filterId) {
+          const f = await filters.get(body.filterId)
+          if (!f) {
+            sendJson(res, { error: 'That filter no longer exists.' }, 404)
+            return true
+          }
+          tracks = evaluate(tracks, f.rule, tree)
+          if (tagIds.length === 0) tagIds = f.rule.includeTagIds ?? []
+        }
+
+        // Turn the rejections into tag weights here, where the rules and the
+        // tree both live. The browser sends what was thrown out; it never needs
+        // a second copy of how that is scored.
+        const rejectedTagSets: string[][] = []
+        for (const id of body.rejectedTrackIds ?? []) {
+          const track = library.track(id)
+          if (!track) continue
+          const assigned = await tags.tagsForTrack(track.path)
+          rejectedTagSets.push(
+            assigned.tags
+              .filter((a) => a.source !== 'ai' || typeof a.approvedAt === 'number')
+              .map((a) => a.tagId),
+          )
+        }
+        const weights =
+          rejectedTagSets.length > 0 ? adjustWeights({ tree, rejected: rejectedTagSets }) : {}
+
+        const candidates = selectCandidates(tracks, tree, {
+          tagIds,
+          weights,
+          excludePaths: pathsFor(body.excludeTrackIds ?? []),
+          playCountMax: body.playCountMax,
+          limit: body.limit,
+          seed: body.seed,
+        })
+        const slice = compactSubtree(tree, tagIds)
+        sendJson(res, {
+          candidates,
+          /** The relevant branch only — not the whole vocabulary. */
+          tagTree: renderSubtree(slice),
+          tagIds: slice.map((t) => t.id),
+          poolSize: tracks.length,
+          /** What the rejections came to, so the UI can show its reasoning. */
+          weights: Object.fromEntries(
+            Object.entries(weights).map(([id, w]) => [tree.get(id)?.name ?? id, w]),
+          ),
+        })
+        return true
+      }
+
+      // The tag ids carried by some tracks — what a rejection round is made of.
+      if (
+        segs.length === 3 &&
+        segs[1] === 'socrates' &&
+        segs[2] === 'track-tags' &&
+        method === 'POST'
+      ) {
+        await ready
+        const body = (await readBody(req)) as { trackIds?: string[] }
+        const out: Record<string, string[]> = {}
+        for (const id of body.trackIds ?? []) {
+          const track = library.track(id)
+          if (!track) continue
+          const assigned = await tags.tagsForTrack(track.path)
+          out[id] = assigned.tags
+            .filter((a) => a.source !== 'ai' || typeof a.approvedAt === 'number')
+            .map((a) => a.tagId)
+        }
+        sendJson(res, out)
         return true
       }
 

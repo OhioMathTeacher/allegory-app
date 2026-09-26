@@ -311,3 +311,91 @@ export async function resolvePlaylist(
     return { proposed, resolved: hit }
   })
 }
+
+// --- the draft-and-revise block ---------------------------------------------
+
+/** One pick from a `draft` block: a shortlist number and the reason given. */
+export interface DraftPick {
+  /** 1-based index into the shortlist the model was shown. */
+  n: number
+  why?: string
+}
+
+export interface DraftProposal {
+  name: string
+  picks: DraftPick[]
+}
+
+/**
+ * Parse a `draft` block.
+ *
+ * Deliberately separate from `parseSocratesMessage`: that one reads a set of
+ * remembered {artist, album, track} triples and matches them against the
+ * library, which is the only thing possible when the model was never shown the
+ * tracks. Here the model chose from a numbered shortlist, so a pick resolves by
+ * index — exactly, with nothing to fuzzy-match and nothing to lose.
+ *
+ * Out-of-range and duplicate numbers are dropped rather than rejecting the whole
+ * block: a model that hallucinates one number out of twelve has still done most
+ * of the job, and the card shows what landed.
+ */
+export function parseDraftMessage(content: string, shortlistLength: number): DraftProposal | null {
+  const fence = /```[ \t]*[a-zA-Z]*\r?\n?([\s\S]*?)```/g
+  const bodies: string[] = []
+  let m: RegExpExecArray | null
+  while ((m = fence.exec(content)) !== null) bodies.push(m[1])
+  // A model that forgot the fence but emitted the object is still understood.
+  const bare = extractPicksObject(content)
+  if (bare) bodies.push(bare)
+
+  for (const body of bodies) {
+    let parsed: unknown
+    try {
+      parsed = looseJsonParse(body)
+    } catch {
+      continue
+    }
+    if (!parsed || typeof parsed !== 'object') continue
+    const p = parsed as { name?: unknown; picks?: unknown }
+    if (!Array.isArray(p.picks)) continue
+
+    const seen = new Set<number>()
+    const picks: DraftPick[] = []
+    for (const raw of p.picks) {
+      if (!raw || typeof raw !== 'object') continue
+      const n = Number((raw as { n?: unknown }).n)
+      if (!Number.isInteger(n) || n < 1 || n > shortlistLength) continue
+      if (seen.has(n)) continue
+      seen.add(n)
+      const why = (raw as { why?: unknown }).why
+      picks.push({ n, why: typeof why === 'string' && why.trim() ? why.trim() : undefined })
+    }
+    if (picks.length === 0) continue
+    const name = typeof p.name === 'string' && p.name.trim() ? p.name.trim() : 'New playlist'
+    return { name, picks }
+  }
+  return null
+}
+
+/** First balanced `{…}` that mentions "picks" — the unfenced fallback. */
+function extractPicksObject(s: string): string | null {
+  const key = s.indexOf('"picks"')
+  if (key === -1) return null
+  let start = s.lastIndexOf('{', key)
+  while (start !== -1) {
+    let depth = 0
+    for (let i = start; i < s.length; i++) {
+      if (s[i] === '{') depth++
+      else if (s[i] === '}') {
+        depth--
+        if (depth === 0) {
+          const text = s.slice(start, i + 1)
+          if (text.includes('"picks"')) return text
+          break
+        }
+      }
+    }
+    start = s.lastIndexOf('{', start - 1)
+  }
+  return null
+}

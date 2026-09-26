@@ -14,6 +14,7 @@ import {
 } from '../lib/api'
 import { askAI, getStoredProvider } from '../lib/ai'
 import { buildPlaylistFromDescriptionPrompt } from '../lib/socrates-prompt'
+import { SocratesDraft } from './SocratesDraft'
 import { parseSocratesMessage, type PlaylistProposal } from '../lib/socrates-actions'
 import { SocratesPlaylistCard } from './SocratesPlaylistCard'
 import { Cover } from './Cover'
@@ -35,7 +36,12 @@ export function Playlists({ onSelectPlaylist, onOpenNotes }: PlaylistsProps) {
   const [creating, setCreating] = useState(false)
   // Describe-it (AI) is the primary New flow when a provider is set up; the
   // plain name field is the fallback (and the only option without AI).
-  const [mode, setMode] = useState<'describe' | 'name'>(hasAI ? 'describe' : 'name')
+  // `draft` is the multi-round loop: Socrates proposes, Todd keeps and throws
+  // out, Socrates revises knowing what happened. `describe` is the one-shot
+  // version, kept because it is quicker when you already know what you want.
+  const [mode, setMode] = useState<'describe' | 'name' | 'draft'>(
+    hasAI ? 'describe' : 'name',
+  )
   const [newName, setNewName] = useState('')
   const [busy, setBusy] = useState(false)
   // Describe-a-playlist state.
@@ -215,13 +221,36 @@ export function Playlists({ onSelectPlaylist, onOpenNotes }: PlaylistsProps) {
               </div>
             )}
 
-            <button
-              type="button"
-              onClick={() => setMode('name')}
-              className="mt-2 text-xs text-white/74 underline-offset-2 transition-colors hover:text-white/70 hover:underline"
-            >
-              or name an empty one instead
-            </button>
+            <div className="mt-2 flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                onClick={() => setMode('draft')}
+                className="inline-flex items-center gap-1 text-xs text-white/74 underline-offset-2 transition-colors hover:text-white/70 hover:underline"
+              >
+                <Sparkles className="h-3 w-3" />
+                or work on it together, round by round
+              </button>
+              <button
+                type="button"
+                onClick={() => setMode('name')}
+                className="text-xs text-white/74 underline-offset-2 transition-colors hover:text-white/70 hover:underline"
+              >
+                or name an empty one instead
+              </button>
+            </div>
+          </div>
+        )}
+
+        {creating && mode === 'draft' && hasAI && (
+          <div className="mt-3">
+            <SocratesDraft
+              onCreated={(id, name, trackCount) => {
+                setCreating(false)
+                setMode('describe')
+                onSelectPlaylist({ id, name, trackCount })
+              }}
+              onClose={() => setMode('describe')}
+            />
           </div>
         )}
 

@@ -280,3 +280,130 @@ export function buildPlaylistFromDescriptionPrompt(
     highlightedAlbums(artists, albums),
   ].join('\n')
 }
+
+/**
+ * The draft-and-revise prompt.
+ *
+ * Two things make this different from the prompts above. First, it hands over
+ * REAL candidate tracks, numbered, and asks for numbers back — so there is no
+ * fuzzy matching of a remembered track title against the library, and a
+ * misremembered tracklist can no longer silently cost a song. Second, it carries
+ * the history of the session: what Todd kept, what he dropped, and what he said
+ * about it. A revision that ignores the last round is not a revision.
+ *
+ * The tag slice is the relevant branch only. Sending several hundred tags to
+ * explain a request about Blues spends a lot of prompt on branches nobody asked
+ * about.
+ */
+export interface DraftCandidate {
+  trackId: string
+  title: string
+  artist: string
+  album: string
+  year?: number
+  playCount: number
+  tags: string[]
+}
+
+export interface DraftPromptContext {
+  /** What the user asked for, in their words. */
+  request: string
+  candidates: DraftCandidate[]
+  /** The relevant branch of the tag tree, already rendered. */
+  tagTree?: string
+  /** Tracks the user has kept — these stay, and are not up for debate. */
+  pinned?: DraftCandidate[]
+  /** Tracks the user threw out, with any reason they gave. */
+  rejected?: { track: DraftCandidate; why?: string }[]
+  /** What the user said when asking for the revision. */
+  feedback?: string
+  /** How many tracks the finished set should hold. */
+  target?: number
+}
+
+function candidateLine(c: DraftCandidate, n: number): string {
+  const bits = [`${n}. "${c.title}" — ${c.artist}`, `(${c.album}${c.year ? `, ${c.year}` : ''})`]
+  if (c.tags.length > 0) bits.push(`[${c.tags.join(', ')}]`)
+  // Play count is stated so "nothing too obvious" can be honoured as a request
+  // about listening rather than guessed at from how famous a song is.
+  bits.push(c.playCount === 0 ? '(never played)' : `(played ${c.playCount}×)`)
+  return bits.join(' ')
+}
+
+export function buildDraftPrompt(ctx: DraftPromptContext): string {
+  const {
+    request,
+    candidates,
+    tagTree,
+    pinned = [],
+    rejected = [],
+    feedback,
+    target = 12,
+  } = ctx
+  const revising = pinned.length > 0 || rejected.length > 0
+
+  const lines: string[] = [
+    'You are building a playlist for the Allegory music app, from a shortlist of',
+    'tracks that are definitely in the library. This is a working draft: the user',
+    'will keep some, throw out others, and ask you again.',
+    '',
+    `THE REQUEST: ${request || '(no words given — read the tags and the shortlist)'}`,
+    '',
+  ]
+
+  if (tagTree) {
+    lines.push('THE RELEVANT TAGS (the user’s own hierarchy, deepest are most specific):')
+    lines.push(tagTree)
+    lines.push('')
+  }
+
+  if (pinned.length > 0) {
+    lines.push('ALREADY KEPT — these stay in, and you do not need to justify them again:')
+    for (const p of pinned) lines.push(`- "${p.title}" — ${p.artist}`)
+    lines.push('')
+  }
+
+  if (rejected.length > 0) {
+    lines.push('THROWN OUT — do not offer these, or anything that misses the same way:')
+    for (const r of rejected) {
+      lines.push(`- "${r.track.title}" — ${r.track.artist}${r.why ? ` (${r.why})` : ''}`)
+    }
+    lines.push('')
+  }
+
+  if (feedback) {
+    lines.push(`WHAT THEY SAID THIS TIME: ${feedback}`)
+    lines.push('')
+  }
+
+  lines.push('THE SHORTLIST — choose ONLY from these, by number:')
+  lines.push(...candidates.map((c, i) => candidateLine(c, i + 1)))
+  lines.push('')
+  lines.push(
+    `Pick about ${Math.max(1, target - pinned.length)} of them to ${revising ? 'fill out' : 'make'} the set,`,
+  )
+  lines.push('sequenced so it flows. Answer with ONE fenced block tagged "draft" and')
+  lines.push('nothing else — no greeting, no list in prose:')
+  lines.push('')
+  lines.push('```draft')
+  lines.push('{')
+  lines.push('  "name": "A short, fitting name",')
+  lines.push('  "picks": [')
+  lines.push('    { "n": 4, "why": "one short clause on why this one, here" },')
+  lines.push('    { "n": 11, "why": "..." }')
+  lines.push('  ]')
+  lines.push('}')
+  lines.push('```')
+  lines.push('')
+  lines.push('Rules:')
+  lines.push('- `n` is the number from the shortlist. Never invent a number that is not on it,')
+  lines.push('  and never name a song that is not there.')
+  lines.push('- One short `why` each, and make it about the music or the sequence — not a')
+  lines.push('  restatement of the tags.')
+  lines.push('- Do not repeat anything under ALREADY KEPT; those are already in the set.')
+  if (revising) {
+    lines.push('- This is a revision. The previous round was not wrong so much as not yet')
+    lines.push('  right: move in the direction they pointed rather than starting over.')
+  }
+  return lines.join('\n')
+}

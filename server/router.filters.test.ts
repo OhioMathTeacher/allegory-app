@@ -188,3 +188,95 @@ test('everything with no plays is a filter, and it matches the whole library', a
   assert.equal(tracks.length, 3)
   assert.equal(tracks[0].artist, 'Miles Davis', 'artist sort did not apply')
 })
+
+test('the Socrates shortlist expands seed tags and reacts to rejections', async (t) => {
+  const s = await serve()
+  t.after(s.cleanup)
+
+  const blues = (await s.api('POST', '/tags', { name: 'Blues', kind: 'genre' })).json
+  const delta = (
+    await s.api('POST', '/tags', { name: 'Delta blues', kind: 'genre', parentId: blues.id })
+  ).json
+  const jazz = (await s.api('POST', '/tags', { name: 'Jazz', kind: 'genre' })).json
+
+  const bluesIds = s.library.allTracks().filter((x) => x.path.includes('Folk Singer')).map((x) => x.id)
+  const jazzIds = s.library.allTracks().filter((x) => x.path.includes('Kind of Blue')).map((x) => x.id)
+  await s.api('POST', `/tags/${delta.id}/tracks`, { trackIds: bluesIds })
+  await s.api('POST', `/tags/${jazz.id}/tracks`, { trackIds: jazzIds })
+
+  // Seeding with the parent offers what is filed beneath it, and nothing else.
+  const seeded = await s.api('POST', '/socrates/candidates', { tagIds: [blues.id] })
+  assert.equal(seeded.status, 200)
+  assert.equal(seeded.json.candidates.length, 2)
+  assert.ok(
+    seeded.json.candidates.every((c: { tags: string[] }) => c.tags.includes('Delta blues')),
+    'the shortlist leaked something outside the seed',
+  )
+  // The model is sent the branch it needs, not the whole vocabulary.
+  assert.match(seeded.json.tagTree, /Blues/)
+  assert.doesNotMatch(seeded.json.tagTree, /Jazz/)
+
+  // Tag names, not ids — this goes to a language model.
+  assert.ok(!seeded.json.candidates[0].tags.includes(delta.id))
+
+  // Rejecting a track excludes it AND down-weights what it carried.
+  const rejectedId = seeded.json.candidates[0].trackId
+  const revised = await s.api('POST', '/socrates/candidates', {
+    tagIds: [blues.id],
+    rejectedTrackIds: [rejectedId],
+    excludeTrackIds: [rejectedId],
+  })
+  assert.ok(
+    !revised.json.candidates.some((c: { trackId: string }) => c.trackId === rejectedId),
+    'a rejected track was offered again',
+  )
+  assert.ok(
+    revised.json.weights['Delta blues'] < 1,
+    `rejection did not become a weight: ${JSON.stringify(revised.json.weights)}`,
+  )
+})
+
+test('a filter can seed a Socrates session — Phase 2 into Phase 3', async (t) => {
+  const s = await serve()
+  t.after(s.cleanup)
+
+  const jazz = (await s.api('POST', '/tags', { name: 'Jazz', kind: 'genre' })).json
+  const jazzIds = s.library.allTracks().filter((x) => x.path.includes('Kind of Blue')).map((x) => x.id)
+  await s.api('POST', `/tags/${jazz.id}/tracks`, { trackIds: jazzIds })
+
+  const f = (await s.api('POST', '/filters', {
+    name: 'Just Jazz',
+    rule: { includeTagIds: [jazz.id] },
+  })).json
+
+  // The filter narrows the pool, and its own include-tags become the seed.
+  const res = await s.api('POST', '/socrates/candidates', { filterId: f.id })
+  assert.equal(res.status, 200)
+  assert.equal(res.json.poolSize, 1, 'the filter did not narrow the pool')
+  assert.equal(res.json.candidates.length, 1)
+  assert.equal(res.json.candidates[0].artist, 'Miles Davis')
+
+  assert.equal((await s.api('POST', '/socrates/candidates', { filterId: 'nope' })).status, 404)
+})
+
+test('the play-count ceiling is honoured, and an empty shortlist is not an error', async (t) => {
+  const s = await serve()
+  t.after(s.cleanup)
+
+  const tag = (await s.api('POST', '/tags', { name: 'Anything', kind: 'other' })).json
+  await s.api('POST', `/tags/${tag.id}/tracks`, {
+    trackIds: s.library.allTracks().map((x) => x.id),
+  })
+
+  // Nothing has been played in a fresh fixture, so a ceiling of 0 keeps
+  // everything — the lever at its widest rather than its narrowest.
+  const wide = await s.api('POST', '/socrates/candidates', { tagIds: [tag.id], playCountMax: 0 })
+  assert.equal(wide.json.candidates.length, 3)
+
+  // A seed tag nothing carries is an empty shortlist, answered as 200 with an
+  // empty list — the UI says "loosen it", which a 500 could not.
+  const other = (await s.api('POST', '/tags', { name: 'Nothing', kind: 'other' })).json
+  const empty = await s.api('POST', '/socrates/candidates', { tagIds: [other.id] })
+  assert.equal(empty.status, 200)
+  assert.deepEqual(empty.json.candidates, [])
+})
