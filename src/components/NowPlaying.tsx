@@ -8,6 +8,7 @@ import {
   Play,
   ListPlus,
   Loader2,
+  Shuffle,
   Check,
   Music2,
   Pencil,
@@ -271,6 +272,18 @@ export function NowPlaying({
                       </span>
                     </h2>
                     <div className="flex items-center gap-2">
+                      {/* Shuffles what is still to come; the playing track
+                          stays put. Add a few playlists, shuffle, and save
+                          the result if it works -- no playlist needed first. */}
+                      <button
+                        type="button"
+                        onClick={player.shuffleUpNext}
+                        disabled={player.queue.length - player.currentIndex - 1 < 2}
+                        className="flex items-center gap-1.5 rounded-full border border-line px-3 py-1.5 text-xs font-medium text-white/65 transition-colors hover:bg-white/5 hover:text-white disabled:opacity-40"
+                      >
+                        <Shuffle className="h-3.5 w-3.5" />
+                        Shuffle up next
+                      </button>
                       <button
                         type="button"
                         onClick={saveAsPlaylist}

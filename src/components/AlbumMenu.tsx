@@ -11,6 +11,7 @@ import {
 } from '../lib/downloads'
 import type { Album } from '../lib/types'
 import { TagPicker } from './TagPicker'
+import { menuPosition, type MenuPos } from '../lib/menu-position'
 
 interface AlbumMenuProps {
   album: Album
@@ -34,7 +35,7 @@ export function AlbumMenu({ album, onEdit, className }: AlbumMenuProps) {
   const conn = useConnected()
   const buttonRef = useRef<HTMLButtonElement>(null)
   const [open, setOpen] = useState(false)
-  const [pos, setPos] = useState<{ top: number; right: number }>({ top: 0, right: 0 })
+  const [pos, setPos] = useState<MenuPos>({ top: 0, right: 0, maxHeight: 0 })
   const [busy, setBusy] = useState(false)
   const [done, setDone] = useState<string | null>(null)
 
@@ -49,7 +50,7 @@ export function AlbumMenu({ album, onEdit, className }: AlbumMenuProps) {
 
   function openMenu() {
     const r = buttonRef.current?.getBoundingClientRect()
-    if (r) setPos({ top: r.bottom + 6, right: window.innerWidth - r.right })
+    if (r) setPos(menuPosition(r))
     setOpen(true)
   }
   function close() {
@@ -113,8 +114,14 @@ export function AlbumMenu({ album, onEdit, className }: AlbumMenuProps) {
           <>
             <div className="fixed inset-0 z-40" onClick={close} />
             <div
-              className="fixed z-50 min-w-[220px] overflow-hidden rounded-lg border border-line bg-surface p-1.5 shadow-xl shadow-black/50"
-              style={{ top: pos.top, right: pos.right }}
+              className="fixed z-50 min-w-[220px] overflow-y-auto overscroll-contain rounded-lg border border-line bg-surface p-1.5 shadow-xl shadow-black/50"
+              style={{
+                top: pos.top,
+                bottom: pos.bottom,
+                left: pos.left,
+                right: pos.right,
+                maxHeight: pos.maxHeight,
+              }}
               onClick={(e) => e.stopPropagation()}
             >
             {done ? (

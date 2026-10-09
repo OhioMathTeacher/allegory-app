@@ -10,6 +10,7 @@ import { Cover } from './Cover'
 import { AlbumCard } from './AlbumCard'
 import { TrackRow } from './TrackList'
 import type { Album, Artist } from '../lib/types'
+import { useNavState } from '../lib/nav-state'
 
 interface SearchProps {
   onSelectAlbum: (album: Album) => void
@@ -44,15 +45,15 @@ function saveRecents(list: string[]) {
 export function Search({ onSelectAlbum, onSelectArtist }: SearchProps) {
   const conn = useConnected()
   const player = usePlayer()
-  const [input, setInput] = useState('')
-  const [query, setQuery] = useState('')
+  const [input, setInput] = useNavState('search.input', '')
+  const [query, setQuery] = useNavState('search.query', '')
   const [recents, setRecents] = useState<string[]>(loadRecents)
 
   // Debounce typing so we don't hit the API on every keystroke.
   useEffect(() => {
     const t = window.setTimeout(() => setQuery(input.trim()), 200)
     return () => window.clearTimeout(t)
-  }, [input])
+  }, [input, setQuery])
 
   // Record a search only on intentful actions (Enter / picking a result),
   // never on every keystroke — otherwise recents fill with prefixes.
@@ -73,7 +74,7 @@ export function Search({ onSelectAlbum, onSelectArtist }: SearchProps) {
     setInput(term)
     setQuery(term)
     recordRecent(term)
-  }, [recordRecent])
+  }, [recordRecent, setInput, setQuery])
 
   const clearRecents = useCallback(() => {
     setRecents([])

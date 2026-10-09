@@ -15,10 +15,12 @@ import type { Album, Artist } from '../lib/types'
 interface AlbumViewProps {
   album: Album
   onBack: () => void
+  /** Names the screen back returns to. */
+  backLabel: string
   onSelectArtist: (artist: Artist) => void
 }
 
-export function AlbumView({ album, onBack, onSelectArtist }: AlbumViewProps) {
+export function AlbumView({ album, onBack, backLabel, onSelectArtist }: AlbumViewProps) {
   const conn = useConnected()
   const player = usePlayer()
   const [editing, setEditing] = useState(false)
@@ -39,10 +41,10 @@ export function AlbumView({ album, onBack, onSelectArtist }: AlbumViewProps) {
     <div className="px-8 py-8">
       <button
         onClick={onBack}
-        className="mb-7 flex items-center gap-2 text-base font-semibold text-white transition-colors hover:text-white/80"
+        className="mb-7 flex max-w-full items-center gap-2 text-base font-semibold text-white transition-colors hover:text-white/80"
       >
-        <ArrowLeft className="h-5 w-5" />
-        Library
+        <ArrowLeft className="h-5 w-5 shrink-0" />
+        <span className="truncate">{backLabel}</span>
       </button>
 
       <div className="flex items-center gap-4">

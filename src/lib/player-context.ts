@@ -51,6 +51,8 @@ export interface PlayerContextValue {
   moveInQueue: (from: number, to: number) => void
   /** Drop every track after the current one. */
   clearUpNext: () => void
+  /** Shuffle every track after the current one; the current keeps playing. */
+  shuffleUpNext: () => void
   outputDeviceId: string
   outputSupported: boolean
   setOutputDevice: (deviceId: string) => void

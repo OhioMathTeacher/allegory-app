@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'motion/react'
@@ -34,6 +34,8 @@ import { useFolderDrop, DragOverlay, UploadToast } from './FolderUpload'
 import { UploadFiling } from './UploadFiling'
 import { getSettings } from '../lib/api'
 import { useConnected } from '../lib/connection'
+import { NavEntryProvider, NavStore } from '../lib/nav-state'
+import { RestoreScroll } from './RestoreScroll'
 import type { Album, Artist, Playlist } from '../lib/types'
 
 type View =
@@ -59,12 +61,92 @@ function initialView(): View {
     : { type: 'artists' }
 }
 
+/** How deep back can go. Artist -> album -> artist loops are a normal way to
+ *  browse; past this the oldest screens fall off. */
+const MAX_STACK = 50
+
+interface StackEntry {
+  id: number
+  view: View
+}
+
+/** Two views are the same screen when they show the same thing. */
+function viewIdentity(v: View): string {
+  return v.type === 'album' ? `album:${v.album.id}`
+    : v.type === 'artist' ? `artist:${v.artist.id}`
+    : v.type === 'playlist' ? `playlist:${v.playlist.id}`
+    : v.type
+}
+
+/** What a back button returns to, said the way the destination names itself. */
+function viewLabel(v: View): string {
+  switch (v.type) {
+    case 'album': return v.album.name
+    case 'artist': return v.artist.name
+    case 'playlist': return v.playlist.name
+    case 'artists': return 'Artists'
+    case 'recent': return 'Recently'
+    case 'discover': return 'Discover'
+    case 'playlists': return 'Playlists'
+    case 'notes': return 'Notes'
+    case 'search': return 'Search'
+    case 'downloads': return 'Downloads'
+    case 'socrates': return 'Socrates'
+  }
+}
+
+/** Where back goes with nothing underneath: the screen's own section. Only a
+ *  page reload with a deep view on top could leave one alone, but a back button
+ *  that does nothing is worse than one that guesses. */
+function parentOf(v: View): View {
+  return v.type === 'playlist' || v.type === 'notes'
+    ? { type: 'playlists' }
+    : { type: 'artists' }
+}
+
 export function AppShell() {
   const conn = useConnected()
-  const [view, setView] = useState<View>(initialView())
-  // The view we were on right before opening Socrates, so the Socrates button
-  // toggles: tap to enter, tap again to return exactly where you came from.
-  const prevViewRef = useRef<View>({ type: 'artists' })
+  // Navigation is a stack: opening something pushes, back pops, so back means
+  // the previous screen. Album pages alone are reachable six ways (Artists,
+  // Recently, Search, Discover, a playlist, Now Playing), and a back button
+  // with one hardcoded destination was wrong for five of them. The top-level
+  // windows reset the stack instead of pushing, or it would grow for as long
+  // as you browse. Socrates is just another push, so its toggle is a pop.
+  //
+  // Each entry carries an id into navStore, which keeps the screen's scroll
+  // position and its useNavState values while it sits underneath, so back
+  // returns to the page as you left it rather than re-mounted at the top.
+  const [navStore] = useState(() => new NavStore())
+  const [stack, setStack] = useState<StackEntry[]>(() => [
+    { id: navStore.newId(), view: initialView() },
+  ])
+  const top = stack[stack.length - 1]
+  const view = top.view
+  const prevView = stack.length > 1 ? stack[stack.length - 2].view : null
+  useEffect(() => navStore.retain(stack.map((e) => e.id)), [navStore, stack])
+
+  const mainRef = useRef<HTMLElement>(null)
+  const getScroller = useCallback(() => mainRef.current, [])
+  const navEntry = useMemo(
+    () => ({ store: navStore, id: top.id, getScroller }),
+    [navStore, top.id, getScroller],
+  )
+
+  /** Open a screen on top of the current one. */
+  function openView(next: View) {
+    // Re-opening what is already showing (the artist link on that artist's
+    // own album, twice) would make back appear to do nothing.
+    if (viewIdentity(view) === viewIdentity(next)) return
+    navStore.saveScroll(top.id, mainRef.current?.scrollTop ?? 0)
+    setStack((s) => [...s, { id: navStore.newId(), view: next }].slice(-MAX_STACK))
+  }
+  /** Start over at a top-level window. */
+  const resetView = (next: View) => setStack([{ id: navStore.newId(), view: next }])
+  function goBack() {
+    setStack((s) =>
+      s.length > 1 ? s.slice(0, -1) : [{ id: navStore.newId(), view: parentOf(s[0].view) }],
+    )
+  }
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [splashOpen, setSplashOpen] = useState(false)
   const [settingsInitial, setSettingsInitial] = useState<'library' | 'ai'>('library')
@@ -116,12 +198,10 @@ export function AppShell() {
     else resumeFromSearch()
   }, [inSearch, pauseForSearch, resumeFromSearch])
 
-  // A stable key per view, so AnimatePresence transitions cleanly.
-  const viewKey =
-    view.type === 'album' ? view.album.id
-    : view.type === 'artist' ? view.artist.id
-    : view.type === 'playlist' ? view.playlist.id
-    : view.type
+  const backLabel = viewLabel(prevView ?? parentOf(view))
+
+  // A stable key per stack entry, so AnimatePresence transitions cleanly.
+  const viewKey = top.id
 
   // --- Window navigation ---------------------------------------------------
   // The corner buttons cycle through the top-level "windows" in this order.
@@ -136,7 +216,7 @@ export function AppShell() {
 
   function goToWindow(idx: number) {
     const key = WINDOWS[((idx % WINDOWS.length) + WINDOWS.length) % WINDOWS.length]
-    setView({ type: key } as View)
+    resetView({ type: key } as View)
   }
 
   function cycleWindow(dir: -1 | 1) {
@@ -165,18 +245,16 @@ export function AppShell() {
     cycleWindow(dx < 0 ? 1 : -1)
   }
 
+  // Search and Socrates both toggle: tap to enter, tap again to return to the
+  // screen you came from.
   function toggleSearch() {
-    setView(section === 'search' ? { type: 'artists' } : { type: 'search' })
+    if (view.type === 'search') goBack()
+    else openView({ type: 'search' })
   }
 
-  // Tap Socrates to enter; tap again to go back to the view you came from.
   function toggleSocrates() {
-    if (view.type === 'socrates') {
-      setView(prevViewRef.current)
-    } else {
-      prevViewRef.current = view
-      setView({ type: 'socrates' })
-    }
+    if (view.type === 'socrates') goBack()
+    else openView({ type: 'socrates' })
   }
 
   return (
@@ -239,7 +317,7 @@ export function AppShell() {
               </TopButton>
             )}
             <TopButton
-              onClick={() => setView({ type: 'playlists' })}
+              onClick={() => resetView({ type: 'playlists' })}
               label="Playlists"
               active={section === 'playlists'}
             >
@@ -311,7 +389,7 @@ export function AppShell() {
             onTogglePlaybar={() => setPlaybarHidden((h) => !h)}
           />
         ) : (
-        <main className="min-h-0 flex-1 overflow-y-auto">
+        <main ref={mainRef} className="min-h-0 flex-1 overflow-y-auto">
           <AnimatePresence mode="wait">
             <motion.div
               key={viewKey}
@@ -320,65 +398,72 @@ export function AppShell() {
               exit={{ opacity: 0, y: -8 }}
               transition={{ duration: 0.26, ease: [0.22, 1, 0.36, 1] }}
             >
+              <NavEntryProvider value={navEntry}>
+              <RestoreScroll />
               {view.type === 'search' && (
                 <Search
-                  onSelectAlbum={(album) => setView({ type: 'album', album })}
-                  onSelectArtist={(artist) => setView({ type: 'artist', artist })}
+                  onSelectAlbum={(album) => openView({ type: 'album', album })}
+                  onSelectArtist={(artist) => openView({ type: 'artist', artist })}
                 />
               )}
               {view.type === 'album' && (
                 <AlbumView
                   album={view.album}
-                  onBack={() => setView({ type: 'artists' })}
-                  onSelectArtist={(artist) => setView({ type: 'artist', artist })}
+                  onBack={goBack}
+                  backLabel={backLabel}
+                  onSelectArtist={(artist) => openView({ type: 'artist', artist })}
                 />
               )}
               {view.type === 'artists' && (
                 <Artists
-                  onSelectArtist={(artist) => setView({ type: 'artist', artist })}
+                  onSelectArtist={(artist) => openView({ type: 'artist', artist })}
                 />
               )}
               {view.type === 'artist' && (
                 <ArtistView
                   artist={view.artist}
-                  onBack={() => setView({ type: 'artists' })}
-                  onSelectAlbum={(album) => setView({ type: 'album', album })}
-                  onSelectArtist={(artist) => setView({ type: 'artist', artist })}
+                  onBack={goBack}
+                  backLabel={backLabel}
+                  onSelectAlbum={(album) => openView({ type: 'album', album })}
+                  onSelectArtist={(artist) => openView({ type: 'artist', artist })}
                 />
               )}
               {view.type === 'recent' && (
                 <Recently
-                  onSelectAlbum={(album) => setView({ type: 'album', album })}
-                  onSelectArtist={(artist) => setView({ type: 'artist', artist })}
+                  onSelectAlbum={(album) => openView({ type: 'album', album })}
+                  onSelectArtist={(artist) => openView({ type: 'artist', artist })}
                 />
               )}
               {view.type === 'discover' && (
                 <Discover
-                  onSelectArtist={(artist) => setView({ type: 'artist', artist })}
+                  onSelectArtist={(artist) => openView({ type: 'artist', artist })}
                 />
               )}
               {view.type === 'playlists' && (
                 <Playlists
                   onSelectPlaylist={(playlist) =>
-                    setView({ type: 'playlist', playlist })
+                    openView({ type: 'playlist', playlist })
                   }
-                  onOpenNotes={() => setView({ type: 'notes' })}
+                  onOpenNotes={() => openView({ type: 'notes' })}
                 />
               )}
               {view.type === 'playlist' && (
                 <PlaylistView
                   playlist={view.playlist}
-                  onBack={() => setView({ type: 'playlists' })}
-                  onSelectArtist={(artist) => setView({ type: 'artist', artist })}
+                  onBack={goBack}
+                  backLabel={backLabel}
+                  onSelectArtist={(artist) => openView({ type: 'artist', artist })}
                 />
               )}
               {view.type === 'notes' && (
                 <NotesView
-                  onBack={() => setView({ type: 'playlists' })}
-                  onSelectArtist={(artist) => setView({ type: 'artist', artist })}
+                  onBack={goBack}
+                  backLabel={backLabel}
+                  onSelectArtist={(artist) => openView({ type: 'artist', artist })}
                 />
               )}
               {view.type === 'downloads' && <DownloadsView />}
+              </NavEntryProvider>
             </motion.div>
           </AnimatePresence>
         </main>
@@ -387,8 +472,8 @@ export function AppShell() {
         <NowPlaying
           open={nowPlayingOpen}
           onClose={() => setNowPlayingOpen(false)}
-          onOpenAlbum={(album) => setView({ type: 'album', album })}
-          onOpenArtist={(artist) => setView({ type: 'artist', artist })}
+          onOpenAlbum={(album) => openView({ type: 'album', album })}
+          onOpenArtist={(artist) => openView({ type: 'artist', artist })}
         />
         </div>
 
@@ -401,8 +486,8 @@ export function AppShell() {
           <>
             <div aria-hidden className="shrink-0 h-4 sm:h-2" />
             <PlayerBar
-              onOpenAlbum={(album) => setView({ type: 'album', album })}
-              onOpenArtist={(artist) => setView({ type: 'artist', artist })}
+              onOpenAlbum={(album) => openView({ type: 'album', album })}
+              onOpenArtist={(artist) => openView({ type: 'artist', artist })}
               onExpand={() => setNowPlayingOpen(true)}
             />
           </>

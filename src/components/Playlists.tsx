@@ -20,6 +20,7 @@ import { SocratesPlaylistCard } from './SocratesPlaylistCard'
 import { Cover } from './Cover'
 import { PlaylistEditMenu } from './PlaylistEditMenu'
 import type { Playlist } from '../lib/types'
+import { useNavState } from '../lib/nav-state'
 
 interface PlaylistsProps {
   onSelectPlaylist: (playlist: Playlist) => void
@@ -33,21 +34,22 @@ export function Playlists({ onSelectPlaylist, onOpenNotes }: PlaylistsProps) {
   const providerId = getStoredProvider()
   const hasAI = !!providerId && providerId !== 'none'
 
-  const [creating, setCreating] = useState(false)
+  const [creating, setCreating] = useNavState('playlists.creating', false)
   // Describe-it (AI) is the primary New flow when a provider is set up; the
   // plain name field is the fallback (and the only option without AI).
   // `draft` is the multi-round loop: Socrates proposes, Todd keeps and throws
   // out, Socrates revises knowing what happened. `describe` is the one-shot
   // version, kept because it is quicker when you already know what you want.
-  const [mode, setMode] = useState<'describe' | 'name' | 'draft'>(
+  const [mode, setMode] = useNavState<'describe' | 'name' | 'draft'>(
+    'playlists.mode',
     hasAI ? 'describe' : 'name',
   )
-  const [newName, setNewName] = useState('')
+  const [newName, setNewName] = useNavState('playlists.newName', '')
   const [busy, setBusy] = useState(false)
   // Describe-a-playlist state.
-  const [description, setDescription] = useState('')
+  const [description, setDescription] = useNavState('playlists.description', '')
   const [generating, setGenerating] = useState(false)
-  const [proposal, setProposal] = useState<PlaylistProposal | null>(null)
+  const [proposal, setProposal] = useNavState<PlaylistProposal | null>('playlists.proposal', null)
   const [genError, setGenError] = useState<string | null>(null)
 
   const {

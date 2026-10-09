@@ -166,6 +166,7 @@ export function RemotePlayerProvider({ children }: RemotePlayerProviderProps) {
       removeFromQueue: noop,
       moveInQueue: noop,
       clearUpNext: noop,
+      shuffleUpNext: noop,
       outputDeviceId: '',
       outputSupported: false,
       setOutputDevice: noop,

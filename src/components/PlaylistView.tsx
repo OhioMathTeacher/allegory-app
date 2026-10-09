@@ -28,10 +28,12 @@ import type { Artist, Playlist } from '../lib/types'
 interface PlaylistViewProps {
   playlist: Playlist
   onBack: () => void
+  /** Names the screen back returns to. */
+  backLabel: string
   onSelectArtist: (artist: Artist) => void
 }
 
-export function PlaylistView({ playlist, onBack, onSelectArtist }: PlaylistViewProps) {
+export function PlaylistView({ playlist, onBack, backLabel, onSelectArtist }: PlaylistViewProps) {
   const conn = useConnected()
   const player = usePlayer()
   const queryClient = useQueryClient()
@@ -132,10 +134,10 @@ export function PlaylistView({ playlist, onBack, onSelectArtist }: PlaylistViewP
     <div className="px-8 py-8">
       <button
         onClick={onBack}
-        className="mb-7 flex items-center gap-2 text-base font-semibold text-white transition-colors hover:text-white/80"
+        className="mb-7 flex max-w-full items-center gap-2 text-base font-semibold text-white transition-colors hover:text-white/80"
       >
-        <ArrowLeft className="h-5 w-5" />
-        Playlists
+        <ArrowLeft className="h-5 w-5 shrink-0" />
+        <span className="truncate">{backLabel}</span>
       </button>
 
       {/* Hidden picker stays mounted so the small cover + ⋮ → "Change artwork…"

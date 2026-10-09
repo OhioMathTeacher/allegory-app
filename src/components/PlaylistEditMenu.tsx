@@ -10,8 +10,10 @@ import {
   ImagePlus,
   Download,
   Loader2,
+  ListEnd,
 } from 'lucide-react'
 import { useConnected } from '../lib/connection'
+import { usePlayer } from '../lib/player'
 import {
   getPlaylists,
   getPlaylistTracks,
@@ -25,6 +27,7 @@ import {
   useCollectionStatus,
 } from '../lib/downloads'
 import type { Playlist } from '../lib/types'
+import { menuPosition, type MenuPos } from '../lib/menu-position'
 
 interface PlaylistEditMenuProps {
   playlistId: string
@@ -54,9 +57,7 @@ export function PlaylistEditMenu({
   const buttonRef = useRef<HTMLButtonElement>(null)
 
   const [open, setOpen] = useState(false)
-  const [pos, setPos] = useState<{ top: number; left?: number; right?: number }>({
-    top: 0,
-  })
+  const [pos, setPos] = useState<MenuPos>({ top: 0, maxHeight: 0 })
   const [mode, setMode] = useState<Mode>('menu')
   const [name, setName] = useState('')
   const [busy, setBusy] = useState(false)
@@ -68,9 +69,17 @@ export function PlaylistEditMenu({
     enabled: open && mode === 'combine',
   })
   const others = (playlists ?? []).filter((p) => p.id !== playlistId)
+  // Type to narrow the Combine list -- with dozens of playlists, scrolling
+  // to the one you want is slower than typing three letters of it.
+  const [filter, setFilter] = useState('')
+  const query = filter.trim().toLowerCase()
+  const matching = query
+    ? others.filter((p) => p.name.toLowerCase().includes(query))
+    : others
 
   // Lazily load the playlist's tracks once the menu opens, so "Download
   // playlist" knows what to fetch and can reflect how much is already cached.
+  const player = usePlayer()
   const { data: tracks } = useQuery({
     queryKey: ['playlist-tracks', playlistId],
     queryFn: () => getPlaylistTracks(conn, playlistId),
@@ -101,14 +110,7 @@ export function PlaylistEditMenu({
   function openMenu() {
     const r = buttonRef.current?.getBoundingClientRect()
     if (r) {
-      // Anchor to whichever side keeps the popover on-screen: open leftward
-      // from a button in the right half (a list row's ⋮), rightward from one
-      // on the left (next to a title).
-      setPos(
-        r.right > window.innerWidth / 2
-          ? { top: r.bottom + 6, right: window.innerWidth - r.right }
-          : { top: r.bottom + 6, left: r.left },
-      )
+      setPos(menuPosition(r))
     }
     setMode('menu')
     setName(playlistName)
@@ -120,6 +122,7 @@ export function PlaylistEditMenu({
     setMode('menu')
     setBusy(false)
     setDone(null)
+    setFilter('')
   }
 
   async function run(work: () => Promise<void>, message: string) {
@@ -132,6 +135,16 @@ export function PlaylistEditMenu({
       setBusy(false)
       setDone(err instanceof Error ? err.message : 'Something went wrong.')
     }
+  }
+
+  // Append, never replace: queue two playlists, shuffle the result in Now
+  // Playing, and save it as a playlist only if it turns out to be worth it.
+  // If nothing is playing, the first one starts.
+  function doAddToQueue() {
+    if (!tracks?.length) return
+    player.addToQueue(tracks)
+    setDone(`Added ${tracks.length} song${tracks.length === 1 ? '' : 's'} to the queue`)
+    window.setTimeout(close, 1000)
   }
 
   function doRename() {
@@ -179,8 +192,14 @@ export function PlaylistEditMenu({
         <>
           <div className="fixed inset-0 z-40" onClick={close} />
           <div
-            className="fixed z-50 max-h-[60vh] min-w-[250px] overflow-y-auto rounded-lg border border-line bg-surface p-1.5 shadow-xl shadow-black/50"
-            style={{ top: pos.top, left: pos.left, right: pos.right }}
+            className="fixed z-50 min-w-[250px] overflow-y-auto overscroll-contain rounded-lg border border-line bg-surface p-1.5 shadow-xl shadow-black/50"
+            style={{
+              top: pos.top,
+              bottom: pos.bottom,
+              left: pos.left,
+              right: pos.right,
+              maxHeight: pos.maxHeight,
+            }}
           >
             {done ? (
               <div className="flex items-center gap-2 px-2.5 py-2 text-sm text-white/75">
@@ -257,7 +276,21 @@ export function PlaylistEditMenu({
                   Combine with…
                 </button>
                 <div className="my-1 h-px bg-line" />
-                {others.map((other) => (
+                {others.length > 6 && (
+                  <input
+                    autoFocus
+                    value={filter}
+                    onChange={(e) => setFilter(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && matching.length === 1) doCombine(matching[0])
+                      if (e.key === 'Escape') setMode('menu')
+                    }}
+                    placeholder="Find a playlist…"
+                    autoCapitalize="off"
+                    className="input mb-1 w-full"
+                  />
+                )}
+                {matching.map((other) => (
                   <button
                     key={other.id}
                     type="button"
@@ -268,6 +301,11 @@ export function PlaylistEditMenu({
                     {other.name}
                   </button>
                 ))}
+                {query && matching.length === 0 && (
+                  <div className="px-2.5 py-2 text-xs text-white/70">
+                    No playlist matches “{filter.trim()}”.
+                  </div>
+                )}
                 {playlists && others.length === 0 && (
                   <div className="px-2.5 py-2 text-xs text-white/70">
                     No other playlists to combine with.
@@ -276,6 +314,16 @@ export function PlaylistEditMenu({
               </>
             ) : (
               <>
+                <button
+                  type="button"
+                  onClick={doAddToQueue}
+                  disabled={busy || !tracks?.length}
+                  className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-sm text-white/85 transition-colors hover:bg-white/14 disabled:opacity-50"
+                >
+                  <ListEnd className="h-4 w-4 shrink-0" style={{ color: 'var(--accent)' }} />
+                  Add to queue
+                </button>
+                <div className="my-1 h-px bg-line" />
                 <button
                   type="button"
                   onClick={toggleDownload}

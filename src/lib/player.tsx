@@ -18,6 +18,7 @@ import type { PlayerContextValue, RepeatMode } from './player-context'
 import { logCrash } from './crash-log'
 import { useIsFavorite, toggleFavorite } from './favorites'
 import { isDownloaded, getDownloadedAudioUrl } from './downloads'
+import { shuffle } from './shuffle'
 
 /**
  * Choosing an audio output device needs HTMLMediaElement.setSinkId, which
@@ -720,6 +721,15 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     setQueue(queueRef.current.slice(0, ci + 1))
   }, [])
 
+  // Shuffle only what is still to come. The playing track keeps its place, so
+  // it does not restart, and what has already played stays behind it.
+  const shuffleUpNext = useCallback(() => {
+    const ci = indexRef.current
+    const q = queueRef.current
+    if (ci < 0 || q.length - ci - 1 < 2) return
+    setQueue(q.slice(0, ci + 1).concat(shuffle(q.slice(ci + 1))))
+  }, [])
+
   const setOutputDevice = useCallback((deviceId: string) => {
     if (!OUTPUT_SUPPORTED) return
     audioRef.current!
@@ -794,6 +804,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       removeFromQueue,
       moveInQueue,
       clearUpNext,
+      shuffleUpNext,
       outputDeviceId,
       outputSupported: OUTPUT_SUPPORTED,
       setOutputDevice,
@@ -828,6 +839,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       removeFromQueue,
       moveInQueue,
       clearUpNext,
+      shuffleUpNext,
       outputDeviceId,
       setOutputDevice,
       isCurrentFavorite,

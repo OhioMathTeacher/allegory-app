@@ -40,10 +40,13 @@ import { SongRows, AlbumRows } from './Recently'
 import { AccordionSection } from './Accordion'
 import { ArtistTags } from './ArtistTags'
 import type { Album, Artist, Track } from '../lib/types'
+import { useNavState } from '../lib/nav-state'
 
 interface ArtistViewProps {
   artist: Artist
   onBack: () => void
+  /** Names the screen back returns to. */
+  backLabel: string
   onSelectAlbum: (album: Album) => void
   onSelectArtist: (artist: Artist) => void
 }
@@ -85,6 +88,7 @@ function loadSectionOpen(): Record<SectionKey, boolean> {
 export function ArtistView({
   artist,
   onBack,
+  backLabel,
   onSelectAlbum,
   onSelectArtist,
 }: ArtistViewProps) {
@@ -160,10 +164,10 @@ export function ArtistView({
     <div className="px-4 py-6 sm:px-8 sm:py-8">
       <button
         onClick={onBack}
-        className="mb-6 flex items-center gap-2 text-base font-semibold text-white transition-colors hover:text-white/80 sm:mb-7"
+        className="mb-6 flex max-w-full items-center gap-2 text-base font-semibold text-white transition-colors hover:text-white/80 sm:mb-7"
       >
-        <ArrowLeft className="h-5 w-5" />
-        Artists
+        <ArrowLeft className="h-5 w-5 shrink-0" />
+        <span className="truncate">{backLabel}</span>
       </button>
 
       {/* Hidden picker stays mounted so the small avatar + Edit can open it. */}
@@ -661,7 +665,7 @@ interface SongsPanelProps {
 function SongsPanel({ artistId, played, playedLoading, playedError }: SongsPanelProps) {
   const conn = useConnected()
   const player = usePlayer()
-  const [tab, setTab] = useState<'popular' | 'played'>('popular')
+  const [tab, setTab] = useNavState<'popular' | 'played'>('artist.songsTab', 'popular')
 
   const popular = useQuery({
     queryKey: ['artist-top-tracks', artistId, conn.serverUrl],

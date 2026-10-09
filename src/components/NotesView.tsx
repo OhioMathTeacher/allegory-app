@@ -10,6 +10,8 @@ import type { Artist } from '../lib/types'
 
 interface NotesViewProps {
   onBack: () => void
+  /** Names the screen back returns to. */
+  backLabel: string
   onSelectArtist: (artist: Artist) => void
 }
 
@@ -18,7 +20,7 @@ interface NotesViewProps {
  * (the illuminated-pencil songs). Read-only and always in sync with the
  * library — there's no .m3u behind it, just the live set of annotated tracks.
  */
-export function NotesView({ onBack, onSelectArtist }: NotesViewProps) {
+export function NotesView({ onBack, backLabel, onSelectArtist }: NotesViewProps) {
   const conn = useConnected()
   const player = usePlayer()
 
@@ -39,10 +41,10 @@ export function NotesView({ onBack, onSelectArtist }: NotesViewProps) {
     <div className="px-8 py-8">
       <button
         onClick={onBack}
-        className="mb-7 flex items-center gap-2 text-base font-semibold text-white transition-colors hover:text-white/80"
+        className="mb-7 flex max-w-full items-center gap-2 text-base font-semibold text-white transition-colors hover:text-white/80"
       >
-        <ArrowLeft className="h-5 w-5" />
-        Playlists
+        <ArrowLeft className="h-5 w-5 shrink-0" />
+        <span className="truncate">{backLabel}</span>
       </button>
 
       <div className="flex flex-col gap-6 sm:flex-row sm:items-end">

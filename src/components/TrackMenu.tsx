@@ -13,6 +13,7 @@ import type { Playlist, Track } from '../lib/types'
 import { bumpPlaylist, sortByRecency } from '../lib/playlist-recency'
 import { TagPicker } from './TagPicker'
 import { downloadTrack, removeDownload, useDownloadStatus } from '../lib/downloads'
+import { menuPosition, type MenuPos } from '../lib/menu-position'
 
 interface TrackMenuProps {
   track: Track
@@ -35,12 +36,7 @@ export function TrackMenu({ track, excludePlaylistId }: TrackMenuProps) {
   const buttonRef = useRef<HTMLButtonElement>(null)
 
   const [open, setOpen] = useState(false)
-  const [pos, setPos] = useState<{
-    top?: number
-    bottom?: number
-    right: number
-    maxHeight: number
-  }>({ top: 0, right: 0, maxHeight: 0 })
+  const [pos, setPos] = useState<MenuPos>({ top: 0, right: 0, maxHeight: 0 })
   const [creating, setCreating] = useState(false)
   const [newName, setNewName] = useState('')
   const [busy, setBusy] = useState(false)
@@ -78,23 +74,7 @@ export function TrackMenu({ track, excludePlaylistId }: TrackMenuProps) {
   function openMenu() {
     const r = buttonRef.current?.getBoundingClientRect()
     if (r) {
-      // Anchoring to the button's bottom and trusting max-height is not
-      // enough: on a track low in the list the box starts near the foot of
-      // the window and runs off the screen, and its own scrollbar cannot
-      // help because the scroll container's bottom edge is off-screen too.
-      // So measure the room on each side, open into whichever is larger,
-      // and cap the height to what is actually there.
-      const GAP = 6
-      const MARGIN = 12 // never touch the very edge of the window
-      const below = window.innerHeight - r.bottom - GAP - MARGIN
-      const above = r.top - GAP - MARGIN
-      const dropUp = below < 220 && above > below
-      setPos({
-        top: dropUp ? undefined : r.bottom + GAP,
-        bottom: dropUp ? window.innerHeight - r.top + GAP : undefined,
-        right: window.innerWidth - r.right,
-        maxHeight: Math.max(160, Math.min(dropUp ? above : below, window.innerHeight * 0.6)),
-      })
+      setPos(menuPosition(r))
     }
     setOpen(true)
   }
@@ -203,6 +183,7 @@ export function TrackMenu({ track, excludePlaylistId }: TrackMenuProps) {
               style={{
                 top: pos.top,
                 bottom: pos.bottom,
+                left: pos.left,
                 right: pos.right,
                 maxHeight: pos.maxHeight,
               }}
