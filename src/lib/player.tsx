@@ -987,8 +987,8 @@ function HostBridge() {
     if (!ws || ws.readyState !== WebSocket.OPEN) return
     ws.send(JSON.stringify({ type: 'state', state: snapshot() }))
     // Intentional: snapshot reads from a ref, so we list only the
-    // primitives whose change should trigger a publish.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // primitives whose change should trigger a publish. The rule does not
+    // object to this any more, so there is no disable directive to carry.
   }, [
     player.currentTrack,
     player.isPlaying,
