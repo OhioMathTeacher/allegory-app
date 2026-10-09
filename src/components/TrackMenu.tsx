@@ -35,7 +35,12 @@ export function TrackMenu({ track, excludePlaylistId }: TrackMenuProps) {
   const buttonRef = useRef<HTMLButtonElement>(null)
 
   const [open, setOpen] = useState(false)
-  const [pos, setPos] = useState<{ top: number; right: number }>({ top: 0, right: 0 })
+  const [pos, setPos] = useState<{
+    top?: number
+    bottom?: number
+    right: number
+    maxHeight: number
+  }>({ top: 0, right: 0, maxHeight: 0 })
   const [creating, setCreating] = useState(false)
   const [newName, setNewName] = useState('')
   const [busy, setBusy] = useState(false)
@@ -72,7 +77,25 @@ export function TrackMenu({ track, excludePlaylistId }: TrackMenuProps) {
 
   function openMenu() {
     const r = buttonRef.current?.getBoundingClientRect()
-    if (r) setPos({ top: r.bottom + 6, right: window.innerWidth - r.right })
+    if (r) {
+      // Anchoring to the button's bottom and trusting max-height is not
+      // enough: on a track low in the list the box starts near the foot of
+      // the window and runs off the screen, and its own scrollbar cannot
+      // help because the scroll container's bottom edge is off-screen too.
+      // So measure the room on each side, open into whichever is larger,
+      // and cap the height to what is actually there.
+      const GAP = 6
+      const MARGIN = 12 // never touch the very edge of the window
+      const below = window.innerHeight - r.bottom - GAP - MARGIN
+      const above = r.top - GAP - MARGIN
+      const dropUp = below < 220 && above > below
+      setPos({
+        top: dropUp ? undefined : r.bottom + GAP,
+        bottom: dropUp ? window.innerHeight - r.top + GAP : undefined,
+        right: window.innerWidth - r.right,
+        maxHeight: Math.max(160, Math.min(dropUp ? above : below, window.innerHeight * 0.6)),
+      })
+    }
     setOpen(true)
   }
 
@@ -176,8 +199,13 @@ export function TrackMenu({ track, excludePlaylistId }: TrackMenuProps) {
           <>
             <div className="fixed inset-0 z-40" onClick={close} />
             <div
-              className="fixed z-50 max-h-[60vh] min-w-[240px] overflow-y-auto rounded-lg border border-line bg-surface p-1.5 shadow-xl shadow-black/50"
-              style={{ top: pos.top, right: pos.right }}
+              className="menu-scroll fixed z-50 min-w-[240px] overflow-y-auto overscroll-contain rounded-lg border border-line bg-surface p-1.5 shadow-xl shadow-black/50"
+              style={{
+                top: pos.top,
+                bottom: pos.bottom,
+                right: pos.right,
+                maxHeight: pos.maxHeight,
+              }}
             >
             {done ? (
               <div className="flex items-center gap-2 px-2.5 py-2 text-sm text-white/75">
@@ -262,7 +290,6 @@ export function TrackMenu({ track, excludePlaylistId }: TrackMenuProps) {
                       ? 'Remove download'
                       : 'Download'}
                 </button>
-                <TagPicker trackIds={[track.id]} label="Tag this song" />
                 <div className="my-1 h-px bg-line" />
                 {canRemove && (
                   <>
@@ -330,6 +357,12 @@ export function TrackMenu({ track, excludePlaylistId }: TrackMenuProps) {
                     No other playlists yet — create one above.
                   </div>
                 )}
+                {/* Tagging sits below the playlists on purpose. It used to be
+                    above, and a song with a lot of possible tags pushed the
+                    playlists — the thing the menu is usually opened for — off
+                    the bottom. Rare actions go under common ones. */}
+                <div className="my-1 h-px bg-line" />
+                <TagPicker trackIds={[track.id]} label="Tag this song" />
               </>
             )}
             </div>

@@ -93,6 +93,23 @@ button {
   background-clip: padding-box;
 }
 
+/* Popover menus that can outgrow the screen. The page-wide thumb above is
+   deliberately almost invisible, which is right for a long page and wrong
+   for a menu: there you need to see at a glance that there is more below.
+   The stable gutter keeps the scrollbar from overlapping the item labels,
+   so a long playlist name is never hidden under the thumb. */
+.menu-scroll {
+  scrollbar-gutter: stable;
+}
+.menu-scroll::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.26);
+  background-clip: padding-box;
+}
+.menu-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.42);
+  background-clip: padding-box;
+}
+
 .glass {
   background: var(--color-bg);
 }
