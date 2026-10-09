@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'motion/react'
 import {
@@ -33,6 +33,8 @@ interface NowPlayingProps {
   onClose: () => void
   onOpenAlbum: (album: Album) => void
   onOpenArtist: (artist: Artist) => void
+  /** Open scrolled to Up next -- the player bar's Queue button. */
+  focusQueue?: boolean
 }
 
 const EASE = [0.22, 1, 0.36, 1] as const
@@ -52,12 +54,23 @@ const EASE = [0.22, 1, 0.36, 1] as const
  */
 export function NowPlaying({
   open,
+  focusQueue = false,
   onClose,
   onOpenAlbum,
   onOpenArtist,
 }: NowPlayingProps) {
   const conn = useConnected()
   const player = usePlayer()
+  // The Queue button opens straight to Up next. The panel animates in, so
+  // wait a frame for the section to exist before scrolling to it.
+  const queueRef = useRef<HTMLElement>(null)
+  useEffect(() => {
+    if (!open || !focusQueue) return
+    const raf = requestAnimationFrame(() =>
+      queueRef.current?.scrollIntoView({ block: 'start' }),
+    )
+    return () => cancelAnimationFrame(raf)
+  }, [open, focusQueue])
   const queryClient = useQueryClient()
   const track = player.currentTrack
 
@@ -263,7 +276,7 @@ export function NowPlaying({
                 </section>
 
                 {/* --- queue --- */}
-                <section className="mt-9">
+                <section ref={queueRef} className="mt-9 scroll-mt-4">
                   <div className="mb-2 flex flex-wrap items-center justify-between gap-3">
                     <h2 className="text-xl font-semibold tracking-tight">
                       Up next

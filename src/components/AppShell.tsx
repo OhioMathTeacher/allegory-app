@@ -9,6 +9,7 @@ import {
   Cast,
   ListMusic,
   X,
+  ListOrdered,
 } from 'lucide-react'
 import { useRemoteMode } from '../lib/remote-mode'
 import { RemoteControlSheet } from './RemoteControlSheet'
@@ -36,6 +37,7 @@ import { getSettings } from '../lib/api'
 import { useConnected } from '../lib/connection'
 import { NavEntryProvider, NavStore } from '../lib/nav-state'
 import { RestoreScroll } from './RestoreScroll'
+import { useStaleBuild } from '../lib/build-check'
 import type { Album, Artist, Playlist } from '../lib/types'
 
 type View =
@@ -157,6 +159,12 @@ export function AppShell() {
   // about what's happening rather than a part of the library to browse, and the
   // bar is on screen everywhere including Socrates.
   const [nowPlayingOpen, setNowPlayingOpen] = useState(false)
+  // Opened from a Queue button: land on Up next rather than the artwork.
+  const [nowPlayingQueue, setNowPlayingQueue] = useState(false)
+  function openNowPlaying(atQueue: boolean) {
+    setNowPlayingQueue(atQueue)
+    setNowPlayingOpen(true)
+  }
   const drop = useFolderDrop()
 
   // Player bar can be hidden for more chat room — only honored on the Socrates
@@ -197,6 +205,8 @@ export function AppShell() {
     if (inSearch) pauseForSearch()
     else resumeFromSearch()
   }, [inSearch, pauseForSearch, resumeFromSearch])
+
+  const { stale: staleBuild } = useStaleBuild(conn.serverUrl)
 
   const backLabel = viewLabel(prevView ?? parentOf(view))
 
@@ -307,15 +317,27 @@ export function AppShell() {
             >
               <SearchIcon className="h-7 w-7" />
             </TopButton>
-            {!__LOCAL_ONLY__ && (
+            {/* Control a computer lives in Settings now -- rarely used, and
+                its top-bar slot is worth more as the way into the queue. It
+                comes back here only while this device IS driving another
+                computer, because the lit icon is the one sign of that mode
+                and the quickest way out of it. */}
+            {!__LOCAL_ONLY__ && playerMode === 'remote' && (
               <TopButton
                 onClick={() => setRemoteSheetOpen(true)}
-                label={playerMode === 'remote' ? 'Controlling another computer' : 'Control a computer'}
-                active={playerMode === 'remote'}
+                label="Controlling another computer"
+                active
               >
                 <Cast className="h-7 w-7" />
               </TopButton>
             )}
+            <TopButton
+              onClick={() => openNowPlaying(true)}
+              label="Queue"
+              active={nowPlayingOpen && nowPlayingQueue}
+            >
+              <ListOrdered className="h-7 w-7" />
+            </TopButton>
             <TopButton
               onClick={() => resetView({ type: 'playlists' })}
               label="Playlists"
@@ -375,6 +397,26 @@ export function AppShell() {
                 </button>
               ),
             )}
+          </div>
+        )}
+
+        {/* The server was updated after this window loaded. Without this the
+            window runs the old build indefinitely -- Allegory lives minimized
+            -- and the About panel used to call that "up to date". */}
+        {staleBuild && (
+          <div className="mx-4 mt-2 flex shrink-0 items-center gap-3 rounded-lg border border-line bg-surface/80 px-3 py-2 text-sm sm:mx-8">
+            <span className="min-w-0 flex-1 text-white/85">
+              Allegory has been updated.
+              <span className="text-white/55"> Reloading stops the music.</span>
+            </span>
+            <button
+              type="button"
+              onClick={() => window.location.reload()}
+              className="shrink-0 rounded-full px-3 py-1 text-xs font-semibold text-black"
+              style={{ background: 'var(--accent)' }}
+            >
+              Reload
+            </button>
           </div>
         )}
 
@@ -471,6 +513,7 @@ export function AppShell() {
 
         <NowPlaying
           open={nowPlayingOpen}
+          focusQueue={nowPlayingQueue}
           onClose={() => setNowPlayingOpen(false)}
           onOpenAlbum={(album) => openView({ type: 'album', album })}
           onOpenArtist={(artist) => openView({ type: 'artist', artist })}
@@ -488,7 +531,8 @@ export function AppShell() {
             <PlayerBar
               onOpenAlbum={(album) => openView({ type: 'album', album })}
               onOpenArtist={(artist) => openView({ type: 'artist', artist })}
-              onExpand={() => setNowPlayingOpen(true)}
+              onExpand={() => openNowPlaying(false)}
+              onOpenQueue={() => openNowPlaying(true)}
             />
           </>
         )}
@@ -498,6 +542,14 @@ export function AppShell() {
             firstRun={firstRun}
             initialSection={settingsInitial}
             onClose={() => setSettingsOpen(false)}
+            onOpenRemote={
+              __LOCAL_ONLY__
+                ? undefined
+                : () => {
+                    setSettingsOpen(false)
+                    setRemoteSheetOpen(true)
+                  }
+            }
           />
         )}
 

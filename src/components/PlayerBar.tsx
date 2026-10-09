@@ -11,6 +11,7 @@ import {
   Repeat1,
   Pencil,
   ChevronUp,
+  ListOrdered,
 } from 'lucide-react'
 import { usePlayer } from '../lib/player'
 import { useConnected } from '../lib/connection'
@@ -27,13 +28,16 @@ interface PlayerBarProps {
   onOpenArtist: (artist: Artist) => void
   /** Expand into Now Playing (queue, notes, song details). */
   onExpand: () => void
+  /** Open Now Playing at Up next. */
+  onOpenQueue: () => void
 }
 
 // One player bar for every width — the same phone-style transport on desktop
 // and phone alike.
-export function PlayerBar({ onOpenAlbum, onOpenArtist, onExpand }: PlayerBarProps) {
+export function PlayerBar({ onOpenAlbum, onOpenArtist, onExpand, onOpenQueue }: PlayerBarProps) {
   const conn = useConnected()
   const player = usePlayer()
+  const upNext = Math.max(0, player.queue.length - player.currentIndex - 1)
   const track = player.currentTrack
   const isFav = player.isCurrentFavorite
   // Snapshot the track when the pencil is clicked, so notes lock to THAT song
@@ -113,6 +117,22 @@ export function PlayerBar({ onOpenAlbum, onOpenArtist, onExpand }: PlayerBarProp
               <div className="truncate text-lg text-white/88">{track.artist}</div>
             ))}
         </div>
+        {/* Queue — the way in to Up next, where the queue can be reordered,
+            shuffled and saved. It used to be reachable only by clicking the
+            song title, which nothing said was a door. The count is what is
+            still to come, not the whole queue. */}
+        <button
+          type="button"
+          onClick={onOpenQueue}
+          disabled={player.queue.length === 0}
+          aria-label={`Queue, ${upNext} up next`}
+          title="Queue — reorder, shuffle, save as playlist"
+          className="flex h-10 shrink-0 items-center gap-1.5 rounded-full border border-line px-3 text-sm font-medium text-white/80 transition-colors hover:bg-white/14 hover:text-white disabled:opacity-30"
+        >
+          <ListOrdered className="h-4 w-4" />
+          <span>Queue</span>
+          {upNext > 0 && <span className="tabular-nums text-white/55">{upNext}</span>}
+        </button>
         {/* Notes pencil — edit the curator notes that ground Socrates for this
             song. Filled/accent when the song already has notes. */}
         <button

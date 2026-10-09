@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Loader2, RefreshCw, Download, Check, AlertCircle, ArrowUpCircle } from 'lucide-react'
 import { useConnected } from '../lib/connection'
 import { getUpdateStatus, applyUpdate } from '../lib/api'
+import { LOADED_SHA, useStaleBuild } from '../lib/build-check'
 
 type Phase = 'idle' | 'updating' | 'timeout'
 
@@ -27,6 +28,10 @@ function stamp(version: string | undefined, sha: string | undefined): string {
 export function UpdatePanel() {
   const conn = useConnected()
   const [phase, setPhase] = useState<Phase>('idle')
+
+  // The server being current is not the same as this window being current: a
+  // window left open across an update runs the old build until reloaded.
+  const { stale: windowBehind, served } = useStaleBuild(conn.serverUrl)
 
   const { data, isLoading, refetch, isFetching } = useQuery({
     queryKey: ['update-status'],
@@ -165,6 +170,25 @@ export function UpdatePanel() {
                   {data?.behind === 1 ? '' : 's'} behind
                 </span>
               )}
+            </div>
+          ) : windowBehind ? (
+            <div className="flex flex-col items-start gap-2">
+              <div className="flex items-center gap-1.5 text-sm font-semibold text-amber-300/90">
+                <AlertCircle className="h-4 w-4 shrink-0" />
+                This window is running an older version
+              </div>
+              <div className="text-xs text-white/74">
+                Loaded {LOADED_SHA} · the server has {served}. Reloading picks it
+                up; the music stops and the song starts over.
+              </div>
+              <button
+                type="button"
+                onClick={() => window.location.reload()}
+                className="rounded-full px-3 py-1.5 text-xs font-semibold text-black"
+                style={{ background: 'var(--accent)' }}
+              >
+                Reload now
+              </button>
             </div>
           ) : (
             <div className="flex items-center gap-1.5 text-sm text-emerald-300/90">

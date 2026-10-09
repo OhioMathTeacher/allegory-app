@@ -27,6 +27,8 @@ interface SettingsProps {
   /** Which tab to open initially. Defaults to 'library'. */
   initialSection?: Section
   onClose: () => void
+  /** Opens the Control a computer sheet. Absent in local-only builds. */
+  onOpenRemote?: () => void
 }
 
 /**
@@ -52,7 +54,7 @@ function serverIdentity(serverUrl: string): { host: string; isLocal: boolean } {
   }
 }
 
-export function Settings({ firstRun, initialSection, onClose }: SettingsProps) {
+export function Settings({ firstRun, initialSection, onClose, onOpenRemote }: SettingsProps) {
   const conn = useConnected()
   const queryClient = useQueryClient()
   const server = serverIdentity(conn.serverUrl)
@@ -382,6 +384,27 @@ export function Settings({ firstRun, initialSection, onClose }: SettingsProps) {
           )}
 
           {!firstRun && <PasswordSettings />}
+
+          {/* Moved here from the top bar, whose slot now opens the queue. */}
+          {!firstRun && onOpenRemote && (
+            <div className="mt-6 border-t border-line/60 pt-5">
+              <label className="text-[11px] font-medium uppercase tracking-wide text-white/74">
+                Control a computer
+              </label>
+              <p className="mt-1 text-xs text-white/74">
+                Use this device as a remote for Allegory playing on another
+                computer: the music comes out of that computer's speakers, and
+                this screen runs it.
+              </p>
+              <button
+                type="button"
+                onClick={onOpenRemote}
+                className="mt-2 rounded-md border border-line px-3 py-1.5 text-sm text-white/85 transition-colors hover:bg-white/14"
+              >
+                Choose a computer…
+              </button>
+            </div>
+          )}
 
           {!firstRun && (
             <div className="mt-6 border-t border-line/60 pt-5">
