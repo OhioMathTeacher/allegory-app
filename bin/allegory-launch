@@ -188,6 +188,8 @@ case "$(uname -s)" in
   *)      APP_DATA="${XDG_DATA_HOME:-$HOME/.local/share}/allegory" ;;
 esac
 FF_PROFILE="$APP_DATA/firefox-app"
+# Keep in step with bin/allegory-playpause, which finds the window by this path.
+CHROMIUM_PROFILE="$APP_DATA/chromium-app"
 
 # A Firefox profile that behaves like an application window.
 #
@@ -467,9 +469,20 @@ open_browser() {
   # A natively packaged Chromium next: --app= is a supported flag doing exactly
   # what it says, where the Firefox path below is a stylesheet reaching into
   # someone else's UI that holds only as long as that UI keeps its element IDs.
+  #
+  # On Linux it gets a profile of its own. Sharing the user's profile means
+  # sharing their browser process, and Chromium publishes one MPRIS player per
+  # process — so bin/allegory-playpause, behind the panel icon's "Pause / Play",
+  # could not tell Allegory from a YouTube tab. A separate profile is a separate
+  # process with its own bus name. macOS is left alone: its raise path asks the
+  # browser by bundle name, which a second instance would confuse.
   local chromium
   if chromium="$(chromium_app_command)"; then
-    chromium_env $chromium --app="$url" --class=Allegory >/dev/null 2>&1 &
+    local profile=()
+    if [ "$(uname -s)" != "Darwin" ]; then
+      profile=(--user-data-dir="$CHROMIUM_PROFILE" --no-first-run --no-default-browser-check)
+    fi
+    chromium_env $chromium ${profile[@]+"${profile[@]}"} --app="$url" --class=Allegory >/dev/null 2>&1 &
     return
   fi
 

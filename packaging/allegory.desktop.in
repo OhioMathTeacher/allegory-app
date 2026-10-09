@@ -10,6 +10,13 @@ Terminal=false
 Categories=AudioVideo;Audio;Player;
 Keywords=music;audio;player;allegory;
 StartupNotify=true
+# Right-click the panel icon. See bin/allegory-playpause.
+Actions=PlayPause;
 # allegory-launch passes --class Allegory to whichever browser it opens, so
 # the app window groups under this icon instead of under Firefox/Chrome.
 StartupWMClass=Allegory
+
+[Desktop Action PlayPause]
+Name=Pause / Play
+Icon=media-playback-pause
+Exec=__REPO__/bin/allegory-playpause

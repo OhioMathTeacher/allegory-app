@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import type { MouseEvent } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Music2, Play, Loader2 } from 'lucide-react'
@@ -103,9 +103,23 @@ export function Artists({ onSelectArtist }: ArtistsProps) {
     return SECTIONS.includes(first) ? first : '#'
   })
 
+  const topRef = useRef<HTMLDivElement>(null)
+  const headerRef = useRef<HTMLElement>(null)
+  const [headerHeight, setHeaderHeight] = useState(0)
+  useEffect(() => {
+    const el = headerRef.current
+    if (!el) return
+    const ro = new ResizeObserver(() => setHeaderHeight(el.offsetHeight))
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+
   function pick(key: { letters: string[] }) {
     const first = key.letters[0]
     setAnchor(first)
+    // The pad now stays on screen mid-list, so a new key must start at its
+    // first artist, not wherever the old key's scroll position lands.
+    topRef.current?.scrollIntoView({ block: 'start' })
     try {
       localStorage.setItem(SELECTED_KEY, first)
     } catch {
@@ -122,20 +136,70 @@ export function Artists({ onSelectArtist }: ArtistsProps) {
     queryFn: () => getArtists(conn),
   })
 
+  // Three keys on a phone, nine once there's width for them. Only offer keys
+  // that hold something, and never leave the page empty if a stored choice has
+  // since been emptied out.
+  const byLetter = artists ? groupByLetter(artists) : []
+  const counts = new Map(byLetter.map(([l, g]) => [l, g.length]))
+  const sizeOf = (k: (typeof KEYPAD)[number]) =>
+    k.letters.reduce((n, l) => n + (counts.get(l) ?? 0), 0)
+  const keys = (isMobile ? MOBILE_KEYPAD : KEYPAD).filter((k) => sizeOf(k) > 0)
+  const active = keys.find((k) => k.letters.includes(anchor)) ?? keys[0]
+  const shown = active
+    ? byLetter.filter(([l]) => active.letters.includes(l))
+    : []
+
   return (
-    <div>
-      {/* The tab row already names the section; on a phone this big title is
-          redundant and costs a screenful, so it shows only from `sm` up. */}
-      <header className="sticky top-0 z-10 hidden bg-bg/95 px-4 pt-6 pb-4 backdrop-blur sm:block sm:px-8 sm:pt-8">
-        <h1 className="text-3xl font-semibold tracking-tight">Artists</h1>
-        <p className="mt-1 text-sm text-white/85">
-          {artists
-            ? `${artists.length} artist${artists.length === 1 ? '' : 's'}`
-            : 'Your music library'}
-        </p>
+    <div ref={topRef}>
+      {/* One sticky bar: a small title and the pad, so the keys stay in reach
+          however far down a 98-artist key you have scrolled. The tab row
+          already names the section on a phone, so the title shows only from
+          `sm` up. */}
+      <header
+        ref={headerRef}
+        className="sticky top-0 z-10 flex flex-wrap items-center gap-x-5 gap-y-2 bg-bg/95 px-4 py-3 backdrop-blur sm:px-8 sm:pt-6"
+      >
+        <div className="hidden items-baseline gap-2 sm:flex">
+          <h1 className="text-2xl font-semibold tracking-tight">Artists</h1>
+          {artists && (
+            <span className="text-sm tabular-nums text-white/60">
+              {artists.length}
+            </span>
+          )}
+        </div>
+        {active && (
+          <div className="grid flex-1 grid-cols-3 gap-1.5 sm:flex sm:flex-none sm:flex-wrap">
+            {keys.map((k) => {
+              const on = k.label === active.label
+              return (
+                <button
+                  key={k.label}
+                  type="button"
+                  onClick={() => pick(k)}
+                  aria-pressed={on}
+                  style={on ? { background: 'var(--accent)' } : undefined}
+                  className={`flex flex-col items-center justify-center rounded-lg px-3 py-1.5 tabular-nums transition-colors sm:min-w-[68px] ${
+                    on
+                      ? 'text-black'
+                      : 'border border-line bg-elevated text-white/80 hover:bg-white/10 hover:text-white'
+                  }`}
+                >
+                  <span className="text-base font-semibold leading-none tracking-wide">
+                    {k.label}
+                  </span>
+                  <span
+                    className={`mt-1 text-[11px] leading-none ${on ? 'text-black/60' : 'text-white/45'}`}
+                  >
+                    {sizeOf(k)}
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+        )}
       </header>
 
-      <div className="px-4 pb-8 pt-4 sm:px-8 sm:pt-0">
+      <div className="px-4 pb-8 pt-2 sm:px-8">
         {isLoading && <SkeletonList />}
 
         {isError && (
@@ -151,76 +215,32 @@ export function Artists({ onSelectArtist }: ArtistsProps) {
           </div>
         )}
 
-        {artists && artists.length > 0 && (() => {
-          const byLetter = groupByLetter(artists)
-          const counts = new Map(byLetter.map(([l, g]) => [l, g.length]))
-          const sizeOf = (k: (typeof KEYPAD)[number]) =>
-            k.letters.reduce((n, l) => n + (counts.get(l) ?? 0), 0)
-          // Three keys on a phone, nine once there's width for them. Only offer
-          // keys that hold something, and never leave the page empty if a stored
-          // choice has since been emptied out.
-          const keys = (isMobile ? MOBILE_KEYPAD : KEYPAD).filter(
-            (k) => sizeOf(k) > 0,
-          )
-          const active = keys.find((k) => k.letters.includes(anchor)) ?? keys[0]
-          const shown = byLetter.filter(([l]) => active.letters.includes(l))
-
-          return (
-            <>
-              {/* 3x3 dialpad on a phone, one row once there's width for it. */}
-              <div className="mb-5 grid grid-cols-3 gap-1.5 sm:flex sm:flex-wrap">
-                {keys.map((k) => {
-                  const on = k.label === active.label
-                  return (
-                    <button
-                      key={k.label}
-                      type="button"
-                      onClick={() => pick(k)}
-                      aria-pressed={on}
-                      style={on ? { background: 'var(--accent)' } : undefined}
-                      className={`flex flex-col items-center justify-center rounded-lg px-3 py-2 tabular-nums transition-colors sm:min-w-[76px] ${
-                        on
-                          ? 'text-black'
-                          : 'border border-line bg-elevated text-white/80 hover:bg-white/10 hover:text-white'
-                      }`}
-                    >
-                      <span className="text-base font-semibold leading-none tracking-wide">
-                        {k.label}
-                      </span>
-                      <span
-                        className={`mt-1 text-[11px] leading-none ${on ? 'text-black/60' : 'text-white/45'}`}
-                      >
-                        {sizeOf(k)}
-                      </span>
-                    </button>
-                  )
-                })}
-              </div>
-
-              {/* Rolodex dividers: a 98-artist key still needs signposts. */}
-              {shown.map(([letter, group]) => (
-                <div key={letter}>
-                  <div className="sticky top-0 z-[5] flex items-baseline gap-2 bg-bg/95 py-1 backdrop-blur sm:top-[104px]">
-                    <span className="text-lg font-bold tracking-tight text-white/90">
-                      {letter}
-                    </span>
-                    <span className="text-xs text-white/40">{group.length}</span>
-                  </div>
-                  <div className="flex flex-col">
-                    {group.map((artist, i) => (
-                      <ArtistRow
-                        key={artist.id}
-                        artist={artist}
-                        index={i}
-                        onSelect={onSelectArtist}
-                      />
-                    ))}
-                  </div>
-                </div>
+        {/* Rolodex dividers: a 98-artist key still needs signposts. They stick
+            just under the bar, whose height is measured rather than assumed —
+            the pad wraps to a second row in a narrow window. */}
+        {shown.map(([letter, group]) => (
+          <div key={letter}>
+            <div
+              className="sticky z-[5] flex items-baseline gap-2 bg-bg/95 py-1 backdrop-blur"
+              style={{ top: headerHeight }}
+            >
+              <span className="text-lg font-bold tracking-tight text-white/90">
+                {letter}
+              </span>
+              <span className="text-xs text-white/40">{group.length}</span>
+            </div>
+            <div className="flex flex-col">
+              {group.map((artist, i) => (
+                <ArtistRow
+                  key={artist.id}
+                  artist={artist}
+                  index={i}
+                  onSelect={onSelectArtist}
+                />
               ))}
-            </>
-          )
-        })()}
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   )

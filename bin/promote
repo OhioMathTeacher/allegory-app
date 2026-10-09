@@ -38,6 +38,7 @@ EXCLUDES=(
   --exclude='CLAUDE.md' --exclude='REFERENCE.md' --exclude='ROADMAP.md'
   --exclude='HANDOFF*.md' --exclude='DESIGN-*.md' --exclude='version-2-vision.md'
   --exclude='tools/library-maintenance/'
+  --exclude='NEXT-STEPS.md'
   # .env can hold keys. Prod's .gitignore already refuses to commit one, but a
   # gitignore is one edit away from not doing that, and prod is the public repo.
   # Belt and suspenders: do not copy it at all. The committed .env.example is

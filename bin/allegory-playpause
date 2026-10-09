@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+# Pause or resume Allegory without raising its window. Behind "Pause / Play" in
+# the right-click menu of the Allegory panel icon (packaging/allegory.desktop.in).
+#
+# The app publishes a Media Session, which Chromium exposes on the session bus
+# as an MPRIS player named org.mpris.MediaPlayer2.<browser>.instance<PID>, one
+# per browser process. bin/allegory-launch gives the Allegory window a profile
+# of its own, so its process — and therefore its bus name — is Allegory's alone,
+# never a YouTube tab in the user's everyday browser. We find that process by
+# its profile path and send PlayPause to the matching name. dbus-send ships with
+# every desktop; nothing to install.
+#
+# Linux only. A window opened before the separate profile existed shares the
+# user's browser process and is not found; reopen Allegory once.
+set -euo pipefail
+
+PROFILE="${XDG_DATA_HOME:-$HOME/.local/share}/allegory/chromium-app"
+
+say() {
+  command -v notify-send >/dev/null 2>&1 && notify-send -i audio-x-generic "Allegory" "$1" || echo "$1" >&2
+}
+
+# The browser process is the one without --type=; renderers and the GPU
+# process carry the profile path too.
+pid="$(pgrep -f -- "--user-data-dir=$PROFILE" | while read -r p; do
+  tr '\0' '\n' < "/proc/$p/cmdline" 2>/dev/null | grep -q '^--type=' || { echo "$p"; break; }
+done)"
+if [ -z "$pid" ]; then
+  say "Allegory isn't open."
+  exit 1
+fi
+
+name="$(dbus-send --session --print-reply --dest=org.freedesktop.DBus \
+          /org/freedesktop/DBus org.freedesktop.DBus.ListNames 2>/dev/null |
+        grep -o "org\.mpris\.MediaPlayer2\.[A-Za-z0-9_.-]*\.instance$pid\"" |
+        tr -d '"' | head -1 || true)"
+if [ -z "$name" ]; then
+  # Chromium registers the player only once something has played.
+  say "Nothing has played yet."
+  exit 1
+fi
+
+dbus-send --session --type=method_call --dest="$name" \
+  /org/mpris/MediaPlayer2 org.mpris.MediaPlayer2.Player.PlayPause

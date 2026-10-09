@@ -6,10 +6,9 @@ interface LogoProps {
 }
 
 /**
- * Allegory mark — placeholder. Five vertical bars of graduated height,
- * read as: a spectrum, columns, fire-shadows on a wall, prison-bar
- * silhouette. The design conversation is open; this is the baseline we
- * came back to after the flying-V was rejected as too literal.
+ * Allegory mark. GENERATED — do not edit.
+ * Source: tools/make-icons.mjs (mark: cave). Re-run that to change it,
+ * so the on-screen logo and the app icons cannot drift apart.
  */
 export function Logo({ className, style }: LogoProps) {
   return (
@@ -22,11 +21,11 @@ export function Logo({ className, style }: LogoProps) {
       role="img"
       aria-label="Allegory"
     >
-      <rect x="2"    y="4" width="2.4" height="5"  rx="1.2" />
-      <rect x="6.4"  y="4" width="2.4" height="10" rx="1.2" />
-      <rect x="10.8" y="4" width="2.4" height="18" rx="1.2" />
-      <rect x="15.2" y="4" width="2.4" height="10" rx="1.2" />
-      <rect x="19.6" y="4" width="2.4" height="5"  rx="1.2" />
+      <circle cx="12" cy="3.5" r="2.3"/>
+      <path d="M10.75 9.2h2.5l2.45 11.1h-7.4z"/>
+      <path d="M6.9 9.6h2.0l-2.5 10.7h-4.3z" opacity="0.6"/>
+      <path d="M15.1 9.6h2.0l4.8 10.7h-4.3z" opacity="0.6"/>
+      <rect x="0.8" y="20.8" width="22.4" height="1.6" rx="0.8"/>
     </svg>
   )
 }

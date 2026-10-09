@@ -22,7 +22,7 @@ import sharp from 'sharp'
 const REPO = join(dirname(fileURLToPath(import.meta.url)), '..')
 
 // The mark the app ships. Change this line to adopt a candidate.
-const CHOSEN = 'bars'
+const CHOSEN = 'cave'
 
 const INK = '#818cf8' // --accent, src/index.css
 const FIELD = '#09090b' // --background / manifest theme_color
