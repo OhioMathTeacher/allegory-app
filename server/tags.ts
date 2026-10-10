@@ -296,6 +296,41 @@ export function createTags(cacheDir: string): Tags {
     return treeCache
   }
 
+  // What the genre import should do with a name that is no longer a tag.
+  // Merging a tag records "its old name means the target"; deleting one
+  // records "skip this name". Without it the boot-time import (plugin.ts)
+  // re-reads every file's genre frames and recreates whatever was merged or
+  // deleted -- on 2026-10-09 that would have turned 10 consolidated genres
+  // back into 70 on the next restart.
+  const aliasFile = join(cacheDir, 'tag-aliases.json')
+  let aliasCache: Record<string, string | null> | null = null
+
+  async function loadAliases(): Promise<Record<string, string | null>> {
+    if (aliasCache) return aliasCache
+    try {
+      const parsed = JSON.parse(await readFile(aliasFile, 'utf8')) as {
+        aliases?: Record<string, string | null>
+      }
+      aliasCache = parsed.aliases && typeof parsed.aliases === 'object' ? parsed.aliases : {}
+    } catch {
+      aliasCache = {}
+    }
+    return aliasCache
+  }
+
+  /** Point `name` at `targetId` (null = skip it), and re-point any alias that
+   *  led to `fromId`, so a chain of merges still lands on the survivor. */
+  async function recordAlias(name: string, fromId: string, targetId: string | null): Promise<void> {
+    const aliases = { ...(await loadAliases()) }
+    for (const k of Object.keys(aliases)) if (aliases[k] === fromId) aliases[k] = targetId
+    aliases[norm(name)] = targetId
+    aliasCache = aliases
+    await mkdir(cacheDir, { recursive: true })
+    const tmp = aliasFile + '.tmp'
+    await writeFile(tmp, JSON.stringify({ version: 1, aliases }, null, 1) + '\n', 'utf8')
+    await rename(tmp, aliasFile)
+  }
+
   async function saveTree(tags: Tag[]): Promise<void> {
     treeCache = tags
     await mkdir(cacheDir, { recursive: true })
@@ -432,6 +467,8 @@ export function createTags(cacheDir: string): Tags {
       throw new Error(`There is already a tag called \u201c${clash.name}\u201d here.`)
     }
     await saveTree(tags.map((t) => (t.id === id ? { ...t, name: clean } : t)))
+    // The files still say the old name; keep it pointing here.
+    if (norm(self.name) !== norm(clean)) await recordAlias(self.name, id, id)
     return { ...self, name: clean }
   }
 
@@ -519,6 +556,7 @@ export function createTags(cacheDir: string): Tags {
         .map((t) => (t.parentId === id ? { ...t, parentId: self.parentId } : t)),
     )
     await removeFromTracks(carriers, id)
+    await recordAlias(self.name, id, null)
   }
 
   async function mergeTags(sourceId: string, targetId: string, dirs: string[]): Promise<void> {
@@ -553,6 +591,7 @@ export function createTags(cacheDir: string): Tags {
       }
       return true
     })
+    await recordAlias(source.name, sourceId, targetId)
   }
 
   async function tagsForTrack(path: string): Promise<TrackTags> {
@@ -666,7 +705,19 @@ export function createTags(cacheDir: string): Tags {
 
     let tagsCreated = 0
     const idFor = new Map<string, string>()
+    const aliases = await loadAliases()
+    const live = new Set(buildTree(await loadTree()).all().map((t) => t.id))
     for (const [key, name] of wanted) {
+      // A name merged away goes to what it was merged into; a deleted one is
+      // skipped. An alias whose target has since gone falls through to normal.
+      if (key in aliases) {
+        const to = aliases[key]
+        if (to === null) continue
+        if (live.has(to)) {
+          idFor.set(key, to)
+          continue
+        }
+      }
       // Flat existing genres become root-level tags, per the plan. But a genre
       // Todd has since filed under a parent must not be duplicated back at the
       // root, so an existing tag of that name is looked for anywhere in the

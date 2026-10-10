@@ -392,3 +392,34 @@ test('combining albums carries the tags with the files', async (t) => {
     [blues.id],
   )
 })
+
+test('a merged, deleted or renamed genre is not recreated by the boot-time import', async (t) => {
+  // 2026-10-09: 70 ripper genres were consolidated into 10 by merging and
+  // deleting. migrateGenres runs on every boot and re-reads the files' genre
+  // frames, so without aliases the next restart recreated all of them.
+  const f = await fixture()
+  t.after(f.cleanup)
+  const tracks = [
+    { path: f.trackA, genres: ['Pop/Rock', 'Unknown'] },
+    { path: f.trackB, genres: ['Classic Rock'] },
+  ]
+  await f.tags.migrateGenres(tracks)
+  const all = () => f.tags.tree().then((tr) => tr.all())
+  const byName = async (n: string) => (await all()).find((x) => x.name === n)!
+
+  const rock = await f.tags.createTag('Rock', 'genre', null)
+  await f.tags.mergeTags((await byName('Pop/Rock')).id, rock.id, [f.albumDir])
+  await f.tags.mergeTags((await byName('Classic Rock')).id, rock.id, [f.albumDir])
+  await f.tags.removeTag((await byName('Unknown')).id, [f.albumDir])
+  await f.tags.renameTag(rock.id, 'Rock & Pop')
+
+  const again = await f.tags.migrateGenres(tracks)
+  assert.equal(again.tagsCreated, 0, 'a merged, deleted or renamed name came back')
+  assert.deepEqual((await all()).map((x) => x.name), ['Rock & Pop'])
+  assert.equal((await f.tags.counts([f.albumDir]))[rock.id], 2)
+
+  // And the aliases survive a fresh process: a new store over the same cache.
+  const fresh = createTags(f.cache)
+  const third = await fresh.migrateGenres(tracks)
+  assert.equal(third.tagsCreated, 0)
+})
