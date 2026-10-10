@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   AlertCircle,
-  Filter as FilterIcon,
   Loader2,
   RefreshCw,
   Save,
@@ -173,13 +172,9 @@ export function SmartPlaylists() {
   const saved = filters.data ?? []
 
   return (
-    <div className="mt-4 border-t border-line/60 pt-4">
+    <div>
       <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2 text-sm text-white/80">
-          <FilterIcon className="h-3.5 w-3.5" />
-          Smart playlists
-        </div>
-        <div className="mt-0.5 text-xs text-white/74">
+        <div className="text-xs text-white/74">
           Save a question about your library — “Blues, nothing I’ve played more than
           three times” — and write its answer to an ordinary <code>.m3u</code>, so
           Navidrome and Amperfy see it like any other playlist.

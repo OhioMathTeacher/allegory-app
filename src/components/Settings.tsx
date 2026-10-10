@@ -1,6 +1,20 @@
 import { useEffect, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Check, X, Loader2, AlertCircle, FolderSearch, RefreshCw } from 'lucide-react'
+import {
+  Check,
+  X,
+  Loader2,
+  AlertCircle,
+  FolderSearch,
+  RefreshCw,
+  Tag as TagIcon,
+  Filter as FilterIcon,
+  Copy,
+  Gauge,
+  Lock,
+  Cast,
+  KeyRound,
+} from 'lucide-react'
 import { useConnected } from '../lib/connection'
 import {
   getSettings,
@@ -19,6 +33,7 @@ import { TagTreePanel } from './TagTreePanel'
 import { SmartPlaylists } from './SmartPlaylists'
 import { PasswordSettings } from './PasswordSettings'
 import { LoudnessPanel } from './LoudnessPanel'
+import { SettingsSection } from './SettingsSection'
 
 type Section = 'library' | 'ai' | 'diagnostics'
 
@@ -349,12 +364,12 @@ export function Settings({ firstRun, initialSection, onClose, onOpenRemote }: Se
             </div>
           )}
 
+          {/* Everything below folds away: eight stacked panels, one of them a
+              seventy-row tag list, made this dialog scroll for screens. */}
           {!firstRun && (
-            <div className="mt-6 border-t border-line/60 pt-5">
-              <label className="text-[11px] font-medium uppercase tracking-wide text-white/74">
-                Maintenance
-              </label>
-              <div className="mt-2 flex items-center justify-between gap-3">
+            <div className="mt-6">
+            <SettingsSection id="rescan" title="Rescan library" icon={<RefreshCw className="h-3.5 w-3.5" />}>
+              <div className="flex items-center justify-between gap-3">
                 <div className="min-w-0 flex-1">
                   <div className="text-sm text-white/80">Rescan library</div>
                   <div className="mt-0.5 text-xs text-white/74">
@@ -378,22 +393,27 @@ export function Settings({ firstRun, initialSection, onClose, onOpenRemote }: Se
               <p className="mt-3 text-[11px] text-white/66">
                 You can also drag a folder anywhere in the app to add it to your library.
               </p>
+            </SettingsSection>
+            <SettingsSection id="tags" title="Library tags" icon={<TagIcon className="h-3.5 w-3.5" />}>
               <TagTreePanel />
+            </SettingsSection>
+            <SettingsSection id="smart" title="Smart playlists" icon={<FilterIcon className="h-3.5 w-3.5" />}>
               <SmartPlaylists />
+            </SettingsSection>
+            <SettingsSection id="dupes" title="Duplicate files" icon={<Copy className="h-3.5 w-3.5" />}>
               <DuplicateFinder />
+            </SettingsSection>
+            <SettingsSection id="loudness" title="Level the volume" icon={<Gauge className="h-3.5 w-3.5" />}>
               <LoudnessPanel />
-            </div>
-          )}
-
-          {!firstRun && <PasswordSettings />}
+            </SettingsSection>
+            <SettingsSection id="password" title="Password" icon={<Lock className="h-3.5 w-3.5" />}>
+              <PasswordSettings />
+            </SettingsSection>
 
           {/* Moved here from the top bar, whose slot now opens the queue. */}
-          {!firstRun && onOpenRemote && (
-            <div className="mt-6 border-t border-line/60 pt-5">
-              <label className="text-[11px] font-medium uppercase tracking-wide text-white/74">
-                Control a computer
-              </label>
-              <p className="mt-1 text-xs text-white/74">
+          {onOpenRemote && (
+            <SettingsSection id="remote" title="Control a computer" icon={<Cast className="h-3.5 w-3.5" />}>
+              <p className="text-xs text-white/74">
                 Use this device as a remote for Allegory playing on another
                 computer: the music comes out of that computer's speakers, and
                 this screen runs it.
@@ -405,15 +425,12 @@ export function Settings({ firstRun, initialSection, onClose, onOpenRemote }: Se
               >
                 Choose a computer…
               </button>
-            </div>
+            </SettingsSection>
           )}
 
-          {!firstRun && (
-            <div className="mt-6 border-t border-line/60 pt-5">
-              <label className="text-[11px] font-medium uppercase tracking-wide text-white/74">
-                Last.fm API key
-              </label>
-              <p className="mt-1 text-xs text-white/74">
+            <SettingsSection id="lastfm" title="Last.fm API key" icon={<KeyRound className="h-3.5 w-3.5" />}
+              note={current?.hasLastfmKey ? 'saved' : undefined}>
+              <p className="text-xs text-white/74">
                 Enables Related Artists &amp; genres on artist pages. Fetched once
                 and cached with your music, so it works offline afterwards.{' '}
                 <a
@@ -458,6 +475,7 @@ export function Settings({ firstRun, initialSection, onClose, onOpenRemote }: Se
                   {savingKey ? 'Saving…' : keySaved && !keyDirty ? 'Saved' : 'Save key'}
                 </button>
               </div>
+            </SettingsSection>
             </div>
           )}
         </div>

@@ -67,11 +67,8 @@ export function PasswordSettings() {
   const enabled = status?.enabled ?? false
 
   return (
-    <div className="mt-6 border-t border-line/60 pt-5">
-      <label className="text-[11px] font-medium uppercase tracking-wide text-white/74">
-        Password
-      </label>
-      <p className="mt-1 text-xs text-white/74">
+    <div>
+      <p className="text-xs text-white/74">
         {enabled
           ? 'This library asks for a password over the network. The machine it runs on is never asked.'
           : 'Anyone who can reach this machine on the network can browse and play your library. A password stops that.'}

@@ -74,11 +74,10 @@ export function DuplicateFinder() {
   }
 
   return (
-    <div className="mt-4 border-t border-line/60 pt-4">
+    <div>
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0 flex-1">
-          <div className="text-sm text-white/80">Find duplicate files</div>
-          <div className="mt-0.5 text-xs text-white/74">
+          <div className="text-xs text-white/74">
             {scanning
               ? 'Hashing files that share a size…'
               : 'Looks for the same audio stored twice. Nothing is deleted without your say-so.'}

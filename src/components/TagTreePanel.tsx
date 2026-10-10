@@ -8,7 +8,6 @@ import {
   Loader2,
   Merge,
   RefreshCw,
-  Tag as TagIcon,
   Trash2,
   X,
 } from 'lucide-react'
@@ -307,14 +306,10 @@ export function TagTreePanel() {
   const suggestions = pending.data ?? []
 
   return (
-    <div className="mt-4 border-t border-line/60 pt-4">
+    <div>
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2 text-sm text-white/80">
-            <TagIcon className="h-3.5 w-3.5" />
-            Library tags
-          </div>
-          <div className="mt-0.5 text-xs text-white/74">
+          <div className="text-xs text-white/74">
             Your own hierarchy — file Delta blues under Blues and a filter for Blues
             finds both. Stored beside the music, so it travels with the drive.
           </div>
