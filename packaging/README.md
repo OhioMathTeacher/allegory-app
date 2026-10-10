@@ -18,11 +18,20 @@ From the repo root:
 ./packaging/install-launcher.sh
 ```
 
-The installer does two idempotent things:
+The installer does three idempotent things:
 
-1. Writes a personalised copy of `allegory.desktop.in` (with the repo path
+1. **Installs the mark into your icon theme** as
+   `~/.local/share/icons/hicolor/scalable/apps/allegory.svg` — a symlink to
+   `public/favicon.svg`, so there is still only one copy of the mark.
+   The `.desktop` then asks for it by *name* (`Icon=allegory`) rather than by
+   path. This matters: Cinnamon caches a rasterised absolute-path icon by
+   `(path, size)` and never re-stats the file, so regenerating the mark in
+   place used to leave the panel drawing the previous one until you restarted
+   Cinnamon. A named icon lives in a theme, and touching a theme makes GTK
+   emit `::changed`, which is the signal that actually drops the cache.
+2. Writes a personalised copy of `allegory.desktop.in` (with the repo path
    filled in) to `~/.local/share/applications/allegory.desktop`.
-2. **On Cinnamon, pins it to the panel automatically.** This is the step
+3. **On Cinnamon, pins it to the panel automatically.** This is the step
    that bit us on every fresh install. Cinnamon is *not* GNOME: dropping a
    `.desktop` into the apps folder does **not** auto-create a panel icon the
    way GNOME Shell does. A panel icon in Cinnamon is an explicit *pin* into
@@ -31,8 +40,9 @@ The installer does two idempotent things:
    (backing up each config it touches as `*.json.bak`).
 
 Re-run the script any time — it's safe to run repeatedly (skips the pin if
-it's already there) and you should re-run it after moving the repo to a new
-path or setting up a new machine.
+it's already there), and you should re-run it after moving the repo to a new
+path, after changing the mark with `tools/make-icons.mjs`, or when setting up
+a new machine.
 
 ### After install: reload Cinnamon
 
