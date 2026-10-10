@@ -134,8 +134,14 @@ export function AppShell() {
     [navStore, top.id, getScroller],
   )
 
+  // Now Playing is an overlay on the page, not a page. Navigating while it is
+  // open used to change the page *underneath* it, so the Playlists button lit
+  // up beside a still-lit Queue and the playlists stayed hidden. Every
+  // navigation closes it first.
+
   /** Open a screen on top of the current one. */
   function openView(next: View) {
+    setNowPlayingOpen(false)
     // Re-opening what is already showing (the artist link on that artist's
     // own album, twice) would make back appear to do nothing.
     if (viewIdentity(view) === viewIdentity(next)) return
@@ -143,8 +149,12 @@ export function AppShell() {
     setStack((s) => [...s, { id: navStore.newId(), view: next }].slice(-MAX_STACK))
   }
   /** Start over at a top-level window. */
-  const resetView = (next: View) => setStack([{ id: navStore.newId(), view: next }])
+  function resetView(next: View) {
+    setNowPlayingOpen(false)
+    setStack([{ id: navStore.newId(), view: next }])
+  }
   function goBack() {
+    setNowPlayingOpen(false)
     setStack((s) =>
       s.length > 1 ? s.slice(0, -1) : [{ id: navStore.newId(), view: parentOf(s[0].view) }],
     )
@@ -332,7 +342,10 @@ export function AppShell() {
               </TopButton>
             )}
             <TopButton
-              onClick={() => openNowPlaying(true)}
+              onClick={() =>
+                // A toggle, like Search and Socrates: press again to close.
+                nowPlayingOpen && nowPlayingQueue ? setNowPlayingOpen(false) : openNowPlaying(true)
+              }
               label="Queue"
               active={nowPlayingOpen && nowPlayingQueue}
             >

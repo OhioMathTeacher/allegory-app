@@ -175,6 +175,30 @@ export interface UpdateStatus {
 }
 
 /** Check whether a newer version is published (server runs `git fetch`). */
+export interface LoudnessStatus {
+  total: number
+  measured: number
+  failed: number
+  running: boolean
+  done: number
+  todo: number
+  targetLufs: number
+}
+
+export async function getLoudnessStatus(conn: Connection): Promise<LoudnessStatus> {
+  return getJson<LoudnessStatus>(conn, '/loudness/status')
+}
+
+/** Start the one-time loudness measurement (a no-op if one is running). */
+export async function startLoudnessMeasure(conn: Connection): Promise<LoudnessStatus> {
+  return send<LoudnessStatus>(conn, 'POST', '/loudness/measure')
+}
+
+/** Track id -> gain in dB (always <= 0) for every measured track. */
+export async function getLoudnessGains(conn: Connection): Promise<Record<string, number>> {
+  return getJson<Record<string, number>>(conn, '/loudness')
+}
+
 export async function getUpdateStatus(conn: Connection): Promise<UpdateStatus> {
   return getJson<UpdateStatus>(conn, '/update/status')
 }

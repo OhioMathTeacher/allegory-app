@@ -8,7 +8,8 @@ import {
 } from 'react'
 import type { ReactNode } from 'react'
 import type { Track } from './types'
-import { audioStreamUrl, trackImageUrl, reportPlay, getMoreMixTracks } from './api'
+import { audioStreamUrl, trackImageUrl, reportPlay, getMoreMixTracks, getLoudnessGains } from './api'
+import { useQuery } from '@tanstack/react-query'
 import { useConnected } from './connection'
 import { extractPalette } from './colors'
 import { remoteUrl } from './remote-protocol'
@@ -31,6 +32,7 @@ const OUTPUT_SUPPORTED =
 
 const OUTPUT_STORAGE_KEY = 'jsm.outputDevice'
 const VOLUME_STORAGE_KEY = 'allegory.volume'
+const LEVELING_STORAGE_KEY = 'allegory.leveling'
 const REPEAT_STORAGE_KEY = 'allegory.repeat'
 const QUEUE_STORAGE_KEY = 'allegory.queue'
 const PLAYBACK_RATE_STORAGE_KEY = 'allegory.playbackRate'
@@ -119,6 +121,25 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const refillingRef = useRef(false)
 
   const currentTrack = currentIndex >= 0 ? queue[currentIndex] ?? null : null
+
+  // Volume leveling. The server measured each track's loudness once; the gain
+  // is how far to turn it down to match the rest (never up). The slider keeps
+  // showing the user's own volume -- the gain is applied underneath it, so
+  // turning leveling off or on never moves the slider. Declared ahead of the
+  // effect that loads each track, so the new track starts at its level.
+  const [leveling, setLevelingState] = useState(
+    () => localStorage.getItem(LEVELING_STORAGE_KEY) !== '0',
+  )
+  const { data: gains } = useQuery({
+    queryKey: ['loudness-gains', conn.serverUrl],
+    queryFn: () => getLoudnessGains(conn),
+    staleTime: Infinity,
+  })
+  const gainDb = leveling && currentTrack ? (gains?.[currentTrack.id] ?? 0) : 0
+  const levelFactor = 10 ** (gainDb / 20)
+  useEffect(() => {
+    audioRef.current!.volume = Math.min(1, volume * levelFactor)
+  }, [volume, levelFactor])
 
   // Favorites: this host owns the store; the heart reflects it and remotes
   // mirror it over the wire (see HostBridge / RemoteState.isFavorite).
@@ -655,7 +676,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const setVolume = useCallback((value: number) => {
-    audioRef.current!.volume = value
+    // The leveling effect applies this, scaled by the current track's gain.
     setVolumeState(value)
     localStorage.setItem(VOLUME_STORAGE_KEY, String(value))
   }, [])
@@ -713,6 +734,11 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     // Keep the playing track current wherever it landed.
     const landed = nq.indexOf(playing)
     if (landed >= 0) setCurrentIndex(landed)
+  }, [])
+
+  const setLeveling = useCallback((on: boolean) => {
+    setLevelingState(on)
+    localStorage.setItem(LEVELING_STORAGE_KEY, on ? '1' : '0')
   }, [])
 
   const clearUpNext = useCallback(() => {
@@ -805,6 +831,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       moveInQueue,
       clearUpNext,
       shuffleUpNext,
+      leveling,
+      setLeveling,
       outputDeviceId,
       outputSupported: OUTPUT_SUPPORTED,
       setOutputDevice,
@@ -840,6 +868,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       moveInQueue,
       clearUpNext,
       shuffleUpNext,
+      leveling,
+      setLeveling,
       outputDeviceId,
       setOutputDevice,
       isCurrentFavorite,

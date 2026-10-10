@@ -167,6 +167,9 @@ export function RemotePlayerProvider({ children }: RemotePlayerProviderProps) {
       moveInQueue: noop,
       clearUpNext: noop,
       shuffleUpNext: noop,
+      // Leveling happens on the host, which owns the audio.
+      leveling: false,
+      setLeveling: noop,
       outputDeviceId: '',
       outputSupported: false,
       setOutputDevice: noop,

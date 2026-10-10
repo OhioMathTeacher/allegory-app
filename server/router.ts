@@ -11,6 +11,7 @@ import { basename, dirname, extname, isAbsolute, join, relative } from 'node:pat
 import sharp from 'sharp'
 import type { Library } from './scanner.ts'
 import type { Playlists } from './playlists.ts'
+import type { Loudness } from './loudness.ts'
 import { TAG_KINDS, TAG_SOURCES, type TagKind, type TagSource, type Tags } from './tags.ts'
 import {
   evaluate,
@@ -140,6 +141,8 @@ interface RouterDeps {
   tags: Tags
   /** Saved filters, and the smart playlists they materialise. */
   filters: Filters
+  /** Per-track loudness, measured once, for volume leveling. */
+  loudness: Loudness
 }
 
 export interface Router {
@@ -469,6 +472,7 @@ export function createRouter(deps: RouterDeps): Router {
     auth,
     tags,
     filters,
+    loudness,
   } = deps
 
   /** Map track ids to their absolute file paths. */
@@ -1047,6 +1051,23 @@ export function createRouter(deps: RouterDeps): Router {
 
       // Every read below needs the first scan to have finished.
       await ready
+
+      // --- loudness leveling ----------------------------------------------
+      // A one-time measurement started from Settings > Library, then a
+      // track-id -> gain map the player applies. See server/loudness.ts.
+      if (segs.length === 3 && segs[1] === 'loudness' && segs[2] === 'status' && method === 'GET') {
+        sendJson(res, await loudness.status(library))
+        return true
+      }
+      if (segs.length === 3 && segs[1] === 'loudness' && segs[2] === 'measure' && method === 'POST') {
+        await loudness.start(library)
+        sendJson(res, await loudness.status(library))
+        return true
+      }
+      if (segs.length === 2 && segs[1] === 'loudness' && method === 'GET') {
+        sendJson(res, await loudness.gains(library))
+        return true
+      }
 
       // --- search ---------------------------------------------------------
       if (segs.length === 2 && segs[1] === 'search' && method === 'GET') {

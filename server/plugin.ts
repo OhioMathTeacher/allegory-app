@@ -31,6 +31,7 @@ import { createSettings } from './settings.ts'
 import { createPortraits } from './artist-portrait.ts'
 import { attachRemote } from './remote.ts'
 import { createAuth } from './auth.ts'
+import { createLoudness } from './loudness.ts'
 
 export interface TsmOptions {
   /** Fallback music dir if no settings file exists yet (from ALLEGORY_MUSIC_DIR). */
@@ -57,6 +58,7 @@ export function allegoryLibrary(options: TsmOptions): Plugin {
   // Filters live beside the tag tree, and for the same reason: a saved filter
   // is a question Todd wrote, not a fact about any album.
   const filters = createFilters(cacheDir)
+  const loudness = createLoudness(cacheDir)
 
   // Publishes the live server URL to `.allegory-cache/url` so the launcher
   // script (and any other tool) can find it without scraping Vite's stdout.
@@ -203,6 +205,7 @@ export function allegoryLibrary(options: TsmOptions): Plugin {
     auth,
     tags,
     filters,
+    loudness,
   })
 
   // Bring the library online using the persisted music dir (or the env

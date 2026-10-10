@@ -21,6 +21,7 @@ import { createPortraits } from './artist-portrait.ts'
 import { createTags } from './tags.ts'
 import { createFilters } from './filters.ts'
 import { createRouter } from './router.ts'
+import { createLoudness } from './loudness.ts'
 
 async function serve() {
   const root = await mkdtemp(join(tmpdir(), 'allegory-filters-api-'))
@@ -49,6 +50,7 @@ async function serve() {
     auth: createAuth(cache),
     tags: createTags(cache),
     filters: createFilters(cache),
+    loudness: createLoudness(cache),
   })
 
   const server = createServer((req, res) => {

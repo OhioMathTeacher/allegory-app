@@ -53,6 +53,10 @@ export interface PlayerContextValue {
   clearUpNext: () => void
   /** Shuffle every track after the current one; the current keeps playing. */
   shuffleUpNext: () => void
+  /** Volume leveling: play each track at its measured gain (see
+   *  server/loudness.ts). Per device; on unless turned off. */
+  leveling: boolean
+  setLeveling: (on: boolean) => void
   outputDeviceId: string
   outputSupported: boolean
   setOutputDevice: (deviceId: string) => void

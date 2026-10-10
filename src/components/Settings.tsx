@@ -18,6 +18,7 @@ import { DuplicateFinder } from './DuplicateFinder'
 import { TagTreePanel } from './TagTreePanel'
 import { SmartPlaylists } from './SmartPlaylists'
 import { PasswordSettings } from './PasswordSettings'
+import { LoudnessPanel } from './LoudnessPanel'
 
 type Section = 'library' | 'ai' | 'diagnostics'
 
@@ -380,6 +381,7 @@ export function Settings({ firstRun, initialSection, onClose, onOpenRemote }: Se
               <TagTreePanel />
               <SmartPlaylists />
               <DuplicateFinder />
+              <LoudnessPanel />
             </div>
           )}
 
